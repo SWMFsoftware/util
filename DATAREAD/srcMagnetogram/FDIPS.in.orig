@@ -23,6 +23,7 @@ CHANGEWEAKFIELD
 1.0			rMin         (default is 1)
 25.0			rMax         (default is 2.5)
 T			UseLogRadius (default is F)
+F			UseWedge
 
 ! In the Theta and Phi directions coarsening relative to the magnetogram 
 ! resolution by an integer ratio is allowed. Refinement is not possible.

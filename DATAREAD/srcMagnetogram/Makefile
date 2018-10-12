@@ -181,3 +181,30 @@ test_fdips_hypre_check:
 		fdips.out \
 		fdips_ref.out > test_fdips_hypre.diff
 	@ls -l test_fdips_hypre_log.diff test_fdips_hypre.diff
+
+
+test_fdips_wedge:
+	@echo "test_fdips_wedge_compile..." > test_fdips_wedge.diff
+	make FDIPS
+	cp -f FDIPS.in.wedge FDIPS.in
+	gunzip -c fdips_wedge_input.gz > fitsfile.dat
+	@echo "test_fdips_wedge_run..." >> test_fdips_wedge.diff
+	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
+	./redistribute.pl fdips_field_np010202.out fdips_b.out
+	./redistribute.pl fdips_ghostface_np010202.out fdips_g.out
+	@echo "test_fdips_check..." >> test_fdips.diff
+	make test_fdips_check
+
+test_fdips_check:
+	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
+		fdips.log \
+		fdips_wedge.ref > test_fdips_log.diff
+	gunzip -c fdips_ref_wedge_b.gz > fdips_ref_b.out
+	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+		fdips_b.out \
+		fdips_ref_b.out > test_fdips.diff
+	gunzip -c fdips_ref_wedge_g.gz > fdips_ref_g.out
+	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+		fdips_g.out \
+		fdips_ref_g.out >> test_fdips.diff
+	@ls -l test_fdips_log.diff test_fdips.diff

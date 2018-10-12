@@ -5,6 +5,7 @@ module ModPotentialField
   
   use ModMpi
   use ModUtilities, ONLY: CON_stop
+  use ModConst, ONLY: cPi, cTwoPi
 
   implicit none
 
@@ -15,6 +16,10 @@ module ModPotentialField
   integer:: nR = 150, nThetaAll = 180, nPhiAll = 360
   real   :: rMin = 1.0, rMax = 2.5
   logical:: UseLogRadius = .false.  ! logarithmic or linear in radius
+
+  ! wedge parameters
+  logical:: UseWedge = .false.
+  real   :: ThetaMin = 0, ThetaMax = cPi, PhiMin = 0, PhiMax = cTwoPi
 
   ! domain decomposition
   integer:: nProcTheta = 2, nProcPhi = 2
@@ -38,20 +43,24 @@ module ModPotentialField
   real              :: PolarExponent = 2.0
 
   ! output paramters
-  logical           :: DoSaveBxyz   = .true.
+  logical           :: DoSaveBxyz   = .false.
   character(len=100):: NameFileBxyz = 'potentialBxyz'
   character(len=5)  :: TypeFileBxyz = 'real8'
 
-  logical           :: DoSaveField   = .true.
+  logical           :: DoSaveField   = .false.
   character(len=100):: NameFileField = 'potentialfield'
   character(len=5)  :: TypeFileField = 'real8'
 
-  logical           :: DoSavePotential   = .true.
+  logical           :: DoSavePotential   = .false.
   character(len=100):: NameFilePotential = 'potentialtest'
   character(len=5)  :: TypeFilePotential = 'real8'
   
   logical           :: DoSaveTecplot   = .false.
   character(len=100):: NameFileTecplot = 'potentialfield.dat'
+
+  logical           :: DoSaveGhostFace   = .false.
+  character(len=100):: NameFileGhostFace = 'ghostface'
+  character(len=5)  :: TypeFileGhostFace = 'real8'
 
   ! testing parameters
   logical :: UseTiming = .true.
@@ -85,19 +94,19 @@ module ModPotentialField
   integer :: iProc, nProc, iProcTheta, iProcPhi
   integer :: iTheta0, iPhi0
   integer :: nTheta, nPhi
-  real,  allocatable :: tmpXPhi0_II(:,:),tmpXPhipi_II(:,:)
+  real,  allocatable :: TmpXPhi0_II(:,:),TmpXPhipi_II(:,:)
   integer :: nThetaLgr,nThetaSml,nPhiLgr,nPhiSml
   integer :: nProcThetaLgr,nProcThetaSml,nProcPhiLgr,nProcPhiSml
 
   real, allocatable :: &
-       sendBC010_II(:,:), sendBC180_II(:,:), sendBC12_II(:,:), &
-       sendBC21_II(:,:),  sendBC34_II(:,:), sendBC43_II(:,:), &
-       sendBC020_II(:,:), sendBC360_II(:,:), &
-       recvBCLgr010_II(:,:), recvBCSml010_II(:,:), &
-       recvBCLgr180_II(:,:), recvBCSml180_II(:,:), &
-       recvBC12_II(:,:), recvBC21_II(:,:), &
-       recvBC34_II(:,:), recvBC43_II(:,:), &
-       recvBC020_II(:,:), recvBC360_II(:,:)
+       SendBC010_II(:,:), SendBC180_II(:,:), SendBC12_II(:,:), &
+       SendBC21_II(:,:),  SendBC34_II(:,:), SendBC43_II(:,:), &
+       SendBC020_II(:,:), SendBC360_II(:,:), &
+       RecvBCLgr010_II(:,:), RecvBCSml010_II(:,:), &
+       RecvBCLgr180_II(:,:), RecvBCSml180_II(:,:), &
+       RecvBC12_II(:,:), RecvBC21_II(:,:), &
+       RecvBC34_II(:,:), RecvBC43_II(:,:), &
+       RecvBC020_II(:,:), RecvBC360_II(:,:)
 
 contains
 
@@ -105,6 +114,7 @@ contains
   subroutine read_fdips_param
 
     use ModReadParam
+    use ModNumConst, ONLY: cDegToRad
 
     character(len=lStringLine) :: NameCommand
     character(len=10):: TypeOutput
@@ -128,6 +138,25 @@ contains
           call read_var('rMin', rMin)
           call read_var('rMax', rMax)
           call read_var('UseLogRadius', UseLogRadius)
+          call read_var('UseWedge', UseWedge)
+          if (UseWedge) then
+            call read_var('wedgeLatMin',ThetaMax)
+            ThetaMax = (90-ThetaMax) * cDegToRad
+            call read_var('wedgeLatMax',ThetaMin)
+            ThetaMin = (90-ThetaMin) * cDegToRad
+            if (ThetaMax <= ThetaMin) then
+              call CON_stop(NameSub//': Wedge latitude_min > latitude_max.')
+            endif
+            call read_var('wedgeLonMin',PhiMin)
+            PhiMin = PhiMin * cDegToRad
+            call read_var('wedgeLonMax',PhiMax)
+            PhiMax = PhiMax * cDegToRad
+            if (PhiMin >= PhiMax) then
+              ! wedge over zero meridian
+              call CON_stop(NameSub//': '//&
+                'Currently does not support wedge over longitude=0.')
+            endif
+          endif
        case("#GRID")
           call read_var('nR    ', nR)
           call read_var('nThetaAll', nThetaAll)
@@ -192,6 +221,13 @@ contains
                   ': TypeOutput=tecplot works for serial runs only')
              DoSaveTecplot = .true.
              call read_var('NameFileTecplot', NameFileTecplot)
+          case('ghostface')
+             DoSaveGhostFace = .true.
+             call read_var('NameFileGhostFace', NameFileGhostFace)
+             call read_var('TypeFileGhostFace', TypeFileGhostFace)
+             ! remove .out extension if present
+             i = index(NameFileGhostFace,'.out')
+             if(i>0) NameFileGhostFace = NameFileGhostFace(1:i-1)
           case default
              call CON_stop(NameSub//': unknown TypeOutput='//trim(TypeOutput))
           end select
@@ -205,6 +241,16 @@ contains
             nProcTheta, nProcPhi, nProc
        call CON_stop(NameSub//': nProc should be nProcTheta*nProcPhi')
     end if
+
+    if (DoChangePolarField .and. UseWedge) then
+      call CON_stop('UseWedge currently does not support DoChangePolarField.')
+    endif
+
+    if (.not.(DoSaveBxyz .or. DoSaveField .or. DoSavePotential .or. &
+        DoSaveTecplot .or. DoSaveGhostFace)) then
+      call CON_stop(&
+          'No output file specified; you will need at least one #OUTPUT')
+    endif
 
     ! Do timing on proc 0 only, if at all
     if(iProc > 0) UseTiming = .false.
@@ -249,13 +295,18 @@ contains
     if(DoChangePolarField)then
        do iTheta = 1, nTheta0
           Var_II(:,iTheta) = Var_II(:,iTheta) * (1 + &
-               (PolarFactor-1)*abs(sin(cDegToRad*Lat0_I(iTheta)))**PolarExponent)
+             (PolarFactor-1)*abs(sin(cDegToRad*Lat0_I(iTheta)))**PolarExponent)
        end do
     end if
 
     ! Check if the latitude coordinate is uniform or not
     UseCosTheta = abs(Lat0_I(3) - 2*Lat0_I(2) + Lat0_I(1)) > 1e-6
+    if (UseCosTheta .and. UseWedge) then
+      call CON_stop(NameSub//&
+        ': Currently UseWedge only works with uniform latitude grid')
+    endif
 
+    
     ! Convert Var_II(iLon,iLat) -> Br0_II(iTheta,iPhi)
     do iTheta = 1, nTheta0, 1
        do iPhi = 1, nPhi0
@@ -263,7 +314,6 @@ contains
        end do
     end do
     deallocate(Var_II)
-
 
     ! Fix too large values of Br
     where (abs(Br0_II) > BrMax) Br0_II = sign(BrMax, Br0_II)
@@ -300,12 +350,17 @@ contains
     Br_II = 0.0
 
     do iPhi = 1, nPhiAll
-       jPhi0 = nPhiRatio*(iPhi-1) - nPhiRatio/2 + 1
-       jPhi1 = nPhiRatio*(iPhi-1) + nPhiRatio/2 + 1
+       if (.not. UseWedge) then
+         jPhi0 = nPhiRatio*(iPhi-1) - nPhiRatio/2 + 1
+         jPhi1 = nPhiRatio*(iPhi-1) + nPhiRatio/2 + 1
+       else
+         ! phi binning is different for UseWedge because no periodicity
+         jPhi0 = nPhiRatio*(iPhi-1) + 1
+         jPhi1 = jPhi0 + nPhiRatio -1
+       endif
 
        do jPhi = jPhi0, jPhi1
-
-          if( modulo(nPhiRatio,2) == 0 .and. &
+          if( .not. UseWedge .and. modulo(nPhiRatio,2) == 0 .and. &
                (jPhi == jPhi0 .or. jPhi == jPhi1) )then
              ! For even coarsening ratio use 0.5 weight at the two ends
              Weight = 0.5
@@ -313,8 +368,12 @@ contains
              Weight = 1.0
           end if
 
-          ! Apply periodicity
-          kPhi = modulo(jPhi-1,nPhi0) + 1
+          if (.not. UseWedge) then
+            ! Apply periodicity
+            kPhi = modulo(jPhi-1,nPhi0) + 1
+          else
+            kPhi = jPhi
+          endif
 
           do iTheta = 1, nThetaAll
              iTheta0 = nThetaRatio*(iTheta-1) + 1
@@ -328,9 +387,11 @@ contains
 
     Br_II = Br_II / (nThetaRatio*nPhiRatio)
 
-    ! remove monopole
-    BrAverage = sum(Br_II)/(nThetaAll*nPhiAll)
-    Br_II = Br_II - BrAverage
+    if (.not. UseWedge) then
+      ! remove monopole
+      BrAverage = sum(Br_II)/(nThetaAll*nPhiAll)
+      Br_II = Br_II - BrAverage
+    endif
 
     deallocate(Br0_II)
 
@@ -340,10 +401,12 @@ contains
 
   subroutine init_potential_field
 
-    use ModConst, ONLY: cPi, cTwoPi
+    use ModConst, ONLY: cPi, cTwoPi, cDegToRad
+
 
     integer :: iR, iTheta, iPhi
     real:: dR, dLogR, dTheta, dPhi, dZ, z
+    real:: CellShiftPhi
     !--------------------------------------------------------------------------
 
     ! The processor coordinate
@@ -368,11 +431,11 @@ contains
     if (iProc == 0) then
        write(*,*) 'nThetaLgr = ',nThetaLgr, 'nThetaSml = ', nThetaSml
        write(*,*) 'nPhiLgr   = ', nPhiLgr,  'nPhiSml   = ', nPhiSml
-       write(*,*) 'Partitioning in nThetaAll gives: ', nThetaLgr*nProcThetaLgr + &
-            nThetaSml*nProcThetaSml, &
+       write(*,*) 'Partitioning in nThetaAll gives: ', &
+            nThetaLgr*nProcThetaLgr + nThetaSml*nProcThetaSml, &
             'Actual nThetaAll is: ', nThetaAll
-       write(*,*) 'Partitioning in nPhiAll gives:   ', nPhiLgr*nProcPhiLgr +  &
-            nPhiSml*nProcPhiSml, &
+       write(*,*) 'Partitioning in nPhiAll gives:   ', &
+            nPhiLgr*nProcPhiLgr + nPhiSml*nProcPhiSml, &
             'Actual nPhiAll is:   ', nPhiAll
     end if
 
@@ -394,9 +457,10 @@ contains
 
     !Only iProcPhi in the large region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
-       nTheta = nThetaSml
-       nPhi   = nPhiLgr
-       iTheta0 = nProcThetaLgr * nThetaLgr + (iProcTheta - nProcThetaLgr)*nThetaSml
+       nTheta  = nThetaSml
+       nPhi    = nPhiLgr
+       iTheta0 = nProcThetaLgr * nThetaLgr + &
+                    (iProcTheta - nProcThetaLgr)*nThetaSml
        iPhi0   = iProcPhi      * nPhiLgr
     end if
 
@@ -434,7 +498,7 @@ contains
        do iR = 0, nR+1
           Radius_I(iR) = rMin*exp( (iR - 0.5)*dLogR )
        end do
-       ! node based radial coordinate                                               
+       ! node based radial coordinate
        do iR = 1, nR+1
           RadiusNode_I(iR) = rMin*exp( (iR - 1)*dLogR )
        end do
@@ -454,38 +518,37 @@ contains
     dRadiusNode_I = Radius_I(1:nR+1) - Radius_I(0:nR)
 
     if(UseCosTheta)then
-       dZ = 2.0/nThetaAll
+      dZ = 2.0/nThetaAll
 
-       ! Set Theta_I
-       do iTheta = 0, nTheta+1
-          z = max(-1.0, min(1.0, 1 - (iTheta + iTheta0 - 0.5)*dZ))
-          Theta_I(iTheta) = acos(z)
-       end do
+      ! Set Theta_I
+      do iTheta = 0, nTheta+1
+        z = max(-1.0, min(1.0, 1 - (iTheta + iTheta0 - 0.5)*dZ))
+        Theta_I(iTheta) = acos(z)
+      end do
 
-       ! Set the boundary condition of Theta_I
-       if (iProcTheta == 0) &
-            Theta_I(0) = -Theta_I(1)
-       if (iProcTheta == nProcTheta-1) &
-            Theta_I(nTheta+1) = cTwoPi - Theta_I(nTheta)
+      ! Set the boundary condition of Theta_I
+      if (iProcTheta == 0) &
+          Theta_I(0) = -Theta_I(1)
+      if (iProcTheta == nProcTheta-1) &
+          Theta_I(nTheta+1) = cTwoPi - Theta_I(nTheta)
 
-       ! Set ThetaNode_I
-       do iTheta = 1, nTheta + 1
-          z = max(-1.0, min(1.0, 1 - (iTheta + iTheta0 -1)*dZ))
-          ThetaNode_I(iTheta) = acos(z)
-       end do
+      ! Set ThetaNode_I
+      do iTheta = 1, nTheta + 1
+        z = max(-1.0, min(1.0, 1 - (iTheta + iTheta0 -1)*dZ))
+        ThetaNode_I(iTheta) = acos(z)
+      end do
     else
+      dTheta = (ThetaMax-ThetaMin)/nThetaAll
 
-       dTheta = cPi/nThetaAll
+      ! Set Theta_I
+      do iTheta = 0, nTheta+1
+        Theta_I(iTheta) = ThetaMin + (iTheta  + iTheta0 - 0.5)*dTheta
+      end do
 
-       ! Set Theta_I
-       do iTheta = 0, nTheta+1
-          Theta_I(iTheta) = (iTheta  + iTheta0 - 0.5)*dTheta
-       end do
-
-       ! Set ThetaNode_I
-       do iTheta = 1, nTheta+1
-          ThetaNode_I(iTheta) = (iTheta + iTheta0 - 1)*dTheta
-       end do
+      ! Set ThetaNode_I
+      do iTheta = 1, nTheta+1
+        ThetaNode_I(iTheta) = ThetaMin + (iTheta + iTheta0 - 1)*dTheta
+      end do
     end if
 
     dTheta_I = ThetaNode_I(2:nTheta+1) - ThetaNode_I(1:nTheta)
@@ -502,15 +565,23 @@ contains
        dThetaNode_I          = dTheta
     end if
 
-    dPhi = cTwoPi/nPhiAll
-    !Set Phi_I
+    ! global synoptic map start from phi=0
+    ! for wedge, the input to FDIPS is already shifted to cell center
+    if (.not. UseWedge) then
+      CellShiftPhi = 0
+    else
+      CellShiftPhi = 0.5
+    endif
+    dPhi = (PhiMax-PhiMin)/nPhiAll
+    ! Set Phi_I
     do iPhi = 0, nPhi+1
-       Phi_I(iPhi) = (iPhi + iPhi0 - 1)*dPhi
+       Phi_I(iPhi) = PhiMin+(iPhi + iPhi0 - 1 + CellShiftPhi)*dPhi
     end do
 
     PhiNode_I = Phi_I(1:nPhi+1) - 0.5*dPhi
     dPhi_I = PhiNode_I(2:nPhi+1) - PhiNode_I(1:nPhi)
     dPhiNode_I = Phi_I(1:nPhi+1) - Phi_I(0:nPhi)
+
 
     Potential_C       =   0.0
     Rhs_C             =   0.0
@@ -532,13 +603,14 @@ contains
     real   :: rI, rJ, rInv
     real, allocatable :: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:)
     real, allocatable :: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
+    real, allocatable :: Potential_G(:,:,:), PlotVar_VG(:,:,:,:)
     integer:: iError
     integer:: iStatus_I(mpi_status_size)
-    integer:: nPhiOut, MinLat, MaxLat
+    integer:: nPhiOut, MinLat, MaxLat, MinTheta, MaxTheta, MinPhi, MaxPhi
     !-------------------------------------------------------------------------
 
     ! Only the last processors in the phi direction write out the ghost cell
-    if(iProcPhi == nProcPhi - 1)then
+    if(iProcPhi == nProcPhi - 1 .and. .not.UseWedge)then
        nPhiOut = nPhi + 1
     else
        nPhiOut = nPhi
@@ -600,20 +672,22 @@ contains
     b_DX(2:3,nR+1,:,:) = 0.0
     
     ! Apply periodicity in Phi to fill the nPhi+1 ghost cell
-    if (nProcPhi > 1) then
-       if (iProcPhi ==0 ) then 
-          b_DII = b_DX(:,:,1,1:nLat)
-          call mpi_send(b_DII, 3*(nR+1)*nLat, MPI_REAL, &
-               iProcTheta*nProcPhi + nProcPhi-1, 21, iComm,  iError)
-       end if
-       if (iProcPhi == nProcPhi -1) then
-          call mpi_recv(b_DII, 3*(nR+1)*nLat, MPI_REAL, &
-               iProcTheta*nProcPhi , 21, iComm, iStatus_I, iError)
-          b_DX(:,:,nPhiOut,1:nLat) = b_DII
-       end if
-    else
-       b_DX(:,:,nPhiOut,1:nLat) = b_DX(:,:,1,1:nLat)
-    end if
+    if (.not. UseWedge) then
+      if (nProcPhi > 1) then
+         if (iProcPhi ==0 ) then 
+            b_DII = b_DX(:,:,1,1:nLat)
+            call mpi_send(b_DII, 3*(nR+1)*nLat, MPI_REAL, &
+                 iProcTheta*nProcPhi + nProcPhi-1, 21, iComm,  iError)
+         end if
+         if (iProcPhi == nProcPhi -1) then
+            call mpi_recv(b_DII, 3*(nR+1)*nLat, MPI_REAL, &
+                 iProcTheta*nProcPhi , 21, iComm, iStatus_I, iError)
+            b_DX(:,:,nPhiOut,1:nLat) = b_DII
+         end if
+      else
+         b_DX(:,:,nPhiOut,1:nLat) = b_DX(:,:,1,1:nLat)
+      end if
+    endif
 
     if(DoSaveField)then
        ! Note the fake processor index to be used by redistribute.pl
@@ -647,35 +721,36 @@ contains
 
        ! Average values in the Phi direction for the two poles. 
        ! The average value only makes sense for Cartesian components
+       if (.not. UseWedge) then
+         ! Initialize on all processors for the MPI_allreduce
+         Bpole_DII = 0.0
 
-       ! Initialize on all processors for the MPI_allreduce
-       Bpole_DII = 0.0
+         ! South pole, minimum latitude (maximum theta)
+         if(iProcTheta == nProcTheta - 1) &
+              Bpole_DII(:,:,1) = sum(b_DX(:,:,1:nPhi,1), DIM=3)
 
-       ! South pole, minimum latitude (maximum theta)
-       if(iProcTheta == nProcTheta - 1) &
-            Bpole_DII(:,:,1) = sum(B_DX(:,:,1:nPhi,1), DIM=3)
+         ! North pole, maximum latitude (minimum theta)
+         if(iProcTheta == 0) &
+              Bpole_DII(:,:,2) = sum(b_DX(:,:,1:nPhi,nLat), DIM=3)
 
-       ! North pole, maximum latitude (minimum theta)
-       if(iProcTheta == 0) &
-            Bpole_DII(:,:,2) = sum(b_DX(:,:,1:nPhi,nLat), DIM=3)
+         ! Sum over processors in the phi direction
+         if(nProcPhi > 1)then
+            call MPI_allreduce(Bpole_DII, Btotal_DII, size(Bpole_DII), &
+                 MPI_REAL, MPI_SUM, iComm, iError)
+            Bpole_DII = Btotal_DII
+         end if
 
-       ! Sum over processors in the phi direction
-       if(nProcPhi > 1)then
-          call MPI_allreduce(Bpole_DII, Btotal_DII, size(Bpole_DII), &
-               MPI_REAL, MPI_SUM, iComm, iError)
-          Bpole_DII = Btotal_DII
-       end if
-
-       ! Get the average
-       Bpole_DII = Bpole_DII / nPhiAll
-          
-       ! Use same value for all Phi indexes at the ghost cells at the poles
-       do iPhi = 1, nPhiOut
-          if(iProcTheta == nProcTheta - 1) &
-               B_DX(:,:,iPhi,MinLat) = Bpole_DII(:,:,1)
-          if(iProcTheta == 0)              &
-               B_DX(:,:,iPhi,MaxLat) = Bpole_DII(:,:,2)
-       end do
+         ! Get the average
+         Bpole_DII = Bpole_DII / nPhiAll
+            
+         ! Use same value for all Phi indexes at the ghost cells at the poles
+         do iPhi = 1, nPhiOut
+            if(iProcTheta == nProcTheta - 1) &
+                 b_DX(:,:,iPhi,MinLat) = Bpole_DII(:,:,1)
+            if(iProcTheta == 0)              &
+                 b_DX(:,:,iPhi,MaxLat) = Bpole_DII(:,:,2)
+         end do
+       endif
 
        ! Note the fake processor index to be used by redistribute.pl
        write(NameFile,'(a,2i2.2,a,i3.3,a)') &
@@ -688,7 +763,7 @@ contains
                'logRadius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
                nameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax', &
                ParamIn_I = (/ rMin, rMax /), &
-               nDimIn=3, VarIn_VIII=B_DX, &
+               nDimIn=3, VarIn_VIII=b_DX, &
                Coord1In_I=log10(RadiusNode_I), &
                Coord2In_I=Phi_I(1:nPhiOut), &
                Coord3In_I=Lat_I)
@@ -698,7 +773,7 @@ contains
                'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
                nameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax', &
                ParamIn_I = (/ rMin, rMax /), &
-               nDimIn=3, VarIn_VIII=B_DX, &
+               nDimIn=3, VarIn_VIII=b_DX, &
                Coord1In_I=RadiusNode_I, &
                Coord2In_I=Phi_I(1:nPhiOut), &
                Coord3In_I=Lat_I)
@@ -708,23 +783,29 @@ contains
     end if
 
 
+    if (.not. UseWedge) then
+      nPhiOut = nPhiAll+1
+    else
+      nPhiOut = nPhiAll
+    endif
     if(DoSaveTecplot)then
        open(unit = UnitTmp_, file=NameFileTecplot, status='replace')
 
        write (UnitTmp_, '(a)') 'Title = "'     // 'PFSSM' // '"'
        write (UnitTmp_, '(a)') &
          'Variables = ' // trim ('"X [Rs]", "Y [Rs]", "Z [Rs]","Bx [G]",'// &
-	' "By [G]", "Bz [G]"')
+            ' "By [G]", "Bz [G]"')
        write(UnitTmp_, '(a)') 'ZONE T="Rectangular zone"'
        write(UnitTmp_, '(a,i6,a,i6,a,i6,a)') &
-            ' I = ', nR+1, ', J=', nThetaAll, ', K=', nPhiAll+1, ', ZONETYPE=Ordered'
+            ' I = ', nR+1, ', J=', nThetaAll, ', K=', nPhiOut, &
+            ', ZONETYPE=Ordered'
        write(UnitTmp_, '(a)')' DATAPACKING=POINT'
        write(UnitTmp_, '(a)')' DT=(SINGLE SINGLE SINGLE SINGLE SINGLE SINGLE )'
 
-       do iPhi = 1, nPhiAll+1; do iTheta = 1, nThetaAll; do iR = 1, nR+1
-          Br     = B_DX(1,iR,iPhi,nThetaAll+1-iTheta)
-          Btheta = B_DX(3,iR,iPhi,nThetaAll+1-iTheta)
-          Bphi   = B_DX(2,iR,iPhi,nThetaAll+1-iTheta)
+       do iPhi = 1, nPhiOut; do iTheta = 1, nThetaAll; do iR = 1, nR+1
+          Br     = b_DX(1,iR,iPhi,nThetaAll+1-iTheta)
+          Btheta = b_DX(3,iR,iPhi,nThetaAll+1-iTheta)
+          Bphi   = b_DX(2,iR,iPhi,nThetaAll+1-iTheta)
           r = RadiusNode_I(iR)
           SinTheta = SinTheta_I(iTheta)
           CosTheta = cos(Theta_I(iTheta))
@@ -743,7 +824,50 @@ contains
        close(UnitTmp_)
     end if
 
-    deallocate(B_DX)
+    deallocate(b_DX)
+
+    if (DoSaveGhostFace) then
+      allocate( Potential_G(0:nR+1,0:nTheta+1,0:nPhi+1), &
+                PlotVar_VG(4,0:nR+1,0:nTheta+1,0:nPhi+1))
+
+      MinTheta = 1
+      MaxTheta = nTheta
+      MinPhi   = 1
+      MaxPhi   = nPhi
+      if(iProcTheta == 0)               MinTheta = 0
+      if(iProcTheta == nProcTheta - 1)  MaxTheta = nTheta+1
+      if(iProcPhi   == 0)               MinPhi   = 0
+      if(iProcPhi   == nProcPhi - 1)    MaxPhi   = nPhi+1
+
+      call set_boundary(Potential_C, Potential_G)
+
+      PlotVar_VG = -1.
+      PlotVar_VG(1,:,:,:) = Potential_G
+      PlotVar_VG(2:4,1:nR+1,1:nTheta+1,1:nPhi+1) = B0_DF
+
+      ! Note that the processor number here is changed. For redistribute.pl,
+      ! the grid is ordered such that the first dimension is shifted first,
+      ! then the second dimension, then the third. Here we are outputing a 
+      ! [r,t,p] grid that has the processor numbered as phi first, then theta.
+      write(NameFile,'(a,2i2.2,a,i3.3,a)') &
+           trim(NameFileGhostFace)//'_np01', nProcPhi, nProcTheta, '_', &
+           iProcTheta + iProcPhi*nProcTheta, '.out'
+
+      ! For redistribute.pl to work, the output must contain a line of 
+      ! parameters, so even if rMin and rMax are not quite needed here,
+      ! we do need to include them here
+      call save_plot_file(NameFile, TypeFileIn=TypeFileGhostFace, &
+           StringHeaderIn = &
+           'Potential field with ghost cells, face centered magnetic field', &
+           nameVarIn = 'Radius Theta Phi Pot Br Btheta Bphi rMin rMax', &
+           ParamIn_I = (/ rMin, rMax /), nDimIn=3, Coord1In_I=Radius_I, &
+           Coord2In_I=Theta_I(MinTheta:MaxTheta), &
+           Coord3In_I=Phi_I(MinPhi:MaxPhi), &
+           VarIn_VIII=PlotVar_VG(:,:,MinTheta:MaxTheta,MinPhi:MaxPhi))
+
+      deallocate(Potential_G, PlotVar_VG)
+    endif
+
 
   end subroutine save_potential_field
 
@@ -754,36 +878,38 @@ contains
     real, intent(in):: x_C(nR,nTheta,nPhi)
     real, intent(inout):: x_G(0:nR+1,0:nTheta+1,0:nPhi+1)
 
-    integer:: iPhi, jPhi, shift
-    integer:: status(mpi_status_size)
-    integer:: SendRequest010, SendRequest020, SendRequest360, SendRequest180, &
-         SendRequest12, SendRequest21, SendRequest34, SendRequest43, &
-         RecvRequest010, RecvRequest020, RecvRequest360, RecvRequest180, &
-         RecvRequest12, RecvRequest21, RecvRequest34, RecvRequest43
+    integer:: iPhi, jPhi, nShift
+    integer:: IntMpiStatus_I(mpi_status_size)
+    integer:: IntSendRequest010, IntSendRequest020, IntSendRequest360, &
+         IntSendRequest180, IntSendRequest12, IntSendRequest21, &
+         IntSendRequest34, IntSendRequest43, &
+         IntRecvRequest010, IntRecvRequest020, IntRecvRequest360, &
+         IntRecvRequest180, IntRecvRequest12, IntRecvRequest21, &
+         IntRecvRequest34, IntRecvRequest43
     integer:: jProc
     integer:: iError
 
-    if (.not. allocated(tmpXPhi0_II)) allocate( &
-         tmpXPhi0_II(0:nR+1,nPhiAll),              &
-         tmpXPhipi_II(0:nR+1,nPhiAll),             &
-         sendBC010_II(0:nR+1,nPhi),        &
-         sendBC180_II(0:nR+1,nPhi),        &
-         sendBC12_II(0:nR+1,0:nTheta+1),   &
-         sendBC21_II(0:nR+1,0:nTheta+1),   &
-         sendBC34_II(0:nR+1,nPhi),         &
-         sendBC43_II(0:nR+1,nPhi),         &
-         sendBC020_II(0:nR+1,0:nTheta+1),  &
-         sendBC360_II(0:nR+1,0:nTheta+1),  &
-         recvBCLgr010_II(0:nR+1,nPhiLgr),       &
-         recvBCLgr180_II(0:nR+1,nPhiLgr),       &
-         recvBCSml010_II(0:nR+1,nPhiSml),       &
-         recvBCSml180_II(0:nR+1,nPhiSml),       &
-         recvBC12_II(0:nR+1,0:nTheta+1),   &
-         recvBC21_II(0:nR+1,0:nTheta+1),   &
-         recvBC34_II(0:nR+1,nPhi),         &
-         recvBC43_II(0:nR+1,nPhi),         &
-         recvBC020_II(0:nR+1,0:nTheta+1),  &
-         recvBC360_II(0:nR+1,0:nTheta+1))
+    if (.not. allocated(TmpXPhi0_II)) allocate( &
+         TmpXPhi0_II(0:nR+1,nPhiAll),              &
+         TmpXPhipi_II(0:nR+1,nPhiAll),             &
+         SendBC010_II(0:nR+1,nPhi),        &
+         SendBC180_II(0:nR+1,nPhi),        &
+         SendBC12_II(0:nR+1,0:nTheta+1),   &
+         SendBC21_II(0:nR+1,0:nTheta+1),   &
+         SendBC34_II(0:nR+1,nPhi),         &
+         SendBC43_II(0:nR+1,nPhi),         &
+         SendBC020_II(0:nR+1,0:nTheta+1),  &
+         SendBC360_II(0:nR+1,0:nTheta+1),  &
+         RecvBCLgr010_II(0:nR+1,nPhiLgr),       &
+         RecvBCLgr180_II(0:nR+1,nPhiLgr),       &
+         RecvBCSml010_II(0:nR+1,nPhiSml),       &
+         RecvBCSml180_II(0:nR+1,nPhiSml),       &
+         RecvBC12_II(0:nR+1,0:nTheta+1),   &
+         RecvBC21_II(0:nR+1,0:nTheta+1),   &
+         RecvBC34_II(0:nR+1,nPhi),         &
+         RecvBC43_II(0:nR+1,nPhi),         &
+         RecvBC020_II(0:nR+1,0:nTheta+1),  &
+         RecvBC360_II(0:nR+1,0:nTheta+1))
 
     !--------------------------------------------------------------------------
     ! Current solution inside
@@ -798,157 +924,177 @@ contains
 
     ! The potential is zero at the outer boundary
     x_G(nR+1,:,:) = -x_G(nR,:,:)
+    ! wedge has four side boundaries, updated later in the side boundary part
 
-    ! Set tmpXPhi0_II and tmpXPhipi_II which used to store the global 
-    ! boundary close to the pole to the root
-    if (iProcTheta ==0) then
-       sendBC010_II = x_G(:,1,1:nPhi)
-       call MPI_ISEND(sendBC010_II, (nR+2)*nPhi,MPI_REAL, 0, 010, &
-                      iComm, SendRequest010, iError)
-    end if
-    if (iProcTheta == nProcTheta-1) then
-       sendBC180_II = x_G(:,nTheta,1:nPhi)
-       call MPI_ISEND(sendBC180_II, (nR+2)*nPhi,MPI_REAL, 0, 180, &
-                      iComm, SendRequest180, iError)
-    end if
 
-    ! The root update tmpXPhi0_II/tmpXPhipi_II from all processors
-    if (iProc == 0) then
-       do jProc=0, nProcPhi-1
-          if (jProc < nProcPhiLgr) then
-             shift = jProc * nPhiLgr
-             
-             call MPI_IRECV(recvBCLgr010_II, (nR+2)*nPhiLgr, MPI_REAL, &
-                            jProc, &
-                            010, iComm, RecvRequest010, iError)
-             call mpi_wait(RecvRequest010, status, iError)
-             tmpXPhi0_II(:, shift + 1: shift + nPhiLgr) = recvBCLgr010_II
-                
-             call MPI_IRECV(recvBCLgr180_II, (nR+2)*nPhiLgr, MPI_REAL, &
-                            (nProcTheta-1)*nProcPhi+jProc, &
-                            180, iComm, RecvRequest180, iError)
-             call mpi_wait(RecvRequest180, status, iError)
-             tmpXPhipi_II(:, shift + 1: shift + nPhiLgr) = recvBCLgr180_II
-          else
-             shift = nProcPhiLgr*nPhiLgr + (jProc - nProcPhiLgr)*nPhiSml
+    ! ----- pole ------
+    if (.not. UseWedge) then
+      ! Set TmpXPhi0_II and TmpXPhipi_II which used to store the global 
+      ! boundary close to the pole to the root
+      if (iProcTheta ==0) then
+         SendBC010_II = x_G(:,1,1:nPhi)
+         call MPI_ISEND(SendBC010_II, (nR+2)*nPhi,MPI_REAL, 0, 010, &
+                        iComm, IntSendRequest010, iError)
+      end if
+      if (iProcTheta == nProcTheta-1) then
+         SendBC180_II = x_G(:,nTheta,1:nPhi)
+         call MPI_ISEND(SendBC180_II, (nR+2)*nPhi,MPI_REAL, 0, 180, &
+                        iComm, IntSendRequest180, iError)
+      end if
 
-             call MPI_IRECV(recvBCSml010_II, (nR+2)*nPhiSml,  MPI_REAL, &
-                            jProc, &
-                            010, iComm, RecvRequest010, iError)
-             call mpi_wait(RecvRequest010, status, iError)
-             tmpXPhi0_II(:, shift + 1: shift + nPhiSml) = recvBCSml010_II
+      ! The root update TmpXPhi0_II/TmpXPhipi_II from all processors
+      if (iProc == 0) then
+         do jProc=0, nProcPhi-1
+            if (jProc < nProcPhiLgr) then
+               nShift = jProc * nPhiLgr
+               
+               call MPI_IRECV(RecvBCLgr010_II, (nR+2)*nPhiLgr, MPI_REAL, &
+                              jProc, &
+                              010, iComm, IntRecvRequest010, iError)
+               call mpi_wait(IntRecvRequest010, IntMpiStatus_I, iError)
+               TmpXPhi0_II(:, nShift + 1: nShift + nPhiLgr) = RecvBCLgr010_II
+                  
+               call MPI_IRECV(RecvBCLgr180_II, (nR+2)*nPhiLgr, MPI_REAL, &
+                              (nProcTheta-1)*nProcPhi+jProc, &
+                              180, iComm, IntRecvRequest180, iError)
+               call mpi_wait(IntRecvRequest180, IntMpiStatus_I, iError)
+               TmpXPhipi_II(:, nShift + 1: nShift + nPhiLgr) = RecvBCLgr180_II
+            else
+               nShift = nProcPhiLgr*nPhiLgr + (jProc - nProcPhiLgr)*nPhiSml
 
-             call MPI_IRECV(recvBCSml180_II , (nR+2)*nPhiSml,  MPI_REAL, &
-                            (nProcTheta-1)*nProcPhi+jProc, &
-                            180, iComm, RecvRequest180, iError)
-             call mpi_wait(RecvRequest180, status, iError)
-             tmpXPhipi_II(:, shift + 1: shift + nPhiSml) = recvBCSml180_II
-          end if
-       end do
-    end if
+               call MPI_IRECV(RecvBCSml010_II, (nR+2)*nPhiSml,  MPI_REAL, &
+                              jProc, &
+                              010, iComm, IntRecvRequest010, iError)
+               call mpi_wait(IntRecvRequest010, IntMpiStatus_I, iError)
+               TmpXPhi0_II(:, nShift + 1: nShift + nPhiSml) = RecvBCSml010_II
 
-    call  MPI_bcast(tmpXPhi0_II,  (nR+2)*nPhiAll, MPI_REAL, 0,  iComm, iError)
-    call  MPI_bcast(tmpXPhipi_II, (nR+2)*nPhiAll, MPI_REAL, 0,  iComm, iError)
+               call MPI_IRECV(RecvBCSml180_II , (nR+2)*nPhiSml,  MPI_REAL, &
+                              (nProcTheta-1)*nProcPhi+jProc, &
+                              180, iComm, IntRecvRequest180, iError)
+               call mpi_wait(IntRecvRequest180, IntMpiStatus_I, iError)
+               TmpXPhipi_II(:, nShift + 1: nShift + nPhiSml) = RecvBCSml180_II
+            end if
+         end do
+      end if
 
-    ! Symmetric in Theta but shifted by nPhiAll/2, be careful about the shift!
-    if (iProcTheta == 0) then
-       do iPhi = 1, nPhi
-          jPhi = modulo(iPhi + iPhi0 - 1 + nPhiAll/2, nPhiAll) + 1
-          x_G(:,0,iPhi)        = tmpXPhi0_II(:,jPhi)
-       end do
-    end if
-    if (iProcTheta == nProcTheta-1) then
-       do iPhi = 1, nPhi
-          jPhi = modulo(iPhi + iPhi0 - 1 + nPhiAll/2, nPhiAll) + 1
-          x_G(:,nTheta+1,iPhi) = tmpXPhipi_II(:,jPhi)
-       end do
-    end if
+      call  MPI_bcast(TmpXPhi0_II,  (nR+2)*nPhiAll, MPI_REAL, 0, iComm, iError)
+      call  MPI_bcast(TmpXPhipi_II, (nR+2)*nPhiAll, MPI_REAL, 0, iComm, iError)
+
+      ! Symmetric in Theta but shifted by nPhiAll/2, be careful about the shift
+      if (iProcTheta == 0) then
+         do iPhi = 1, nPhi
+            jPhi = modulo(iPhi + iPhi0 - 1 + nPhiAll/2, nPhiAll) + 1
+            x_G(:,0,iPhi)        = TmpXPhi0_II(:,jPhi)
+         end do
+      end if
+      if (iProcTheta == nProcTheta-1) then
+         do iPhi = 1, nPhi
+            jPhi = modulo(iPhi + iPhi0 - 1 + nPhiAll/2, nPhiAll) + 1
+            x_G(:,nTheta+1,iPhi) = TmpXPhipi_II(:,jPhi)
+         end do
+      end if
+
+    ! ----- wedge theta outer boundary -----
+    else
+      if (iProcTheta == 0)             x_G(:,0,:)        = x_G(:,1,:)
+      if (iProcTheta == nProcTheta-1)  x_G(:,nTheta+1,:) = x_G(:,nTheta,:)
+    endif
 
     !Update the local theta boundary
     if (iProcTheta /= nProcTheta-1) then
-       sendBC34_II = x_G(:,nTheta,1:nPhi)
-       call MPI_ISEND(sendBC34_II, (nR+2)*nPhi, MPI_REAL, &
+       SendBC34_II = x_G(:,nTheta,1:nPhi)
+       call MPI_ISEND(SendBC34_II, (nR+2)*nPhi, MPI_REAL, &
                      (iProcTheta+1)*nProcPhi+iProcPhi, &
-                     34, iComm, SendRequest34,  iError)
+                     34, iComm, IntSendRequest34,  iError)
     end if
     if (iProcTheta /= 0) then
-       sendBC43_II = x_G(:,1,1:nPhi)
-       call MPI_ISEND(sendBC43_II, (nR+2)*nPhi, MPI_REAL, &
+       SendBC43_II = x_G(:,1,1:nPhi)
+       call MPI_ISEND(SendBC43_II, (nR+2)*nPhi, MPI_REAL, &
                      (iProcTheta-1)*nProcPhi+iProcPhi, &
-                     43, iComm,  SendRequest43,  iError)
+                     43, iComm,  IntSendRequest43,  iError)
     end if
     if (iProcTheta /= nProcTheta-1) then
-       call MPI_IRECV(recvBC43_II, (nR+2)*nPhi, MPI_REAL, &
+       call MPI_IRECV(RecvBC43_II, (nR+2)*nPhi, MPI_REAL, &
                      (iProcTheta+1)*nProcPhi+iProcPhi, &
-                     43, iComm,  RecvRequest43, iError)
-       call mpi_wait(RecvRequest43, status, iError)
-       x_G(:,nTheta+1,1:nPhi) = recvBC43_II
+                     43, iComm,  IntRecvRequest43, iError)
+       call mpi_wait(IntRecvRequest43, IntMpiStatus_I, iError)
+       x_G(:,nTheta+1,1:nPhi) = RecvBC43_II
     end if
     if (iProcTheta /= 0) then
-       call MPI_IRECV(recvBC34_II, (nR+2)*nPhi, MPI_REAL, &
+       call MPI_IRECV(RecvBC34_II, (nR+2)*nPhi, MPI_REAL, &
                      (iProcTheta-1)*nProcPhi+iProcPhi, &
-                     34, iComm,  RecvRequest34, iError)
-       call mpi_wait(RecvRequest34, status, iError)
-       x_G(:,0,1:nPhi) = recvBC34_II
+                     34, iComm,  IntRecvRequest34, iError)
+       call mpi_wait(IntRecvRequest34, IntMpiStatus_I, iError)
+       x_G(:,0,1:nPhi) = RecvBC34_II
     end if
 
-    ! Periodic around phi
-    ! Send boundary info
-    if (iProcPhi == 0) then
-       sendBC020_II = x_G(:,:,1)
-       call MPI_ISEND(sendBC020_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + nProcPhi-1, &
-                      020, iComm, SendRequest020, iError)
-    end if
-    if (iProcPhi == nProcPhi-1) then
-       sendBC360_II = x_G(:,:,nPhi)
-       call MPI_ISEND(sendBC360_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi ,  &
-                      360, iComm, SendRequest360, iError)
-    end if
+    ! ----- phi wrap around -----
+    if (.not. UseWedge) then
+      ! Periodic around phi
+      ! Send boundary info
+      if (iProcPhi == 0) then
+         SendBC020_II = x_G(:,:,1)
+         call MPI_ISEND(SendBC020_II, (nR+2)*(nTheta+2), MPI_REAL, &
+                        iProcTheta*nProcPhi + nProcPhi-1, &
+                        020, iComm, IntSendRequest020, iError)
+      end if
+      if (iProcPhi == nProcPhi-1) then
+         SendBC360_II = x_G(:,:,nPhi)
+         call MPI_ISEND(SendBC360_II, (nR+2)*(nTheta+2), MPI_REAL, &
+                        iProcTheta*nProcPhi ,  &
+                        360, iComm, IntSendRequest360, iError)
+      end if
 
-    ! Update boundary info
-    if (iProcPhi == 0) then
-       call MPI_IRECV(recvBC360_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi + nProcPhi-1, &
-                      360, iComm, RecvRequest360, iError)
-       call mpi_wait(RecvRequest360, status, iError)
-       x_G(:,:,0) = recvBC360_II
-    end if
-    if (iProcPhi == nProcPhi-1) then
-       call MPI_IRECV(recvBC020_II, (nR+2)*(nTheta+2), MPI_REAL, &
-                      iProcTheta*nProcPhi , &
-                      020, iComm, RecvRequest020, iError)
-       call mpi_wait(RecvRequest020, status, iError)
-       x_G(:,:,nPhi+1) = recvBC020_II
-    end if
+      ! Update boundary info
+      if (iProcPhi == 0) then
+         call MPI_IRECV(RecvBC360_II, (nR+2)*(nTheta+2), MPI_REAL, &
+                        iProcTheta*nProcPhi + nProcPhi-1, &
+                        360, iComm, IntRecvRequest360, iError)
+         call mpi_wait(IntRecvRequest360, IntMpiStatus_I, iError)
+         x_G(:,:,0) = RecvBC360_II
+      end if
+      if (iProcPhi == nProcPhi-1) then
+         call MPI_IRECV(RecvBC020_II, (nR+2)*(nTheta+2), MPI_REAL, &
+                        iProcTheta*nProcPhi , &
+                        020, iComm, IntRecvRequest020, iError)
+         call mpi_wait(IntRecvRequest020, IntMpiStatus_I, iError)
+         x_G(:,:,nPhi+1) = RecvBC020_II
+      end if
+
+
+    ! ----- wedge phi outer boundary -----
+    else
+      if (iProcPhi == 0)               x_G(:,:,0)        = x_G(:,:,1)
+      if (iProcPhi == nProcPhi-1)      x_G(:,:,nPhi+1)   = x_G(:,:,nPhi)
+    endif
+
 
     ! Start to send and update the local boundary
     if (iProcPhi /= nProcPhi-1) then
-       sendBC12_II = x_G(:,:,nPhi)
-       call MPI_ISEND(sendBC12_II, (nR+2)*(nTheta+2), MPI_REAL, &
+       SendBC12_II = x_G(:,:,nPhi)
+       call MPI_ISEND(SendBC12_II, (nR+2)*(nTheta+2), MPI_REAL, &
                       iProcTheta*nProcPhi + iProcPhi+1, &
-                      12,  iComm, SendRequest12, iError)
+                      12,  iComm, IntSendRequest12, iError)
     end if
     if (iProcPhi /= 0) then
-       sendBC21_II = x_G(:,:,1)
-       call MPI_ISEND(sendBC21_II, (nR+2)*(nTheta+2), MPI_REAL, &
+       SendBC21_II = x_G(:,:,1)
+       call MPI_ISEND(SendBC21_II, (nR+2)*(nTheta+2), MPI_REAL, &
                       iProcTheta*nProcPhi + iProcPhi-1, &
-                      21,  iComm, SendRequest21, iError)
+                      21,  iComm, IntSendRequest21, iError)
     end if
     if (iProcPhi /= nProcPhi-1) then
-       call MPI_IRECV(recvBC21_II, (nR+2)*(nTheta+2), MPI_REAL, &
+       call MPI_IRECV(RecvBC21_II, (nR+2)*(nTheta+2), MPI_REAL, &
                       iProcTheta*nProcPhi + iProcPhi+1, &
-                      21,  iComm, RecvRequest21, iError)
-       call mpi_wait(RecvRequest21, status, iError)
-       x_G(:,:,nPhi+1) = recvBC21_II
+                      21,  iComm, IntRecvRequest21, iError)
+       call mpi_wait(IntRecvRequest21, IntMpiStatus_I, iError)
+       x_G(:,:,nPhi+1) = RecvBC21_II
     end if
     if (iProcPhi /= 0) then
-       call MPI_IRECV(recvBC12_II, (nR+2)*(nTheta+2), MPI_REAL, &
+       call MPI_IRECV(RecvBC12_II, (nR+2)*(nTheta+2), MPI_REAL, &
                       iProcTheta*nProcPhi + iProcPhi-1, &
-                      12,  iComm, RecvRequest12, iError)
-       call mpi_wait(RecvRequest12, status, iError)
-       x_G(:,:,0) = recvBC12_II
+                      12,  iComm, IntRecvRequest12, iError)
+       call mpi_wait(IntRecvRequest12, IntMpiStatus_I, iError)
+       x_G(:,:,0) = RecvBC12_II
     end if
 
   end subroutine set_boundary
