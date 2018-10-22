@@ -86,6 +86,8 @@ test:
 	-@(make test_potential)
 	-@(make test_fdips)
 	-@(make test_fdips_hypre)
+	-@(make test_fdips_wedge)
+	@echo "All test results:"
 	@ls -l *.diff
 
 test_harmonics:
@@ -153,7 +155,7 @@ test_fdips_check:
 	gunzip -c fdips_bxyz_ref.out.gz > fdips_bxyz_ref.out
 	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
 		fdips_bxyz.out \
-		fdips_bxyz_ref.out > test_fdips.diff
+		fdips_bxyz_ref.out >> test_fdips.diff
 	@ls -l test_fdips_log.diff test_fdips.diff
 
 ###############################################################################
@@ -183,6 +185,8 @@ test_fdips_hypre_check:
 	@ls -l test_fdips_hypre_log.diff test_fdips_hypre.diff
 
 
+###############################################################################
+
 test_fdips_wedge:
 	@echo "test_fdips_wedge_compile..." > test_fdips_wedge.diff
 	make FDIPS
@@ -192,19 +196,19 @@ test_fdips_wedge:
 	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
 	./redistribute.pl fdips_field_np010202.out fdips_b.out
 	./redistribute.pl fdips_ghostface_np010202.out fdips_g.out
-	@echo "test_fdips_check..." >> test_fdips.diff
-	make test_fdips_check
+	@echo "test_fdips_check..." >> test_fdips_wedge.diff
+	make test_fdips_wedge_check
 
-test_fdips_check:
+test_fdips_wedge_check:
 	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
 		fdips.log \
-		fdips_wedge.ref > test_fdips_log.diff
+		fdips_wedge.ref > test_fdips_wedge_log.diff
 	gunzip -c fdips_ref_wedge_b.gz > fdips_ref_b.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-8 -a=1e-9 \
 		fdips_b.out \
-		fdips_ref_b.out > test_fdips.diff
+		fdips_ref_b.out > test_fdips_wedge.diff
 	gunzip -c fdips_ref_wedge_g.gz > fdips_ref_g.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-8 -a=1e-9 \
 		fdips_g.out \
-		fdips_ref_g.out >> test_fdips.diff
-	@ls -l test_fdips_log.diff test_fdips.diff
+		fdips_ref_g.out >> test_fdips_wedge.diff
+	@ls -l test_fdips_wedge_log.diff test_fdips_wedge.diff
