@@ -1,4 +1,4 @@
-ModReadParam::read_file: read and broadcast nLine=  99 lines of text
+ModReadParam::read_file: read and broadcast nLine= 100 lines of text
 
 #MAGNETOGRAMFILE
 dipole11.out		NameFileIn
@@ -12,6 +12,7 @@ dipole11.out		NameFileIn
 1.0			rMin         (default is 1)
 25.0			rMax         (default is 2.5)
 T			UseLogRadius (default is F)
+F			UseWedge
 
 #GRID
 20			nR     (number of cells in the radial direction)
