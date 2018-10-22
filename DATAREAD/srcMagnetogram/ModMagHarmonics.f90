@@ -149,7 +149,7 @@ contains
 
     integer :: iTheta, iError
     real, allocatable:: Phi_I(:), Latitude_I(:)
-    real:: Param_I(1)
+    real:: Param_I(2)
 
     character(len=*), parameter:: NameSub = 'read_raw_magnetogram'
     !--------------------------------------------------------------------------
@@ -159,7 +159,7 @@ contains
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read header from file'//trim(NameFileIn))
 
-    write(*,*)'nTheta, nPhi, LongitudeShift: ', nTheta, nPhi, Param_I
+    write(*,*)'nTheta, nPhi, LongitudeShift: ', nTheta, nPhi, Param_I(1)
 
     allocate(Phi_I(nPhi), Latitude_I(nTheta), Br_II(0:nPhi-1,0:nTheta-1))
 
