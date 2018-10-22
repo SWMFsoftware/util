@@ -40,12 +40,11 @@ ascii						TypeFileField (ascii, real4 or real8)
 ghostface					TypeOutput
 fdips_ghostface.out		NameFilePotential		NameFileGhostFace
 ascii						TypeFilePotential		TypeFileGhostFace
- nTheta0, nPhi0, LongitudeShift:           60          60
-   3.00000000000000     
- nThetaLgr =            8 nThetaSml =            7
- nPhiLgr   =           15 nPhiSml   =           15
- Partitioning in nThetaAll gives:           15 Actual nThetaAll is:           15
- Partitioning in nPhiAll gives:             30 Actual nPhiAll is:             30
- nIter, Tolerance, iError=         130  7.436323207946296E-011           0
- max(abs(divb)) =   3.958097302692032E-008
- nProcTheta, nProcPhi=           2           2
+ nTheta0, nPhi0, LongitudeShift:  60 60   3.0000000000000000
+ nThetaLgr =  8 nThetaSml =  7
+ nPhiLgr   =  15 nPhiSml   =  15
+ Partitioning in nThetaAll gives:  15 Actual nThetaAll is:  15
+ Partitioning in nPhiAll gives:    30 Actual nPhiAll is:    30
+ nIter, Tolerance, iError= 116   7.9179512324012637E-11 0
+ max(abs(divb)) =    2.3915767630167117E-08
+ nProcTheta, nProcPhi= 2 2
