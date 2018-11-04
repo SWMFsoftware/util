@@ -77,6 +77,11 @@ T			UseSinglePart
 ! the redistribute.pl script.
 ! The solar corona component of the SWMF can read the TypeOutput="field" file
 ! in double precision binary format (real8).
+! Note that the new way to import FDIPS results in SWMF is to use "bxyz"
+!   output file type and "#LOOKUPTABLE" "B0" in PARAM.in.
+!   Check ModB0.f90 subroutine get_b0 for details.
+
+
 
 #OUTPUT
 field			TypeOutput    (field, bxyz, potential, or tecplot)
