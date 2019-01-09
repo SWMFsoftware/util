@@ -16,7 +16,7 @@ import argparse
 import pdb
 
 
-def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'):
+def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified', i=-1):
     """
     Flux-conserving magnetogram remapping tool.
     inputfile - FITS file containing original magnetogram (include path)
@@ -65,8 +65,8 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     d = g[0].data
     if magtype == 'ADAPT Synchronic':
         nim = g[0].header['NAXIS3'] # number of images
-        imdex = 0  #which of the 12 maps do you want?
-        print 'This file contains ', str(nim), ' images.  Using only number ', str(imdex)
+        imdex = i  #which of the 12 maps do you want?
+        print 'This file contains ', str(nim), ' images. Writing out file  ', outputfile
         if nim > 1:  #just keep one of them for now
             d = d[imdex,:,:]
 
@@ -237,7 +237,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     #ascii output file, Gabor format, the first line is arbitary
     fid = open(outputfile,'w')
     
-    line0 = 'magnetogram type = '+magtype+', grid_type = sin(lat), CR'+CRnumber+ ', MapDate = '+mapdate+', units: ['+bunit+'], created at: '+time.ctime()+'\n' 
+    line0 = 'magnetogram type = '+magtype+', grid_type = '+out_grid+', CR'+CRnumber+ ', MapDate = '+mapdate+', units: ['+bunit+'], created at: '+time.ctime()+'\n' 
     fid.write(line0)
     line0 = '       0      0.00000       2       1       1 \n'
     fid.write(line0)
@@ -398,10 +398,12 @@ if __name__ == '__main__':
     for example, with MacPorts.
     """)
     parser.add_argument('inputfile', help='Input FITS file name including path')
-    parser.add_argument('outputfile', help='Output magnetogram file name including path')
+    parser.add_argument('outputfile', nargs='?', default="map", help='Output file name including path but without the map index and .out extension. Default name is "map".')
     parser.add_argument('nlat', nargs='?', type=int, default=-1, help='Number of latitude points in output. Default is same as input.')
     parser.add_argument('nlon', nargs='?', type=int, default=-1, help='Number of longitude points in output. Default is same as input.')
     parser.add_argument('-grid',choices=['uniform','sinlat'],help="type of latitude grid in the output. Default is same as input.")
+    parser.add_argument('-istart', type=int, help='Initial map index. Default is the first map.', default=1)
+    parser.add_argument('-iend', type=int, help='Final map number. Default is the first map.', default=1)
 
     args = parser.parse_args()
 
@@ -418,10 +420,11 @@ if __name__ == '__main__':
     elif args.grid == 'uniform':
         grid_type = 'uniform'
 
-    remap(args.inputfile, args.outputfile, args.nlat, args.nlon, grid_type )
+if args.istart == None:
+    args.istart = 0
+if args.iend < args.istart:
+    args.iend = args.istart
 
-    
-
-        
-
-    
+for i in range(args.istart,args.iend+1):
+    out=args.outputfile+'_'+str(i)+'.out' 
+    remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
