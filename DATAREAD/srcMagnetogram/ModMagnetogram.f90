@@ -666,7 +666,7 @@ contains
     character(len=32)                :: FileNameOut
     !-----------------------------------------------------
     FileNameDat = trim(NameOutDir)//'PFSSM_Br.dat'
-    FileNameOut = trim(NameOutDir)//'PFSSM_Br.outs'
+    FileNameOut = trim(NameOutDir)//'PFSSM_Br.out'
 
     write(*,*) prefix, 'Writing PFSSM_Br output file, named'
     write(*,*) prefix, FileNameDat
@@ -705,10 +705,11 @@ contains
        end do
     end do
     close(iUnit)
-    call save_plot_file(FileNameOut,TypeFileIn='ascii',&
-         StringHeaderIn=&
-         'Longitude [Deg], Latitude [Deg], Br_0 [G], Br_SS [G]',&
-         nDimIn=2, CoordIn_DII=Coord_DII,VarIn_VII=State_VII)
+    call save_plot_file(FileNameOut, &
+         StringHeaderIn='Longitude, Latitude [Deg]; Br, BrSS [G]',&
+         NameVarIn='Longitude Latitude Br BrSS', &
+         CoordIn_DII=Coord_DII, &
+         VarIn_VII=State_VII)
 
   end subroutine Write_Br_plot
 
