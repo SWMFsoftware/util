@@ -24,7 +24,7 @@ subroutine timing_version(on,name,number)
 
   !OUTPUT ARGUMENTS:
   logical, intent(out)            :: on
-  character (len=40), intent(out) :: name
+  character (len=34), intent(out) :: name
   real, intent(out)               :: number
   !DESCRIPTION:
   ! Provide version information. 
