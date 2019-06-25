@@ -5,7 +5,7 @@ module ModPotentialField
   
   use ModMpi
   use ModUtilities, ONLY: CON_stop
-  use ModConst, ONLY: cPi, cTwoPi
+  use ModConst, ONLY: cPi, cTwoPi, cHalfPi
 
   implicit none
 
@@ -22,7 +22,7 @@ module ModPotentialField
   real   :: ThetaMin = 0, ThetaMax = cPi, PhiMin = 0, PhiMax = cTwoPi
 
   ! domain decomposition
-  integer:: nProcTheta = 2, nProcPhi = 2
+  integer:: nProcTheta = 0, nProcPhi = 0
 
   ! solver parameters
   character(len=20):: NameSolver         = 'BICGSTAB' ! or 'GMRES' or 'AMG'
@@ -41,6 +41,8 @@ module ModPotentialField
   logical           :: DoChangePolarField = .false.
   real              :: PolarFactor = 1.0
   real              :: PolarExponent = 2.0
+
+  logical           :: DoRemoveMonopole = .true.
 
   ! output paramters
   logical           :: DoSaveBxyz   = .false.
@@ -126,10 +128,6 @@ contains
     call read_init
     if(iProc==0) call read_echo_set(.true.)
 
-    ! Default decomposition
-    nProcTheta = nProc
-    nProcPhi   = 1
-
     do
        if(.not.read_line() ) EXIT
        if(.not.read_command(NameCommand)) CYCLE
@@ -171,6 +169,8 @@ contains
           DoChangePolarField = .true.
           call read_var('PolarFactor',   PolarFactor)
           call read_var('PolarExponent', PolarExponent)
+       case('#REMOVEMONOPOLE')
+          call read_var('DoRemoveMonopole', DoRemoveMonopole)
        case("#TIMING")
           call read_var('UseTiming', UseTiming)
        case("#TEST")
@@ -236,10 +236,14 @@ contains
        end select
     end do
 
-    if ( nProcTheta*nProcPhi /= nProc .and. iProc==0) then
-       write(*,*)NameSub,': nProcTheta, nProcPhi, nProc=', &
-            nProcTheta, nProcPhi, nProc
-       call CON_stop(NameSub//': nProc should be nProcTheta*nProcPhi')
+    if ( nProcTheta*nProcPhi /= nProc .and. &
+        nProcTheta*nProcPhi /= 0 .and. iProc==0) then
+      write(*,*) NameSub, ': WARNING: nProcTheta, nProcPhi, nProc=', &
+          nProcTheta, nProcPhi, nProc
+      write(*,*) NameSub, &
+          ': Changing to default decomposition. Look I am intelligent!'
+      nProcTheta = 0
+      nProcPhi = 0
     end if
 
     if (DoChangePolarField .and. UseWedge) then
@@ -261,6 +265,7 @@ contains
 
     use ModPlotFile, ONLY: read_plot_file
     use ModNumConst, ONLY: cDegToRad
+    use ModUtilities, ONLY: upper_case
 
     ! Read the raw magnetogram file into a 2d array
 
@@ -271,6 +276,10 @@ contains
 
     real, allocatable:: Br0_II(:,:), Var_II(:,:), Phi0_I(:), Lat0_I(:)
     real:: Param_I(1)
+
+    logical :: IsInputLonLatInDegree = .true.
+    logical :: IsInputLatReverse = .false.
+    character(len=200) :: NameVarOut
 
     character(len=*), parameter:: NameSub = 'read_magnetogram'
     !------------------------------------------------------------------------
@@ -287,15 +296,30 @@ contains
 
     call read_plot_file(NameFileIn, &
          Coord1Out_I=Phi0_I, Coord2Out_I=Lat0_I, VarOut_II = Var_II, &
-         iErrorOut=iError)
+         iErrorOut=iError, NameVarOut=NameVarOut)
 
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read data from file'//trim(NameFileIn))
 
+    call upper_case(NameVarOut)
+    if (index(NameVarOut, '[DEG') > 0) then
+      IsInputLonLatInDegree = .true.
+    elseif (maxval(abs(Lat0_I)) > cHalfPi .or. &
+        maxval(abs(Phi0_I)) > cTwoPi) then
+      IsInputLonLatInDegree = .true.
+    else
+      IsInputLonLatInDegree = .false.
+    endif
+
+    if (IsInputLonLatInDegree) then
+      Phi0_I = Phi0_I * cDegToRad
+      Lat0_I = Lat0_I * cDegToRad
+    endif
+
     if(DoChangePolarField)then
        do iTheta = 1, nTheta0
           Var_II(:,iTheta) = Var_II(:,iTheta) * (1 + &
-             (PolarFactor-1)*abs(sin(cDegToRad*Lat0_I(iTheta)))**PolarExponent)
+             (PolarFactor-1)*abs(sin(Lat0_I(iTheta)))**PolarExponent)
        end do
     end if
 
@@ -308,15 +332,36 @@ contains
 
     
     ! Convert Var_II(iLon,iLat) -> Br0_II(iTheta,iPhi)
+    IsInputLatReverse = Lat0_I(1) > Lat0_I(nTheta0)
     do iTheta = 1, nTheta0, 1
        do iPhi = 1, nPhi0
-          Br0_II(iTheta,iPhi) = Var_II(iPhi,nTheta0+1-iTheta)
+          if (IsInputLatReverse) then
+            Br0_II(iTheta,iPhi) = Var_II(iPhi,iTheta)
+          else
+            Br0_II(iTheta,iPhi) = Var_II(iPhi,nTheta0+1-iTheta)
+          endif
        end do
     end do
     deallocate(Var_II)
 
     ! Fix too large values of Br
     where (abs(Br0_II) > BrMax) Br0_II = sign(BrMax, Br0_II)
+
+    ! remove monopole
+    if ((.not. UseWedge) .and. DoRemoveMonopole) then
+      if (UseCosTheta) then
+        BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
+      else
+        BrAverage = 0.0
+        do iTheta = 1, nTheta0
+          BrAverage = BrAverage + &
+            sum(Br0_II(iTheta,:)) * cos(Lat0_I(nTheta0+1-iTheta))
+        enddo
+        BrAverage = BrAverage / (nTheta0*nPhi0)
+      endif
+      Br0_II = Br0_II - BrAverage
+    endif
+
 
     if(nTheta0 > nThetaAll .and. nThetaAll > 1)then
 
@@ -387,11 +432,6 @@ contains
 
     Br_II = Br_II / (nThetaRatio*nPhiRatio)
 
-    if (.not. UseWedge) then
-      ! remove monopole
-      BrAverage = sum(Br_II)/(nThetaAll*nPhiAll)
-      Br_II = Br_II - BrAverage
-    endif
 
     deallocate(Br0_II)
 
@@ -407,7 +447,32 @@ contains
     integer :: iR, iTheta, iPhi
     real:: dR, dLogR, dTheta, dPhi, dZ, z
     real:: CellShiftPhi
+    real:: Err, ErrNew
+    integer :: i, j
     !--------------------------------------------------------------------------
+
+    if (nProcTheta*nProcPhi == 0) then
+      nProcPhi = 1
+      Err = real(max(nPhiAll,nThetaAll))
+      do i = 1, floor(sqrt(real(nProc)))
+        j = nProc/i
+        if (i*j == nProc) then
+          ErrNew = abs(nPhiAll/real(i)-nThetaAll/real(j))
+          if (ErrNew < Err) then
+            Err = ErrNew
+            nProcPhi = i
+          endif
+          ErrNew = abs(nPhiAll/real(j)-nThetaAll/real(i))
+          if (ErrNew < Err) then
+            Err = ErrNew
+            nProcPhi = j
+          endif
+        endif
+      enddo
+      nProcTheta = nProc/nProcPhi
+      if (iProc == 0) write(*,*) 'New nProcTheta, nProcPhi, nProc=', &
+        nProcTheta, nProcPhi, nProc
+    endif
 
     ! The processor coordinate
     iProcTheta = iProc/nProcPhi

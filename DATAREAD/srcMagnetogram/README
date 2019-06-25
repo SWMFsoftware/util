@@ -4,7 +4,7 @@
 
 ##########################################################################
 How to create input magnetogram files for the SWMF from a
-raw magnetogram fits file:
+raw magnetogram fits file (inlcuding ADAPT maps): 
 
 These are the steps for creating a magnetogram file for SWMF from 
 any raw magnetogram fits file.
@@ -39,6 +39,32 @@ to be installed on your machine.
 
    ./remap_magnetogram.py your_magnetogram_file.fits output_file.dat
 
+  ------------------
+   FOR ADAPT MAPS,
+  ------------------
+   Run the python script
+
+   ./remap_magnetogram.py your_magnetogram_file.fits -istart 'startindex' -iend 'endindex'
+
+   This produces map_'index'.out ascii files.
+   'startindex' and 'endindex' are the map index numbers that are specified by the user.
+    If unspecified, only the first adapt map realisation is remapped.
+    istart < iend and lie between 1-12 (no. of adapt realisations).
+
+   For example,
+   -----------
+   remap_magnetogram.py adapt40411_02e012_201708132000_i00020000n0.fts -istart 1 -iend 12
+   converts all 12 realisations of the ADAPT-HMI map and saves 12 (map_1.out to map_12.out) ascii files.
+
+   -grid can be used to specify the required grid (uniform/sinlat) of the output ascii file.
+    If unspecified, the grid of output map is same as that of the input magnetogram.
+
+   For more information on remap options use,
+   -----------------------------------------
+   remap_magnetogarm.py -h
+   
+   Once the magnetogram fits files are converted to ascii files, follow steps 4 and 5 to create the Harmonics file.
+
 3b. Use IDL to convert. Rename your magnetogram file and run the scripts
 
    cp your_magnetoram_file.fits fitsfile.fits
@@ -60,6 +86,12 @@ to be installed on your machine.
 
    cp FDIPIS.in.orig FDIPS.in
    emacs FDIPS.in
+
+   ---------------
+   FOR ADAPT MAPS, 
+   ---------------
+   cp HARMONICS.in.ADAPT.orig HARMONICS.in
+   emacs HARMONICS.in
 
    The original input files contain the documentation about all options.
 
