@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
-#this magnetogram remapping can either be run as a script from the unix command line
-#  or imported into Python
-#accompanying files (must be in same directory):
-#    remap_magnetogram.py.README.txt
+# this magnetogram remapping can either be run as a script from the unix command line
+# or imported into Python. See description of use in the README file
 #         by  Richard A. Frazin July 2014 - February 2015
 
 from astropy.io import fits
