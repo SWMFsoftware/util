@@ -57,8 +57,8 @@ program dipole11
 
   call save_plot_file('dipole11.out', &
        StringHeaderIn = 'DIPOLE11 output: [deg] [G]', &
-       NameVarIn = 'Longitude Latitude Br LongitudeShift', &
-       ParamIn_I = (/ 0.0 /), &
+       NameVarIn = 'Longitude Latitude Br LongitudeShift CR', &
+       ParamIn_I = (/ 0.50, 0.0/), &
        Coord1In_I = cRadToDeg*Phi_I, &
        Coord2In_I = 90.0 - cRadToDeg*Theta_I, &
        VarIn_II  = Br_II)
@@ -78,8 +78,8 @@ program dipole11
 
   call save_plot_file('dipole11uniform.out', &
        StringHeaderIn = 'DIPOLE11 output: [deg] [G]', &
-       NameVarIn = 'Longitude Latitude Br LongitudeShift', &
-       ParamIn_I = (/ 0.0 /), &
+       NameVarIn = 'Longitude Latitude Br LongitudeShift CR', &
+       ParamIn_I = (/0.50, 0.0/), &
        Coord1In_I = cRadToDeg*Phi_I, &
        Coord2In_I = 90.0 - cRadToDeg*Theta_I, &
        VarIn_II  = Br_II)
