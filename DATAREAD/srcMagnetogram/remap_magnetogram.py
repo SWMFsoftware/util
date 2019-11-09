@@ -193,7 +193,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
 
     #try to get some context information from the FITS file to include in output
     try:
-        CRnumber = str(g[0].header['CRROTEDG'])  #works for ADAPT
+        CRnumber = str(int(g[0].header['MAPCR']))  #works for ADAPT
     except KeyError as er:
         CRnumber = '0'
 
@@ -231,17 +231,23 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         long0 = g[0].header['LONG0'] #works on GONG 
     except KeyError as er:
         long0 = 0
+    if long0 == 0:
+        try :
+            long0 = g[0].header['CRLNGEDG']
+        except KeyError as er:
+            long0 = 0
+
 
     #ascii output file, Gabor format, the first line is arbitary
     fid = open(outputfile,'w')
     
     line0 = 'magnetogram type = '+magtype+', grid_type = '+out_grid+', CR'+CRnumber+ ', MapDate = '+mapdate+', units: ['+bunit+'], created at: '+time.ctime()+'\n' 
     fid.write(line0)
-    line0 = '       0      0.00000       2       1       1 \n'
+    line0 = '       0      0.00000       2       2       1 \n'
     fid.write(line0)
     fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
-    fid.write(str(long0 + 0.5*360./nlong) + ' \n') #longitude shift (important for GONG Hourly)
-    fid.write('Longitude Latitude Br LongitudeShift \n')
+    fid.write(str(long0 + 0.5*360./nlong) +'  '+str(CRnumber)+' \n') #longitude shift (important for GONG Hourly)
+    fid.write('Longitude Latitude Br LongitudeShift CR \n')
     
     for k in np.arange(nlat):
          for l in np.arange(nlong):
@@ -293,6 +299,7 @@ def FITS_RECOGNIZE(inputfile):
     print("Primary Extension Header:\n")
     print(repr(header0))
     print("====================================================\n")
+
 
     try:
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG
