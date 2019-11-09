@@ -286,6 +286,13 @@ def FITS_RECOGNIZE(inputfile):
     magnetogram_type = 'unknown'
     grid_type = 'unknown'
     g = fits.open(inputfile)
+    g.info()
+    header0 = g[0].header
+    # Print out the headers
+    print("====================================================\n")
+    print("Primary Extension Header:\n")
+    print(repr(header0))
+    print("====================================================\n")
 
     try:
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG
