@@ -42,6 +42,9 @@ module ModPotentialField
   real              :: PolarFactor = 1.0
   real              :: PolarExponent = 2.0
 
+  ! Parameters used to apply modified scaling to the raw magnetogram            
+  real:: BrFactor = 1.0, BrMin = 0.0
+
   logical           :: DoRemoveMonopole = .true.
 
   ! output paramters
@@ -52,6 +55,11 @@ module ModPotentialField
   logical           :: DoSaveField   = .false.
   character(len=100):: NameFileField = 'potentialfield'
   character(len=5)  :: TypeFileField = 'real8'
+
+  logical           :: DoSave2d   = .false.
+  logical           :: DoPlot2dOnly   = .false.
+  character(len=100):: NameFile2d = 'field2d'
+  character(len=5)  :: TypeFile2d = 'real8'
 
   logical           :: DoSavePotential   = .false.
   character(len=100):: NameFilePotential = 'potentialtest'
@@ -169,6 +177,9 @@ contains
           DoChangePolarField = .true.
           call read_var('PolarFactor',   PolarFactor)
           call read_var('PolarExponent', PolarExponent)
+       case('#CHANGEWEAKFIELD')
+          call read_var('BrFactor', Brfactor)
+          call read_var('BrMin', BrMin)
        case('#REMOVEMONOPOLE')
           call read_var('DoRemoveMonopole', DoRemoveMonopole)
        case("#TIMING")
@@ -209,6 +220,11 @@ contains
              ! remove .out extension if present
              i = index(NameFileField,'.out')
              if(i>0) NameFileField = NameFileField(1:i-1)
+          case('field2d')
+             DoSave2d = .true.
+             DoPlot2dOnly = .true.
+             call read_var('NameFile2d', NameFile2d)
+             call read_var('TypeFile2d', TypeFile2d)
           case('potential')
              DoSavePotential = .true.
              call read_var('NameFilePotential', NameFilePotential)
@@ -250,7 +266,7 @@ contains
       call CON_stop('UseWedge currently does not support DoChangePolarField.')
     endif
 
-    if (.not.(DoSaveBxyz .or. DoSaveField .or. DoSavePotential .or. &
+    if (.not.(DoSaveBxyz .or. DoSaveField .or. DoSave2d .or. DoSavePotential .or. &
         DoSaveTecplot .or. DoSaveGhostFace)) then
       call CON_stop(&
           'No output file specified; you will need at least one #OUTPUT')
@@ -263,8 +279,8 @@ contains
   !===========================================================================
   subroutine read_magnetogram
 
-    use ModPlotFile, ONLY: read_plot_file
-    use ModNumConst, ONLY: cDegToRad
+    use ModPlotFile, ONLY: read_plot_file, save_plot_file
+    use ModNumConst, ONLY: cDegToRad, cRadToDeg
     use ModUtilities, ONLY: upper_case
 
     ! Read the raw magnetogram file into a 2d array
@@ -303,65 +319,90 @@ contains
 
     call upper_case(NameVarOut)
     if (index(NameVarOut, '[DEG') > 0) then
-      IsInputLonLatInDegree = .true.
+       IsInputLonLatInDegree = .true.
     elseif (maxval(abs(Lat0_I)) > cHalfPi .or. &
-        maxval(abs(Phi0_I)) > cTwoPi) then
-      IsInputLonLatInDegree = .true.
+         maxval(abs(Phi0_I)) > cTwoPi) then
+       IsInputLonLatInDegree = .true.
     else
-      IsInputLonLatInDegree = .false.
+       IsInputLonLatInDegree = .false.
     endif
 
     if (IsInputLonLatInDegree) then
-      Phi0_I = Phi0_I * cDegToRad
-      Lat0_I = Lat0_I * cDegToRad
+       Phi0_I = Phi0_I * cDegToRad
+       Lat0_I = Lat0_I * cDegToRad
     endif
 
     if(DoChangePolarField)then
        do iTheta = 1, nTheta0
           Var_II(:,iTheta) = Var_II(:,iTheta) * (1 + &
-             (PolarFactor-1)*abs(sin(Lat0_I(iTheta)))**PolarExponent)
+               (PolarFactor-1)*abs(sin(Lat0_I(iTheta)))**PolarExponent)
        end do
     end if
 
     ! Check if the latitude coordinate is uniform or not
     UseCosTheta = abs(Lat0_I(3) - 2*Lat0_I(2) + Lat0_I(1)) > 1e-6
     if (UseCosTheta .and. UseWedge) then
-      call CON_stop(NameSub//&
-        ': Currently UseWedge only works with uniform latitude grid')
+       call CON_stop(NameSub//&
+            ': Currently UseWedge only works with uniform latitude grid')
     endif
 
-    
     ! Convert Var_II(iLon,iLat) -> Br0_II(iTheta,iPhi)
     IsInputLatReverse = Lat0_I(1) > Lat0_I(nTheta0)
-    do iTheta = 1, nTheta0, 1
+    do iTheta = 1, nTheta0
        do iPhi = 1, nPhi0
           if (IsInputLatReverse) then
-            Br0_II(iTheta,iPhi) = Var_II(iPhi,iTheta)
+             Br0_II(iTheta,iPhi) = Var_II(iPhi,iTheta)
           else
-            Br0_II(iTheta,iPhi) = Var_II(iPhi,nTheta0+1-iTheta)
+             Br0_II(iTheta,iPhi) = Var_II(iPhi,nTheta0+1-iTheta)
           endif
        end do
     end do
+
     deallocate(Var_II)
+
+    ! Apply a scaling factor to small magnetic fields, to compensate
+    ! the measurement error for the coronal hole (=very low) field
+    if(BrMin > 0.0 .or. BrFactor > 1.0) &
+         Br0_II = sign(min(abs(Br0_II) + BrMin, BrFactor*abs(Br0_II)), Br0_II)
 
     ! Fix too large values of Br
     where (abs(Br0_II) > BrMax) Br0_II = sign(BrMax, Br0_II)
 
     ! remove monopole
     if ((.not. UseWedge) .and. DoRemoveMonopole) then
-      if (UseCosTheta) then
-        BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
-      else
-        BrAverage = 0.0
-        do iTheta = 1, nTheta0
-          BrAverage = BrAverage + &
-            sum(Br0_II(iTheta,:)) * cos(Lat0_I(nTheta0+1-iTheta))
-        enddo
-        BrAverage = BrAverage / (nTheta0*nPhi0)
-      endif
-      Br0_II = Br0_II - BrAverage
+       if (UseCosTheta) then
+          BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
+       else
+          BrAverage = 0.0
+          do iTheta = 1, nTheta0
+             BrAverage = BrAverage + &
+                  sum(Br0_II(iTheta,:)) * cos(Lat0_I(nTheta0+1-iTheta))
+          enddo
+          BrAverage = BrAverage / (nTheta0*nPhi0)
+       endif
+       Br0_II = Br0_II - BrAverage
     endif
 
+    ! The 2D Br variable is transposed from (Lat,Lon) back to
+    ! (Lon,180-Lat) for comparison to the original Magnetogram
+    if(DoSave2d .and. iProc == 0)then
+       if(IsInputLatReverse)then
+          call save_plot_file(NameFile2d, TypeFileIn=TypeFile2d, &
+               StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
+               NameVarIn='Longitude Latitude Br', &
+               VarIn_II=transpose(Br0_II), &
+               Coord1In_I=Phi0_I*cRadToDeg, &
+               Coord2In_I=Lat0_I*cRadToDeg)
+       else
+          call save_plot_file(NameFile2d, TypeFileIn=TypeFile2d, &
+               StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
+               NameVarIn='Longitude Latitude Br', &
+               VarIn_II=transpose(Br0_II(nTheta0:1:-1,:)), &
+               Coord1In_I=Phi0_I*cRadToDeg, &
+               Coord2In_I=Lat0_I*cRadToDeg)
+       end if
+       if(DoPlot2dOnly) call CON_stop(NameSub//': stop FDIPS after 2D plotting')
+    endif
 
     if(nTheta0 > nThetaAll .and. nThetaAll > 1)then
 
@@ -396,12 +437,12 @@ contains
 
     do iPhi = 1, nPhiAll
        if (.not. UseWedge) then
-         jPhi0 = nPhiRatio*(iPhi-1) - nPhiRatio/2 + 1
-         jPhi1 = nPhiRatio*(iPhi-1) + nPhiRatio/2 + 1
+          jPhi0 = nPhiRatio*(iPhi-1) - nPhiRatio/2 + 1
+          jPhi1 = nPhiRatio*(iPhi-1) + nPhiRatio/2 + 1
        else
-         ! phi binning is different for UseWedge because no periodicity
-         jPhi0 = nPhiRatio*(iPhi-1) + 1
-         jPhi1 = jPhi0 + nPhiRatio -1
+          ! phi binning is different for UseWedge because no periodicity
+          jPhi0 = nPhiRatio*(iPhi-1) + 1
+          jPhi1 = jPhi0 + nPhiRatio -1
        endif
 
        do jPhi = jPhi0, jPhi1
@@ -414,10 +455,10 @@ contains
           end if
 
           if (.not. UseWedge) then
-            ! Apply periodicity
-            kPhi = modulo(jPhi-1,nPhi0) + 1
+             ! Apply periodicity
+             kPhi = modulo(jPhi-1,nPhi0) + 1
           else
-            kPhi = jPhi
+             kPhi = jPhi
           endif
 
           do iTheta = 1, nThetaAll
@@ -802,7 +843,7 @@ contains
          if(nProcPhi > 1)then
             call MPI_allreduce(Bpole_DII, Btotal_DII, size(Bpole_DII), &
                  MPI_REAL, MPI_SUM, iComm, iError)
-            Bpole_DII = Btotal_DII
+            Bpole_DII = Btotal_DII 
          end if
 
          ! Get the average
