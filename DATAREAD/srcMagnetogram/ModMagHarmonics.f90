@@ -48,7 +48,14 @@ module ModMagHarmonics
   integer, parameter:: MaxHarmonics = 180
   integer:: nHarmonics = MaxHarmonics, nHarmonicsIn = MaxHarmonics
 
-  integer:: i,n,m,iTheta,iPhi,iR,mm,nn,CarringtonRotation
+  integer:: i,n,m,iTheta,iPhi,iR,mm,nn
+  ! Carrington rotation #. If the map covers parts of two rotations,
+  ! the carrington rotation for the central meridian is provided
+  integer:: iCarringtonRotation = 0
+  ! Garrington longitude of the left margin of the map 
+  ! ("leading longitude")
+  integer:: iLong0 = 0
+
   real:: CosTheta,SinTheta
   real:: stuff1,stuff2,stuff3
   real:: Theta,Phi
@@ -147,19 +154,21 @@ contains
 
     ! Read the raw magnetogram file into a 2d array
 
-    integer :: iTheta, iError
+    integer :: iTheta, iError, nParam
     real, allocatable:: Phi_I(:), Latitude_I(:)
     real:: Param_I(2)
 
     character(len=*), parameter:: NameSub = 'read_raw_magnetogram'
     !--------------------------------------------------------------------------
     call read_plot_file(NameFileIn, n1Out = nPhi, n2Out = nTheta, &
-         ParamOut_I=Param_I, iErrorOut=iError)
+         ParamOut_I=Param_I, iErrorOut=iError, nParamOut = nParam)
 
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read header from file'//trim(NameFileIn))
+    if(nParam>0)iLong0 = nint(Param_I(1)-0.50*360.0/nPhi)
+    if(nParam>1)iCarringtonRotation = nint(Param_I(2))
 
-    write(*,*)'nTheta, nPhi, LongitudeShift: ', nTheta, nPhi, Param_I(1)
+    write(*,*)'nTheta, nPhi, LongitudeShift: ', nTheta, nPhi, iLong0
 
     allocate(Phi_I(nPhi), Latitude_I(nTheta), Br_II(0:nPhi-1,0:nTheta-1))
 
@@ -541,9 +550,9 @@ contains
        stop
     end if
 
-    write ( iUnit, '(a19,I3,a10,I4,a4)' ) &
+    write ( iUnit, '(a19,I3,a10,I4.4,a1,i3.3)' ) &
          'Coefficients order=',nHarmonics, &
-         ' Central=CT',CarringtonRotation,':180'
+         ' Central=CT',iCarringtonRotation,':',mod(iLong0+180,360)
     write ( iUnit, '(a)' ) 'Observation time'
     write ( iUnit, '(a45,I3)' ) &
          'B0 angle & Nmax:        0          ',nHarmonics

@@ -34,12 +34,12 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     pi = 3.141592653589793
 
     if ( (out_grid != 'sin(lat)') and (out_grid != 'uniform') and (out_grid != 'unspecified') ):
-        print "Unknown output grid type.  Choices are blank, 'unspecified', 'uniform' and 'sin(lat)' "
+        print ("Unknown output grid type.  Choices are blank, 'unspecified', 'uniform' and 'sin(lat)' ")
         return(-1)
     
     cc =  FITS_RECOGNIZE(inputfile)
     if cc == -1:
-        print "Input file not recognized."
+        print ("Input file not recognized.")
         return(-1)
     else:
         magtype = cc[0]
@@ -56,7 +56,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     elif ( (grid_type == 'sin(lat)') and (out_grid == 'uniform') ):
         transformation = 'sin2reg'
     else:
-        print "Unknown transformation type."
+        print ("Unknown transformation type.")
         return(-1)
 
     g = fits.open(inputfile)
@@ -64,7 +64,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     if magtype == 'ADAPT Synchronic':
         nim = g[0].header['NAXIS3'] # number of images
         imdex = i  #which of the 12 maps do you want?
-        print 'This file contains ', str(nim), ' images. Writing out file  ', outputfile
+        print ('This file contains ', str(nim), ' images. Writing out file  ', outputfile)
         if nim > 1:  #just keep one of them for now
             d = d[imdex,:,:]
 
@@ -74,13 +74,13 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     if nlat == -1:
         nlat = nla
     elif nlat < 1:
-        print "nlat has to be -1 or a positive integer."
+        print ("nlat has to be -1 or a positive integer.")
         return(-1)
 
     if nlong == -1:
         nlong = nlo
     elif nlong < 1:
-        print "nlong has to be -1 or a positive integer."
+        print ("nlong has to be -1 or a positive integer.")
         return(-1)
     
     
@@ -89,12 +89,12 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     
     try:
         g[0].header['GRID'] = out_grid #change the existing header value
-    except KeyError, er:
+    except KeyError as er:
         g[0].header.set('GRID',out_grid) #create FITS header keyword
 
     try:
         g[0].header['CTYPE2'] = out_grid #change the existing header value
-    except KeyError, er:
+    except KeyError as er:
         g[0].header.set('CTYPE2',out_grid) #create FITS header keyword
 
     if out_grid == 'sin(lat)':
@@ -102,7 +102,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     elif out_grid == 'uniform':
         newlat = (180/pi)*np.linspace(-pi/2 + pi/2/nlat,pi/2 - pi/2/nlat,nlat)
     else:
-        print "out_grid incorrectly set."
+        print ("out_grid incorrectly set.")
         return(-1)
 
 
@@ -163,7 +163,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                     newmap[l,k] = result[0]
 
         else:
-            print "Unknown transformation type."
+            print ("Unknown transformation type.")
             return(-1)
 
 
@@ -177,7 +177,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         elif grid_type == 'sin(lat)':
             oldflux = np.sum(d)*4.*pi/nlo/nla
         else:
-            print "Bad grid_type."
+            print ("Bad grid_type.")
             return(-1)
         if out_grid == 'uniform':
             latt =  np.cos(np.linspace(-pi/2 + pi/2/nlat,pi/2 - pi/2/nlat,nlat))
@@ -186,21 +186,21 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         elif out_grid == 'sin(lat)':
             newflux = np.sum(newmap)*4.*pi/nlong/nlat
         else:
-            print "Bad out_grid."
+            print ("Bad out_grid.")
             return(-1)
-        print "original flux =",str(oldflux),", new flux =",str(newflux)
+        print ("original flux =",str(oldflux),", new flux =",str(newflux))
     
 
     #try to get some context information from the FITS file to include in output
     try:
-        CRnumber = str(g[0].header['CRROTEDG'])  #works for ADAPT
-    except KeyError, er:
+        CRnumber = str(int(g[0].header['MAPCR']))  #works for ADAPT
+    except KeyError as er:
         CRnumber = '0'
 
     if CRnumber == '0':    
         try :
             CRnumber = str(g[0].header['CAR_ROT']) #works on GONG and MDI
-        except KeyError,er:
+        except KeyError as er:
             CRnumber = '0'
 
     if magtype.find('GONG') > -1:
@@ -208,40 +208,46 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     else:                          
         try:
             mapdate = g[0].header['MAPTIME']  #works for ADAPT
-        except KeyError, er:
+        except KeyError as er:
             mapdate = '0000-00-00T00:00:00'
 
         if mapdate == '0000-00-00T00:00:00':    
             try :
                 mapdate = g[0].header['MAP_DATE']  #works for Hathaway
-            except KeyError, er:
+            except KeyError as er:
                 mapdate = '0000-00-00T00:00:00'
 
         if mapdate == '0000-00-00T00:00:00':    
             try :
                 mapdate = g[0].header['T_OBS']  #works for MDI
-            except KeyError, er:
+            except KeyError as er:
                 mapdate = '0000-00-00T00:00:00'
     try:
         bunit = g[0].header['BUNIT']  #works on GONG, MDI
-    except KeyError, er:   #Hathaway and ADAPT don't list units
+    except KeyError as er:   #Hathaway and ADAPT don't list units
         bunit = 'Gauss'  #assume it's Gauss if you don't know
                 
     try :
         long0 = g[0].header['LONG0'] #works on GONG 
-    except KeyError, er:
+    except KeyError as er:
         long0 = 0
+    if long0 == 0:
+        try :
+            long0 = g[0].header['CRLNGEDG']
+        except KeyError as er:
+            long0 = 0
+
 
     #ascii output file, Gabor format, the first line is arbitary
     fid = open(outputfile,'w')
     
     line0 = 'magnetogram type = '+magtype+', grid_type = '+out_grid+', CR'+CRnumber+ ', MapDate = '+mapdate+', units: ['+bunit+'], created at: '+time.ctime()+'\n' 
     fid.write(line0)
-    line0 = '       0      0.00000       2       1       1 \n'
+    line0 = '       0      0.00000       2       2       1 \n'
     fid.write(line0)
     fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
-    fid.write(str(long0 + 0.5*360./nlong) + ' \n') #longitude shift (important for GONG Hourly)
-    fid.write('Longitude Latitude Br LongitudeShift \n')
+    fid.write(str(long0 + 0.5*360./nlong) +'  '+str(CRnumber)+' \n') #longitude shift (important for GONG Hourly)
+    fid.write('Longitude Latitude Br LongitudeShift CR \n')
     
     for k in np.arange(nlat):
          for l in np.arange(nlong):
@@ -252,7 +258,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     ## fid.write('#CR\n')
     ## try:
     ##     fid.write(str(g[0].header['CRROTEDG']) + '\n')
-    ## except KeyError, er:
+    ## except KeyError as er:
     ##     fid.write('-1')
     ## fid.write('#nMax\n')
     ## fid.write(str(-1) + '\n')
@@ -286,30 +292,38 @@ def FITS_RECOGNIZE(inputfile):
     magnetogram_type = 'unknown'
     grid_type = 'unknown'
     g = fits.open(inputfile)
+    g.info()
+    header0 = g[0].header
+    # Print out the headers
+    print("====================================================\n")
+    print("Primary Extension Header:\n")
+    print(repr(header0))
+    print("====================================================\n")
+
 
     try:
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG
-    except KeyError, er:
+    except KeyError as er:
         telescope = 'unknown'
         
     try:
         inst = g[0].header['INSTRUME'] #works for MDI
-    except KeyError,er:
+    except KeyError as er:
         inst = 'unknown'
 
     try:
         ctyp = g[0].header['CTYPE2'] #works for MDI, GONG
-    except KeyError, er:
+    except KeyError as er:
         ctyp = 'unknown'
 
     try:
         model = g[0].header['MODEL'] #works for ADAPT
-    except KeyError, err:
+    except KeyError as err:
         model = 'unknown'
 
     try:
         sft = g[0].header['SFT_TYP'] #works for Hathaway
-    except KeyError,er:
+    except KeyError as er:
         sft = 'unknown'
 
     nlo = g[0].header['NAXIS1'] # number of longitude points
@@ -323,12 +337,12 @@ def FITS_RECOGNIZE(inputfile):
             long0 = g[0].header['LONG0']
             if float(long0) > 0.:
                 magnetogram_type = 'NSO-GONG Hourly'
-        except KeyError, er:
+        except KeyError as er:
             long0 = - 1
         if ctyp.find('CRLT-CEA') > -1:
             grid_type = 'sin(lat)'
         else:
-            print "unknown NSO-GONG magnetogram type"
+            print ("unknown NSO-GONG magnetogram type")
             return(-1)
 
     if telescope.find('SOHO') > -1:
@@ -336,19 +350,19 @@ def FITS_RECOGNIZE(inputfile):
             magnetogram_type = 'MDI Synoptic'
             grid_type = 'sin(lat)'
         else :
-            print "unknown SOHO magnetogram type"
+            print ("unknown SOHO magnetogram type")
             return(-1)
 
     if model.find('ADAPT') > -1:
         magnetogram_type = 'ADAPT Synchronic'
         try:
             adapt_grid = g[0].header['GRID']
-        except KeyError, er:
+        except KeyError as er:
             adapt_grid = -1.
         if adapt_grid == 1.:
             grid_type = 'uniform'
         else:
-            print "unknown ADAPT magnetogram type"
+            print ("unknown ADAPT magnetogram type")
             return(-1)
 
     if sft.find('Baseline / Assimilation') > -1:
@@ -356,10 +370,10 @@ def FITS_RECOGNIZE(inputfile):
         grid_type = 'uniform'
 
     if  ( (magnetogram_type == 'unknown') or (grid_type == 'unknown') ):
-        print "I don't recognize the type of this magnetogram."
+        print ("I don't recognize the type of this magnetogram.")
         return(-1)
                 
-    print "I think this is a",magnetogram_type,"magnetogram on a",str(nla),"X",str(nlo),grid_type,"grid."
+    print ("I think this is a",magnetogram_type,"magnetogram on a",str(nla),"X",str(nlo),grid_type,"grid.")
     return( (magnetogram_type, grid_type) )
 
     
@@ -406,10 +420,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.nlat < -1:
-        print "nlat must be -1 or a postive integer.  No output."
+        print ("nlat must be -1 or a postive integer.  No output.")
         quit()
     if args.nlon < -1:
-        print "nlon must be -1 or a postive integer.  No output."
+        print ("nlon must be -1 or a postive integer.  No output.")
         quit()
 
     grid_type = 'unspecified'
