@@ -143,7 +143,7 @@ contains
   !=================================================================
   subroutine read_raw_magnetogram
 
-    use ModPlotFile,ONLY: read_plot_file
+    use ModPlotFile,ONLY: read_plot_file, save_plot_file
 
     ! Read the raw magnetogram file into a 2d array
 
@@ -186,7 +186,6 @@ contains
                * abs(sin(cDegToRad*Latitude_I(iTheta+1)))**PolarExponent)
        end do
     end if
-    deallocate(Latitude_I)
 
     ! Apply a scaling factor to small magnetic fields, to compensate
     ! the measurement error for the coronal hole (=very low) field.
@@ -200,6 +199,16 @@ contains
 
     ! Fix too large values of Br
     where (abs(Br_II) > BrMax) Br_II = sign(BrMax, Br_II)
+
+    ! Save 2D file
+     call save_plot_file('harmonics_2d.out', TypeFileIn='ascii',&
+         StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
+         NameVarIn='Longitude Latitude Br',&
+         VarIn_II=Br_II, &
+         Coord1In_I=Phi_I, &
+         Coord2In_I=Latitude_I)
+
+    deallocate(Latitude_I)
 
     ! Setting the order on harmonics to be equal to the 
     ! latitudinal resolution.
