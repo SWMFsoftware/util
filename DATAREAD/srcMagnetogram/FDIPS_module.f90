@@ -222,9 +222,9 @@ contains
              if(i>0) NameFileField = NameFileField(1:i-1)
           case('field2d')
              DoSave2d = .true.
-             DoPlot2dOnly = .true.
              call read_var('NameFile2d', NameFile2d)
              call read_var('TypeFile2d', TypeFile2d)
+             call read_var('DoPlot2dOnly', DoPlot2dOnly)
           case('potential')
              DoSavePotential = .true.
              call read_var('NameFilePotential', NameFilePotential)
