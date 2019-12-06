@@ -13,7 +13,8 @@ OBJECTS = \
 
 OBJECTS_HARMONICS= \
 	harmonics.o \
-	ModMagHarmonics.o
+	ModMagHarmonics.o \
+	ModReadMagnetogram.o
 
 harmonics.o: ModMagHarmonics.o
 
