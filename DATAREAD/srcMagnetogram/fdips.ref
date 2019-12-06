@@ -1,4 +1,4 @@
-ModReadParam::read_file: read and broadcast nLine= 105 lines of text
+ModReadParam::read_file: read and broadcast nLine= 116 lines of text
 
 #MAGNETOGRAMFILE
 dipole11.out		NameFileIn
@@ -15,9 +15,9 @@ T			UseLogRadius (default is F)
 F			UseWedge
 
 #GRID
-20			nR     (number of cells in the radial direction)
-20			nTheta (set 0 to use the magnetogram resolution)		nThetaAll
-20			nPhi   (set 0 to use the magnetogram resolution)		nPhiAll
+20			nR
+20			nTheta		nThetaAll
+20			nPhi		nPhiAll
 
 #TIMING
 F			UseTiming
@@ -32,6 +32,12 @@ ILU			NamePreconditioner (ILU or NONE)
 1e-10			Tolerance
 
 #OUTPUT
+field2d			TypeOutput    (field, bxyz, potential, or tecplot)
+fdips_2d.out		NameFileField		NameFile2d
+real4			TypeFileField (ascii, real4 or ascii)		TypeFile2d
+F			DoPlot2dOnly  (stop without solve if true)
+
+#OUTPUT
 field			TypeOutput    (field, bxyz, potential, or tecplot)
 fdips_field.out		NameFileField
 ascii			TypeFileField (ascii, real4 or real8)
@@ -40,11 +46,11 @@ ascii			TypeFileField (ascii, real4 or real8)
 bxyz			TypeOutput    (field, bxyz, potential, or tecplot)
 fdips_bxyz.out		NameFileField		NameFileBxyz
 ascii			TypeFileField (ascii, real4 or real8)		TypeFileBxyz
- nTheta0, nPhi0, LongitudeShift:          180         360   0.0000000000000000     
- nThetaLgr =           10 nThetaSml =           10
- nPhiLgr   =           10 nPhiSml   =           10
- Partitioning in nThetaAll gives:           20 Actual nThetaAll is:           20
- Partitioning in nPhiAll gives:             20 Actual nPhiAll is:             20
- nIter, Tolerance, iError=          68   5.8504846559410924E-011           0
- max(abs(divb)) =    1.1343401710339284E-009
- nProcTheta, nProcPhi=           2           2
+ nTheta0, nPhi0, LongitudeShift:  180 360   0.5000000000000000
+ nThetaLgr =  10 nThetaSml =  10
+ nPhiLgr   =  10 nPhiSml   =  10
+ Partitioning in nThetaAll gives:  20 Actual nThetaAll is:  20
+ Partitioning in nPhiAll gives:    20 Actual nPhiAll is:    20
+ nIter, Tolerance, iError= 68   5.8504788277765159E-11 0
+ max(abs(divb)) =    1.1343434246941037E-09
+ nProcTheta, nProcPhi= 2 2
