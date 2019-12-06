@@ -70,7 +70,7 @@ contains
        DoChangeWeakfield = .true.
        call read_var('BrFactor', BrFactor)
        call read_var('BrMin', BrMin)
-    case("#CHEBYSHEV")
+    case("#CHEBYSHEV", "#UNIFORMTHETA")
        call read_var('UseChebyshevNode', UseChebyshevNode)
     case default
        call CON_stop(NameSub//': unknown command='//trim(NameCommand))
@@ -113,7 +113,7 @@ contains
     if(nParam>0)iLong0 = nint(Param_I(1)-0.50*360.0/nPhi0)
     if(nParam>1)iCarringtonRotation = nint(Param_I(2))
 
-    write(*,*)'nTheta0, nPhi0, LongitudeShift: ', nTheta0, nPhi0, iLong0
+    write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, nPhi0, iLong0
 
     allocate(Phi0_I(nPhi0), Lat0_I(nTheta0)) 
     allocate(Br0_II(nPhi0,nTheta0))
@@ -188,7 +188,9 @@ contains
           BrAverage = BrAverage / (nTheta0*nPhi0)
        endif
        Br0_II = Br0_II - BrAverage
+       write(*,*)NameSub,': Removing BrAverage =',BrAverage
     endif
+
 
     ! Save 2D file
     call save_plot_file('field_2d.out', TypeFileIn='real4',&
@@ -209,9 +211,7 @@ contains
     if(present(nThetaCoarse) .and. present(nPhiCoarse))then
        IsFdips = .true.
     else if(UseChebyshevNode) then
-       write(*,*)'Transforming to Uniform Theta for Harmonics'
        call uniformTheta_transform
-       write(*,*)"Transformed to Uniform Theta grid for Harmonics"
     endif
 
     ! To be done for FDIPS only
@@ -290,7 +290,9 @@ contains
 
        ! Br0_II is phi,theta till here and not reverse
        if(UseChebyshevNode)then
+          write(*,*)'Doing Uniform Theta Transform for FDIPS'
           call uniformTheta_transform
+          UseCosTheta = .false.
           nThetaAll = nTheta0
           nPhiAll = nPhi0
        endif
@@ -357,7 +359,7 @@ contains
     if(IsFdips)then
        nTheta0 = nThetaAll
        nPhi0 = nPhiAll
-       write(*,*)'ISFdips, nTheta0, nPhi0',IsFdips, nTheta0, nPhi0
+       write(*,*)'IsFdips, nTheta0, nPhi0',IsFdips, nTheta0, nPhi0
     endif
 
     nThetaIn = nTheta0
