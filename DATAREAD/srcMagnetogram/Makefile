@@ -16,7 +16,7 @@ OBJECTS_HARMONICS= \
 	ModMagHarmonics.o \
 	ModReadMagnetogram.o
 
-harmonics.o: ModMagHarmonics.o
+harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
 
 POTENTIAL: potential_field.o ${LIBDIR}/libSHARE.a
 	${LINK.f90} -o POTENTIAL.exe potential_field.o \
