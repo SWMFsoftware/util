@@ -7,13 +7,14 @@ program harmonics
 
   use ModMagHarmonics
   use ModMpi
+  use ModReadMagnetogram
 
   implicit none
   integer:: iError
   !----------------------------------------------------------------------------
   call MPI_init(iError)
   call read_harmonics_param
-  call read_raw_magnetogram 
+  call read_modified_magnetogram 
   call calc_harmonics
   call MPI_finalize(iError)
 
