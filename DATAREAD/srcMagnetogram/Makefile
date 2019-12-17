@@ -23,10 +23,10 @@ POTENTIAL: potential_field.o ${LIBDIR}/libSHARE.a
 		-L${LIBDIR} -lSHARE ${Lflag1}
 
 OBJECTS_FDIPS= \
+	ModReadMagnetogram.o \
 	FDIPS_module.o \
 	FDIPS_nohypre.o \
-	FDIPS.o \
-	ModReadMagnetogram.o
+	FDIPS.o
 
 FDIPS.o: ModReadMagnetogram.o FDIPS_hypre.o FDIPS_module.o
 
@@ -35,6 +35,7 @@ FDIPS: ${OBJECTS_FDIPS} ${LIBDIR}/libSHARE.a
 		-L${LIBDIR} -lSHARE ${Lflag1}
 
 OBJECTS_FDIPS_HYPRE= \
+	ModReadMagnetogram.o \
 	FDIPS_module.o \
 	FDIPS_hypre.o \
 	FDIPS.o
