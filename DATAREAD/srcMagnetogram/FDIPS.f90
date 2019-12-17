@@ -11,9 +11,10 @@ module ModB0Matvec
        nR, nTheta, nPhi, Radius_I, SinTheta_I, &
        dRadiusNode_I, dTheta_I, dCosTheta_I, dThetaNode_I, dPhiNode_I, &
        Br_II, set_boundary, &
-       UseCosTheta, RadiusNode_I, Theta_I, SinThetaNode_I, dCosThetaNode_I, &
+       RadiusNode_I, Theta_I, SinThetaNode_I, dCosThetaNode_I, &
        iRTest, iThetaTest, iPhiTest, ThetaNode_I, Phi_I, PhiNode_I
 
+  use ModReadMagnetogram, ONLY: UseCosTheta, nThetaAll, nPhiAll
   use ModMPI
   use ModUtilities, ONLY: flush_unit
   use ModIoUnit, ONLY: STDOUT_
@@ -228,6 +229,7 @@ program potential_field
   use ModUtilities, ONLY: flush_unit
   use ModIoUnit, ONLY: STDOUT_
   use ModMpi
+  use ModReadMagnetogram, ONLY: UseCosTheta, nThetaAll, nPhiAll
 
   implicit none
 
@@ -239,10 +241,14 @@ program potential_field
   call MPI_init(iError)
   call MPI_comm_rank(iComm,iProc,iError)
   call MPI_comm_size(iComm,nProc,iError)
-
+  
   call read_fdips_param
 
-  if(DoReadMagnetogram .and. iProc == 0) call read_magnetogram
+  if(DoReadMagnetogram .and. iProc == 0) call read_modified_magnetogram
+
+!  nThetaAll = nThetaCoarse
+!  nPhiAll = nPhiCoarse
+!  write(*,*)'nTHetaCoarse, nPhiCoarse in FDIPS.f90',nThetaAll, nPhiAll
 
   call MPI_bcast(UseCosTheta, 1, MPI_LOGICAL, 0, iComm, iError)
   call MPI_bcast(nThetaAll, 1, MPI_INTEGER, 0, iComm, iError)
@@ -254,7 +260,6 @@ program potential_field
   if(UseTiming) TimeStart = mpi_wtime()
 
   call init_potential_field
-
   if(.not.DoReadMagnetogram)then
      allocate(Br_II(nThetaAll,nPhiAll))
      do iPhi = 1, nPhiAll; do iTheta = 1, nThetaAll; 

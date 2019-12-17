@@ -4,6 +4,7 @@ module ModHypre
 
   use ModPotentialField
   use ModKind, ONLY: Int8_
+  use ModReadMagnetogram, ONLY: nThetaAll, nPhiAll
 
   implicit none
 
