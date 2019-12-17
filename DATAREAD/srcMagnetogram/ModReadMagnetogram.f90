@@ -113,7 +113,8 @@ contains
     if(nParam>0)iLong0 = nint(Param_I(1)-0.50*360.0/nPhi0)
     if(nParam>1)iCarringtonRotation = nint(Param_I(2))
 
-    write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, nPhi0, iLong0
+    write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, nPhi0, &
+         iLong0
 
     allocate(Phi0_I(nPhi0), Lat0_I(nTheta0)) 
     allocate(Br0_II(nPhi0,nTheta0))
@@ -168,7 +169,8 @@ contains
     ! For #CHANGEWEAKFIELD
     if(DoChangeWeakField)then
        if(BrMin > 0.0 .or. BrFactor > 1.0) &
-            Br0_II = sign(min(abs(Br0_II) + BrMin, BrFactor*abs(Br0_II)), Br0_II)
+            Br0_II = sign(min(abs(Br0_II) + BrMin, &
+            BrFactor*abs(Br0_II)), Br0_II)
     endif
 
     ! Fix too large values of Br
@@ -183,14 +185,14 @@ contains
           BrAverage = 0.0
           do iTheta = 1, nTheta0
              BrAverage = BrAverage + &
-                  sum(Br0_II(:,nTheta0+1-iTheta)) * cos(cDegToRad*Lat0_I(nTheta0+1-iTheta))
+                  sum(Br0_II(:,nTheta0+1-iTheta)) * &
+                  cos(cDegToRad*Lat0_I(nTheta0+1-iTheta))
           enddo
           BrAverage = BrAverage / (nTheta0*nPhi0)
        endif
        Br0_II = Br0_II - BrAverage
        write(*,*)NameSub,': Removing BrAverage =',BrAverage
     endif
-
 
     ! Save 2D file
     call save_plot_file('field_2d.out', TypeFileIn='real4',&
@@ -315,29 +317,29 @@ contains
     endif
 
   end subroutine read_orig_magnetogram
-  !============================================================================== 
+  !========================================================================== 
   real function sin_latitude(iTheta)
     integer,intent(in)::iTheta
 
     sin_latitude = (real(iTheta)+0.5)*dSinTheta-1.0
 
   end function sin_latitude
-  !==============================================================================
+  !==========================================================================
   real function r_latitude(iTheta)
     integer,intent(in)::iTheta
-    !----------------------------------------------------------------------------
+    !------------------------------------------------------------------------
     if(UseCosTheta)then
        r_latitude = asin(sin_latitude(iTheta))
     else
        r_latitude = (iTheta + 0.50)*dTheta - cPi*0.50
     end if
   end function r_latitude
-  !==============================================================================
+  !==========================================================================
   real function colatitude(iTheta)
     integer,intent(in)::iTheta
     colatitude = cPi*0.5 - r_latitude(iTheta)
   end function colatitude
-  !==============================================================================
+  !==========================================================================
   subroutine uniformTheta_transform
 
     ! The magnetogram is remeshed onto a uniform in theta (co-latitude) grid.
@@ -359,6 +361,9 @@ contains
     if(IsFdips)then
        nTheta0 = nThetaAll
        nPhi0 = nPhiAll
+       dPhi      = cTwoPi/nPhi0
+       dTheta    = cPi/nTheta0
+       dSinTheta = 2.0/nTheta0
        write(*,*)'IsFdips, nTheta0, nPhi0',IsFdips, nTheta0, nPhi0
     endif
 
@@ -410,7 +415,6 @@ contains
     BrNorthPole = sum(Br_II(:,nThetaIn-1))/nPhi0
     BrSouthPole = sum(Br_II(:,0))/nPhi0
 
-    write(*,*)'BrNorth,BrSouth',BrNorthPole,BrSouthPole
     ! Use linear interpolation to do the data remesh
     do iPhi=0,nPhi0-1
        do iTheta=0, nThetaOut-1
@@ -429,7 +433,6 @@ contains
           iUpper = &
                floor((cos(ThetaOut_I(iTheta)) - cos(ThetaIn_I(0)))/dSinTheta)
           iLower = iUpper+1
-
           if (iUpper /= -1 .and. iUpper /= nThetaIn-1 ) then
              dThetaInterpolate = ThetaIn_I(iUpper) - ThetaIn_I(iLower)
              NewBr_II(iPhi,iTheta) = Br_II(iPhi,iLower)* &
