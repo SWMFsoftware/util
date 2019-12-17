@@ -24,6 +24,12 @@ CHANGEWEAKFIELD
 T			UseLogRadius (default is F)
 F			UseWedge
 
+! For Uniform Theta Transform
+! Default is False
+
+#CHEBYSHEV
+F			UseChebyshevNode
+
 ! In the Theta and Phi directions coarsening relative to the magnetogram 
 ! resolution by an integer ratio is allowed. Refinement is not possible.
 
@@ -87,12 +93,6 @@ T			UseSinglePart
 ! Note that the new way to import FDIPS results in SWMF is to use "bxyz"
 !   output file type and "#LOOKUPTABLE" "B0" in PARAM.in.
 !   Check ModB0.f90 subroutine get_b0 for details.
-
-#OUTPUT
-field2d			TypeOutput    (field, bxyz, potential, or tecplot)
-fdips_2d.out		NameFileField
-real4			TypeFileField (ascii, real4 or real8)
-F			DoPlot2dOnly  (stop without solve if true)
 
 #OUTPUT
 field			TypeOutput    (field, bxyz, potential, or tecplot)
