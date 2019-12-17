@@ -25,9 +25,10 @@ POTENTIAL: potential_field.o ${LIBDIR}/libSHARE.a
 OBJECTS_FDIPS= \
 	FDIPS_module.o \
 	FDIPS_nohypre.o \
-	FDIPS.o
+	FDIPS.o \
+	ModReadMagnetogram.o
 
-FDIPS.o: FDIPS_hypre.o FDIPS_module.o
+FDIPS.o: ModReadMagnetogram.o FDIPS_hypre.o FDIPS_module.o
 
 FDIPS: ${OBJECTS_FDIPS} ${LIBDIR}/libSHARE.a
 	${LINK.f90} -o FDIPS.exe ${OBJECTS_FDIPS} \
@@ -101,7 +102,7 @@ test_harmonics:
 	@echo "test_harmonics_run..." >> test_harmonics.diff
 	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/' HARMONICS.in.orig \
 		> HARMONICS.in
-	${SERIAL} ./HARMONICS.exe > harmonics.log
+	${SERIAL} ./HARMONICS.exe | tee harmonics.log
 	@echo "test_harmonics_check..." >> test_harmonics.diff
 	make test_harmonics_check
 
