@@ -21,13 +21,6 @@ module ModMagHarmonics
   ! Name of output file
   character (len=100):: NameFileOut='harmonics.dat'
 
-  ! Carrington rotation #. If the map covers parts of two rotations,                           
-  ! the carrington rotation for the central meridian is provided
-  ! integer:: iCarringtonRotation = 0
-  ! Garrington longitude of the left margin of the map 
-  ! ("leading longitude")                                                
-  !  integer:: iLong0 = 0
-
   ! This Module reads a raw (RADIAL, not LOS!!!) magnetogram data file and
   ! generates a magnetogram file in the form of spherical
   ! harmonics to be used by the SWMF. 
