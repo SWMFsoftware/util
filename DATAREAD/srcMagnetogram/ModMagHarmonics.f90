@@ -172,19 +172,6 @@ contains
     allocate(Br_II(0:nPhi-1,0:nTheta-1))
     Br_II=Br0_II
 
-    iunit=9
-    open ( unit = iUnit, &
-         file = 'br.dat', &
-         form = 'formatted', &
-         access = 'sequential')
-
-    do iTheta=0, nTheta-1
-       do iPhi=0, nPhi-1
-          write(iUnit,'(I3,I3,2f20.10)') iTheta, iPhi, Br_II(iPhi,iTheta)
-       enddo
-    enddo
-    close(iUnit)
-
     if(UseChebyshevNode) then
        allocate(PNMTheta_III(nHarmonics+1,nHarmonics+1,0:nTheta-1))
        PNMTheta_III = 0.0
