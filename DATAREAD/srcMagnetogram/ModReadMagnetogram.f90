@@ -101,7 +101,7 @@ contains
     integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi, kPhi
 
     logical :: IsInputLatReverse = .false.
-
+    logical :: RemoveMonopole = .true.
     character(len=200) :: NameVarOut
 
     character(len=*), parameter:: NameSub = 'read_orig_magnetogram'
@@ -117,7 +117,7 @@ contains
     if(nParam>1)iCarringtonRotation = nint(Param_I(2))
 
     write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, &
-        nPhi0, iLong0
+         nPhi0, iLong0
 
     allocate(Phi0_I(nPhi0), Lat0_I(nTheta0)) 
     allocate(Br0_II(nPhi0,nTheta0))
@@ -154,8 +154,18 @@ contains
           call CON_stop(NameSub//&
                ': Currently UseWedge only works with uniform latitude grid')
        endif
+       if(present(DoRemoveMonopole))then
+          if(DoRemoveMonopole .and. (.not. UseWedge))then
+             RemoveMonopole = .true.
+          else
+             RemoveMonopole = .false.
+          endif
+          if (.not. DoRemoveMonopole .and. .not. UseWedge)then
+             RemoveMonopole = .false.
+          endif
+       endif
     endif
-
+    
     ! For #CHANGEWEAKFIELD
     if(DoChangeWeakField)then
        if(BrMin > 0.0 .or. BrFactor > 1.0) &
@@ -168,22 +178,20 @@ contains
 
     ! Done for both Harmonics & Fdips unless specified otherwise
     ! for FDIPS when wedge is used
-    if(present(DoRemoveMonopole))then
-       if(DoRemoveMonopole .and. (.not. UseWedge))then
-          if (UseCosTheta) then
-             BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
-          else
-             BrAverage = 0.0
-             do iTheta = 1, nTheta0
-                BrAverage = BrAverage + &
-                     sum(Br0_II(:,nTheta0+1-iTheta)) * &
-                     cos(cDegToRad*Lat0_I(nTheta0+1-iTheta))
-             enddo
-             BrAverage = BrAverage / (nTheta0*nPhi0)
-          endif
-          Br0_II = Br0_II - BrAverage
-          write(*,*)NameSub,': Removing BrAverage =', BrAverage
+    if(RemoveMonopole) then
+       if (UseCosTheta) then
+          BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
+       else
+          BrAverage = 0.0
+          do iTheta = 1, nTheta0
+             BrAverage = BrAverage + &
+                  sum(Br0_II(:,nTheta0+1-iTheta)) * &
+                  cos(cDegToRad*Lat0_I(nTheta0+1-iTheta))
+          enddo
+          BrAverage = BrAverage / (nTheta0*nPhi0)
        endif
+       Br0_II = Br0_II - BrAverage
+       write(*,*)NameSub,': Removing BrAverage =', BrAverage
     endif
 
     ! Save 2D file
@@ -310,28 +318,6 @@ contains
 
   end subroutine read_orig_magnetogram
   !========================================================================== 
-  real function sin_latitude(iTheta)
-    integer,intent(in)::iTheta
-
-    sin_latitude = (real(iTheta)+0.5)*dSinTheta-1.0
-
-  end function sin_latitude
-  !==========================================================================
-  real function r_latitude(iTheta)
-    integer,intent(in)::iTheta
-    !------------------------------------------------------------------------
-    if(UseCosTheta)then
-       r_latitude = asin(sin_latitude(iTheta))
-    else
-       r_latitude = (iTheta + 0.50)*dTheta - cPi*0.50
-    end if
-  end function r_latitude
-  !==========================================================================
-  real function colatitude(iTheta)
-    integer,intent(in)::iTheta
-    colatitude = cPi*0.5 - r_latitude(iTheta)
-  end function colatitude
-  !==========================================================================
   subroutine uniformTheta_transform
 
     ! The magnetogram is remeshed onto a uniform in theta (co-latitude) grid.
@@ -382,7 +368,11 @@ contains
     allocate(ThetaOut_I(0:nThetaOut-1))
 
     do iTheta=0,nThetaIn-1
-       ThetaIn_I(iTheta) = colatitude(iTheta)
+       if(UseCosTheta)then
+          ThetaIn_I(iTheta) = cPi*0.5 - asin((real(iTheta)+0.5)*dSinTheta-1.0)
+       else
+          ThetaIn_I(iTheta) = cPi*0.5 - ((iTheta + 0.50)*dTheta - cPi*0.50)
+       end if
     end do
 
     dThetaChebyshev = cPi/(nThetaOut-1)

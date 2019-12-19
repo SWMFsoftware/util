@@ -9,17 +9,12 @@ module ModMagHarmonics
 
   implicit none  
 
-  logical:: UseSinLatitudeGrid = .true.
-  logical:: UseChebyshevNode   = .true.
   ! **********************Choice of this parameter**********************
   ! *Sin(Latitude): WSO : http://wso.stanford.edu                      *
   ! *   MDI: see http://soi.stanford.edu/magnetic/index6.html          * 
   ! *   SOLIS:http://solis.nso.edu/vsm/map_info.html                   *
   ! *   GONG: http://gong.nso.edu/data/magmap/index.html               *
   ! ********************************************************************
-
-  ! Name of output file
-  character (len=100):: NameFileOut='harmonics.dat'
 
   ! This Module reads a raw (RADIAL, not LOS!!!) magnetogram data file and
   ! generates a magnetogram file in the form of spherical
@@ -36,6 +31,9 @@ module ModMagHarmonics
   ! * Field in microTesla(0.01Gs): WSO, MWO                            *
   ! ********************************************************************
 
+
+  ! Name of output file
+  character (len=100):: NameFileOut='harmonics.dat'
 
   integer:: i,n,m,iTheta,iPhi,iR,mm,nn
   real, allocatable, dimension(:,:):: g_nm, h_nm, Br_II
@@ -109,8 +107,8 @@ contains
 
     nTheta = nTheta0
     nPhi   = nPhi0
-    write(*,*)' Original nTheta, nPhi =', nThetaorig, nPhiorig
-    write(*,*)' Remeshed nTheta, nPhi =', nTheta0, nPhi0
+    write(*,*)NameSub,': Original nTheta, nPhi =', nThetaorig, nPhiorig
+    write(*,*)NameSub,': Remeshed nTheta, nPhi =', nTheta0, nPhi0
 
     ! Setting the order on harmonics to be equal to the 
     ! latitudinal resolution.
@@ -133,28 +131,6 @@ contains
     h_nm = 0.0
 
   end subroutine read_modified_magnetogram
-  !============================================================================
-  real function sin_latitude(iTheta)
-    integer,intent(in)::iTheta
-
-    sin_latitude = (real(iTheta)+0.5)*dSinTheta-1.0
-
-  end function sin_latitude
-  !=================================================================
-  real function r_latitude(iTheta)
-    integer,intent(in)::iTheta
-    !-------------------------------------------------------------- 
-    if(UseSinLatitudeGrid)then
-       r_latitude = asin(sin_latitude(iTheta))
-    else
-       r_latitude = (iTheta + 0.50)*dTheta - cPi*0.50
-    end if
-  end function r_latitude
-  !================================================================= 
-  real function colatitude(iTheta)
-    integer,intent(in)::iTheta
-    colatitude = cPi*0.5 - r_latitude(iTheta)
-  end function colatitude
   !=================================================================
   subroutine calc_harmonics
 
@@ -171,8 +147,6 @@ contains
 
     !-------------------------------------------------------------------------
     write(*,*)'Calculating harmonic coefficients'
-
-    if(.not.UseCosTheta) UseSinLatitudeGrid = .false.
 
     ! Calculate sqrt(integer) from 1 to 10000::
     do m=1,MaxInt
@@ -217,7 +191,6 @@ contains
        dThetaChebyshev = cPi/(nTheta-1)
        do iTheta=0,nTheta-1
           Theta=cPi-iTheta*dThetaChebyshev
-          !write(*,*) Theta
           CosTheta=cos(Theta)
           SinTheta=max(sin(Theta), 1E-9)
           call calc_legendre_polynoms
@@ -227,8 +200,11 @@ contains
        allocate(PNMTheta_III(nHarmonics+1,nHarmonics+1,0:nTheta-1))
        PNMTheta_III = 0.0
        do iTheta=0,nTheta-1
-          Theta=colatitude(iTheta)
-          !write(*,*) Theta
+          if(UseCosTheta)then
+             Theta = cPi*0.5 - asin((real(iTheta)+0.5)*dSinTheta-1.0)
+          else
+             Theta = cPi*0.5 - ((iTheta + 0.50)*dTheta - cPi*0.50)
+          end if
           CosTheta=cos(Theta)
           SinTheta=max(sin(Theta), 1E-9)
           call calc_legendre_polynoms
@@ -294,13 +270,15 @@ contains
              ! Use Chebyshev Weight in theta direction
              da = ChebyshevWeightE_I(iTheta)*ChebyshevWeightW_I(iTheta)*dPhi
           else
-             Theta = colatitude(iTheta) 
-             SinTheta = max(sin(Theta), 0.0)
              if(UseCosTheta)then
+                Theta = cPi*0.5 - asin((real(iTheta)+0.5)*dSinTheta-1.0)
+                SinTheta = max(sin(Theta), 0.0)
                 da = dSinTheta*dPhi
              else
+                Theta = cPi*0.5 - ((iTheta + 0.50)*dTheta - cPi*0.50)
+                SinTheta = max(sin(Theta), 0.0)
                 da = SinTheta*dTheta*dPhi
-             end if
+             endif
           end if
 
           ! Calculate the set of Legendre polynoms (with Schmidt normalization)
