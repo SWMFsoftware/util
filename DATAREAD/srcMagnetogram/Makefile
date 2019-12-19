@@ -6,6 +6,9 @@ include ../../../Makefile.def
 
 include ../../../Makefile.conf
 
+${LIBDIR}/libSHARE.a:
+	cd ${SHAREDIR}; $(MAKE) LIB
+
 MY_LIB = ${LIBDIR}/libMAGNETOGRAM.a
 
 OBJECTS = \
@@ -18,9 +21,16 @@ OBJECTS_HARMONICS= \
 
 harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
 
-POTENTIAL: potential_field.o ${LIBDIR}/libSHARE.a
+POTENTIAL: ${LIBDIR}/libSHARE.a potential_field.o 
 	${LINK.f90} -o POTENTIAL.exe potential_field.o \
 		-L${LIBDIR} -lSHARE ${Lflag1}
+
+############## FDIPS #############
+
+FDIPS: ${LIBDIR}/libSHARE.a ${OBJECTS_FDIPS} 
+	make ${FDIPSEXE}
+	@echo "${FDIPSEXE} has been compiled."
+	ln -sf ${FDIPSEXE} .
 
 OBJECTS_FDIPS= \
 	ModReadMagnetogram.o \
@@ -30,9 +40,20 @@ OBJECTS_FDIPS= \
 
 FDIPS.o: ModReadMagnetogram.o FDIPS_hypre.o FDIPS_module.o
 
-FDIPS: ${OBJECTS_FDIPS} ${LIBDIR}/libSHARE.a
-	${LINK.f90} -o FDIPS.exe ${OBJECTS_FDIPS} \
+FDIPSEXE = ${BINDIR}/FDIPS.exe
+
+${FDIPSEXE}: ${OBJECTS_FDIPS}
+	${LINK.f90} -o ${FDIPSEXE} ${OBJECTS_FDIPS} \
 		-L${LIBDIR} -lSHARE ${Lflag1}
+
+############## FDIPS_HYPRE #############
+
+FDIPS_HYPRE: ${LIBDIR}/libSHARE.a
+	make ${FDIPS_HYPREEXE}
+	@echo ${FDIPS_HYPREEXE} has been compiled.
+	ln -sf ${FDIPS_HYPREEXE} .
+
+FDIPS_HYPREEXE = ${BINDIR}/FDIPS_HYPRE.exe
 
 OBJECTS_FDIPS_HYPRE= \
 	ModReadMagnetogram.o \
@@ -40,15 +61,19 @@ OBJECTS_FDIPS_HYPRE= \
 	FDIPS_hypre.o \
 	FDIPS.o
 
-FDIPS_HYPRE: ${OBJECTS_FDIPS_HYPRE} ${LIBDIR}/libSHARE.a
-	${LINK.f90} -o FDIPS.exe ${OBJECTS_FDIPS_HYPRE} \
+${FDIPS_HYPREEXE}: ${OBJECTS_FDIPS_HYPRE}
+	${LINK.f90} -o ${FDIPS_HYPREEXE} ${OBJECTS_FDIPS_HYPRE} \
 		-L${LIBDIR} -lSHARE ${Lflag1} ${HYPRELIB}
 
-HYPRE: hypre.o ${LIBDIR}/libSHARE.a ${HYPRELIB}/libHYPRE.a
+############## HYPRE ONLY #############
+
+HYPRE: ${LIBDIR}/libSHARE.a ${HYPRELIB}/libHYPRE.a hypre.o
 	${LINK.f90} -o HYPRE.exe hypre.o \
 		-L${LIBDIR} -lSHARE ${Lflag1} ${HYPRELIB}
 
-HARMONICS:
+############## HARMONICS #############
+
+HARMONICS: ${LIBDIR}/libSHARE.a
 	make ${HARMONICSEXE}
 	@echo ${HARMONICSEXE} has been compiled.
 	ln -sf ${HARMONICSEXE} .
@@ -172,7 +197,7 @@ test_fdips_hypre:
 	perl -i -pe 's/real8/ascii/' FDIPS.in
 	perl -i -pe 's/^BiCGSTAB/GMRES/i;s/^ILU/AMG/' FDIPS.in
 	@echo "test_fdips_hypre_run..." >> test_fdips_hypre.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips_hypre.log
+	${PARALLEL} ${NPFLAG} 4 ./FDIPS_HYPRE.exe > fdips_hypre.log
 	./redistribute.pl fdips_field_np010202.out fdips.out
 	@echo "test_fdips_hypre_check..." >> test_fdips_hypre.diff
 	make test_fdips_hypre_check
