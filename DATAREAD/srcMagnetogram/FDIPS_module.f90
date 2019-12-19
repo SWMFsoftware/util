@@ -249,8 +249,6 @@ contains
          Lat0_I, Phi0_I, nThetaAll, nPhiAll
 
     logical:: IsPhiThetaOrder = .false.
-    integer:: nThetaRatio, nPhi
-
     logical :: IsInputLonLatInDegree = .true.
 
     character(len=*), parameter:: NameSub = 'read_modified_magnetogram'
@@ -279,15 +277,16 @@ contains
 
   subroutine init_potential_field
 
-    use ModConst, ONLY: cPi, cTwoPi
+    use ModConst, ONLY: cTwoPi
     use ModReadMagnetogram, ONLY: UseCosTheta, nThetaAll, nPhiAll
 
     integer :: iR, iTheta, iPhi
+    integer :: i, j
+
     real:: dR, dLogR, dTheta, dPhi, dZ, z
     real:: CellShiftPhi
     real:: Err, ErrNew
-    real, allocatable:: BrTmp_II(:,:)
-    integer :: i, j
+
     !--------------------------------------------------------------------------
 
     if (nProcTheta*nProcPhi == 0) then
@@ -498,7 +497,7 @@ contains
     use ModNumConst,    ONLY: cHalfPi, cPi
     use ModPlotFile,    ONLY: save_plot_file
     use ModCoordTransform, ONLY: rot_xyz_sph
-    use ModReadMagnetogram, ONLY: Br0_II, UseCosTheta, nThetaAll, nPhiAll
+    use ModReadMagnetogram, ONLY: nThetaAll, nPhiAll
 
     integer:: iR, jR, iTheta, iPhi, iLat, nLat
     real   :: r, CosTheta, SinTheta, CosPhi, SinPhi
@@ -778,7 +777,7 @@ contains
 
   subroutine set_boundary(x_C, x_G)
 
-    use ModReadMagnetogram, ONLY: Br0_II, UseCosTheta, nThetaAll, nPhiAll
+    use ModReadMagnetogram, ONLY: nPhiAll
 
     real, intent(in):: x_C(nR,nTheta,nPhi)
     real, intent(inout):: x_G(0:nR+1,0:nTheta+1,0:nPhi+1)
