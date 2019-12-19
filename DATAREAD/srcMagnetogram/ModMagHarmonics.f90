@@ -141,7 +141,7 @@ contains
          iCarringtonRotation, iLong0, UseCosTheta, nThetaorig, nPhiorig, &
          ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta
 
-    integer :: iUnit, iError, iTheta, iPhi, m,inm, nn, mm, n 
+    integer :: iUnit, iError, iTheta, iPhi, m,inm, nn, mm
     real    :: dThetaChebyshev
     real, allocatable:: Br_II(:,:)
 
