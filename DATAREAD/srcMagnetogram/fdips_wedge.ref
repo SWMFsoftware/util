@@ -16,8 +16,8 @@ T							UseWedge     (default is F)
 
 #GRID
 20							nR     (number of cells in the radial direction)
-15							nTheta (set 0 to use the magnetogram resolution)		nThetaAll
-30							nPhi   (set 0 to use the magnetogram resolution)		nPhiAll
+15							nTheta (set 0 to use the magnetogram resolution)		nThetaCoarse
+30							nPhi   (set 0 to use the magnetogram resolution)		nPhiCoarse
 
 #TIMING
 F							UseTiming
@@ -40,11 +40,11 @@ ascii						TypeFileField (ascii, real4 or real8)
 ghostface					TypeOutput
 fdips_ghostface.out		NameFilePotential		NameFileGhostFace
 ascii						TypeFilePotential		TypeFileGhostFace
- nTheta0, nPhi0, LongitudeShift:  60 60   3.0000000000000000
+ read_orig_magnetogram: nTheta0, nPhi0, LongitudeShift =  60 60   3.0000000000000000
  nThetaLgr =  8 nThetaSml =  7
  nPhiLgr   =  15 nPhiSml   =  15
  Partitioning in nThetaAll gives:  15 Actual nThetaAll is:  15
  Partitioning in nPhiAll gives:    30 Actual nPhiAll is:    30
- nIter, Tolerance, iError= 116   7.9179512324012637E-11 0
- max(abs(divb)) =    2.3915767630167117E-08
+ nIter, Tolerance, iError= 120   6.8382872182896449E-11 0
+ max(abs(divb)) =    2.8123651060751875E-08
  nProcTheta, nProcPhi= 2 2
