@@ -5,9 +5,33 @@ module ModReadMagnetogram
 
   use ModNumConst
   use ModUtilities, ONLY: CON_stop
-  use ModConst, ONLY: cPi, cTwoPi, cHalfPi
+  use ModConst, ONLY: cPi, cTwoPi
 
   implicit none
+
+  private ! except
+
+  public:: read_magnetogram_param ! reads the input parameters
+  public:: read_orig_magnetogram  ! reads and modifies the magnetogram
+
+  real,    public, allocatable:: Br0_II(:,:) ! Final Magnetic field
+  integer, public:: nThetaAll, nPhiAll    ! Size of remeshed grid for FDIPS
+  ! theta and phi passed to harmonics & fdips
+  integer, public:: nTheta0, nPhi0
+  integer, public:: nThetaorig, nPhiorig  ! original magnetogram theta and phi
+  ! Parameters for uniformTheta_Transform
+  logical, public:: UseCosTheta = .true.  ! To check the latitude grid
+  ! For the associated functions
+  real,    public:: dR=1.0, dPhi=1.0, dTheta=1.0, dSinTheta=1.0
+  logical, public:: UseChebyshevNode = .false.
+  real,    public,  allocatable:: ChebyshevWeightE_I(:), ChebyshevWeightW_I(:)
+  ! Carrington rotation #. If the map covers parts of two rotations,
+  ! the carrington rotation for the central meridian is provided
+  integer, public:: iCarringtonRotation = 0
+  ! Carrington longitude of the left margin of the map
+  ! ("leading longitude")
+  integer, public:: iLong0 = 0
+  real,    public, allocatable:: Phi0_I(:), Lat0_I(:) ! Phi and Lat passed to Fdips
 
   ! Input parameters
   character (len=100):: NameFileIn = 'fitsfile.out'
@@ -25,29 +49,8 @@ module ModReadMagnetogram
   logical :: DoChangeWeakField = .false.
   real    :: BrFactor = 1.0, BrMin = 0.0
 
-  ! To check the latitude grid
-  logical:: UseCosTheta = .true.
-  ! Parameters for uniformTheta_Transform
-  logical:: UseChebyshevNode = .false.
-  real, allocatable:: ChebyshevWeightE_I(:), ChebyshevWeightW_I(:)
-
-  ! For Reading the original Magnetogram & Modifying
-  real, allocatable   :: Br0_II(:,:)
-  real, allocatable   :: Phi0_I(:), Lat0_I(:)
-  integer :: nTheta0, nPhi0, nThetaorig, nPhiorig, nThetaAll, nPhiAll
-
   ! To indicate if fdips is done or harmonics
   logical :: IsFdips = .false.
-
-  ! Carrington rotation #. If the map covers parts of two rotations,
-  ! the carrington rotation for the central meridian is provided
-  integer:: iCarringtonRotation = 0
-  ! Garrington longitude of the left margin of the map
-  ! ("leading longitude")
-  integer:: iLong0 = 0
-
-  ! For the associated functions
-  real:: dR=1.0, dPhi=1.0, dTheta=1.0, dSinTheta=1.0
 
 contains
 
@@ -98,7 +101,6 @@ contains
     integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi, kPhi
 
     logical :: IsInputLatReverse = .false.
-    logical :: RemoveMonopole = .true.
 
     character(len=200) :: NameVarOut
 
@@ -110,11 +112,12 @@ contains
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read header from file '//trim(NameFileIn))
 
-    if(nParam>0)iLong0 = nint(Param_I(1)-0.50*360.0/nPhi0)
+    !if(nParam>0)iLong0 =nint(Param_I(1)-0.50*360.0/nPhi0)
+    if(nParam>0)iLong0 = Param_I(1)
     if(nParam>1)iCarringtonRotation = nint(Param_I(2))
 
-    write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, nPhi0, &
-         iLong0
+    write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, &
+        nPhi0, iLong0
 
     allocate(Phi0_I(nPhi0), Lat0_I(nTheta0)) 
     allocate(Br0_II(nPhi0,nTheta0))
@@ -127,8 +130,8 @@ contains
          ': could not read data from file'//trim(NameFileIn))
 
     ! Check if the latitude coordinate is uniform or not
-    ! There is no point using Chebyshev transform if the original grid                   
-    ! is already uniform in theta                                                        
+    ! There is no point using Chebyshev transform if the original grid
+    ! is already uniform in theta
     UseCosTheta = abs(Lat0_I(3) - 2*Lat0_I(2) + Lat0_I(1)) > 1e-6
     if(.not.UseCosTheta) UseChebyshevNode = .false.
 
@@ -151,19 +154,6 @@ contains
           call CON_stop(NameSub//&
                ': Currently UseWedge only works with uniform latitude grid')
        endif
-       if(present(DoRemoveMonopole))then
-          if(DoRemoveMonopole .and. UseWedge)then
-             call CON_stop(NameSub//&
-                  ': Currently UseWedge does not work with DoRemoveMonopole')
-          elseif (.not. DoRemoveMonopole .and. .not. UseWedge)then
-             RemoveMonopole = .false.
-          endif
-       endif
-    endif
-
-    if(present(DoRemoveMonopole))then
-       if(.not.DoRemoveMonopole)&
-            RemoveMonopole = .false.
     endif
 
     ! For #CHANGEWEAKFIELD
@@ -178,20 +168,22 @@ contains
 
     ! Done for both Harmonics & Fdips unless specified otherwise
     ! for FDIPS when wedge is used
-    if(RemoveMonopole)then
-       if (UseCosTheta) then
-          BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
-       else
-          BrAverage = 0.0
-          do iTheta = 1, nTheta0
-             BrAverage = BrAverage + &
-                  sum(Br0_II(:,nTheta0+1-iTheta)) * &
-                  cos(cDegToRad*Lat0_I(nTheta0+1-iTheta))
-          enddo
-          BrAverage = BrAverage / (nTheta0*nPhi0)
+    if(present(DoRemoveMonopole))then
+       if(DoRemoveMonopole .and. (.not. UseWedge))then
+          if (UseCosTheta) then
+             BrAverage = sum(Br0_II)/(nTheta0*nPhi0)
+          else
+             BrAverage = 0.0
+             do iTheta = 1, nTheta0
+                BrAverage = BrAverage + &
+                     sum(Br0_II(:,nTheta0+1-iTheta)) * &
+                     cos(cDegToRad*Lat0_I(nTheta0+1-iTheta))
+             enddo
+             BrAverage = BrAverage / (nTheta0*nPhi0)
+          endif
+          Br0_II = Br0_II - BrAverage
+          write(*,*)NameSub,': Removing BrAverage =', BrAverage
        endif
-       Br0_II = Br0_II - BrAverage
-       write(*,*)NameSub,': Removing BrAverage =',BrAverage
     endif
 
     ! Save 2D file
@@ -370,7 +362,7 @@ contains
     nThetaIn = nTheta0
     nThetaOut = ceiling(nThetaIn * cPi/2)
 
-    write(*,*)'nTHeta0,nTHetaIn,nTHetaOut',nTheta0,nThetaIn,nThetaOut
+    write(*,*)'nTheta0,nThetaIn,nThetaOut',nTheta0,nThetaIn,nThetaOut
 
     !Notice the number of point in theta direction is an odd number
     if (mod(nThetaOut,2) == 0) then
