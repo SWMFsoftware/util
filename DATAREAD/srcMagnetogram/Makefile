@@ -203,7 +203,7 @@ test_fdips_wedge:
 	make test_fdips_wedge_check
 
 test_fdips_wedge_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
+	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-9 \
 		fdips.log \
 		fdips_wedge.ref > test_fdips_wedge_log.diff
 	gunzip -c fdips_ref_wedge_b.gz > fdips_ref_b.out
