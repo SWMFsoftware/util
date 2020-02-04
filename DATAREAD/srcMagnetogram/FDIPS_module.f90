@@ -6,12 +6,13 @@ module ModPotentialField
   use ModMpi
   use ModUtilities, ONLY: CON_stop
   use ModConst, ONLY: cPi, cTwoPi, cHalfPi
+  use ModNumConst,    ONLY: cHalfPi, cPi, cDegToRad
 
   implicit none
 
   ! input parameter
   logical:: DoReadMagnetogram = .true.
-
+  real :: LongCR = 0.0, CarRot = 0.0
   ! grid and domain parameters
   integer:: nR = 150, nThetaCoarse = 180, nPhiCoarse = 360
   real   :: rMin = 1.0, rMax = 2.5
@@ -105,7 +106,6 @@ contains
   subroutine read_fdips_param
 
     use ModReadParam
-    use ModNumConst, ONLY: cDegToRad
     use ModReadMagnetogram, ONLY: read_magnetogram_param
 
     character(len=lStringLine) :: NameCommand
@@ -231,12 +231,6 @@ contains
        nProcPhi = 0
     end if
 
-    !    if (.not.(DoSaveBxyz .or. DoSaveField .or. DoSavePotential .or. &
-    !         DoSaveTecplot .or. DoSaveGhostFace)) then
-    !       call CON_stop(&
-    !            'No output file specified; you will need at least one #OUTPUT')
-    !    endif
-
     ! Do timing on proc 0 only, if at all
     if(iProc > 0) UseTiming = .false.
 
@@ -244,11 +238,10 @@ contains
   !===========================================================================
   subroutine read_modified_magnetogram
 
-    use ModNumConst, ONLY: cDegToRad
     use ModReadMagnetogram, ONLY: read_orig_magnetogram, Br0_II,  &
-         Lat0_I, Phi0_I, nThetaAll, nPhiAll
+         Lat0_I, Phi0_I, nThetaAll, nPhiAll, LongShift, CarringtonRotation
 
-    logical:: IsPhiThetaOrder = .false.
+    logical :: IsPhiThetaOrder = .false.
     logical :: IsInputLonLatInDegree = .true.
 
     character(len=*), parameter:: NameSub = 'read_modified_magnetogram'
@@ -271,6 +264,12 @@ contains
     endif
 
     Br_II=Br0_II
+
+    ! The CR longitude of Left edge (Longitdue Shift)
+    ! and the Carrington Rotation of the Central Meridian 
+    ! is read.
+    LongCR = LongShift
+    CarRot = CarringtonRotation
 
   end subroutine read_modified_magnetogram
   !============================================================================
@@ -466,23 +465,16 @@ contains
        dThetaNode_I          = dTheta
     end if
 
-    ! global synoptic map start from phi=0
-    ! for wedge, the input to FDIPS is already shifted to cell center
-    if (.not. UseWedge) then
-       CellShiftPhi = 0
-    else
-       CellShiftPhi = 0.5
-    endif
     dPhi = (PhiMax-PhiMin)/nPhiAll
     ! Set Phi_I
     do iPhi = 0, nPhi+1
-       Phi_I(iPhi) = PhiMin+(iPhi + iPhi0 - 1 + CellShiftPhi)*dPhi
+       ! Phi grid is Cell Centered 
+       Phi_I(iPhi) = PhiMin+(iPhi + iPhi0 - 0.5)*dPhi
     end do
 
     PhiNode_I = Phi_I(1:nPhi+1) - 0.5*dPhi
     dPhi_I = PhiNode_I(2:nPhi+1) - PhiNode_I(1:nPhi)
     dPhiNode_I = Phi_I(1:nPhi+1) - Phi_I(0:nPhi)
-
 
     Potential_C       =   0.0
     Rhs_C             =   0.0
@@ -494,10 +486,9 @@ contains
   subroutine save_potential_field
 
     use ModIoUnit,      ONLY: UnitTmp_
-    use ModNumConst,    ONLY: cHalfPi, cPi
     use ModPlotFile,    ONLY: save_plot_file
     use ModCoordTransform, ONLY: rot_xyz_sph
-    use ModReadMagnetogram, ONLY: nThetaAll, nPhiAll
+    use ModReadMagnetogram, ONLY: nThetaAll, nPhiAll, StringMagHeader
 
     integer:: iR, jR, iTheta, iPhi, iLat, nLat
     real   :: r, CosTheta, SinTheta, CosPhi, SinPhi
@@ -591,6 +582,10 @@ contains
        end if
     endif
 
+    call  MPI_bcast(StringMagHeader, len(StringMagHeader), MPI_CHARACTER, 0, iComm, iError)
+    call  MPI_bcast(LongCR, 5 , MPI_REAL, 0, iComm, iError)
+    call  MPI_bcast(CarRot, 10 , MPI_REAL, 0, iComm, iError)
+
     if(DoSaveField)then
        ! Note the fake processor index to be used by redistribute.pl
        write(NameFile,'(a,2i2.2,a,i3.3,a)') &
@@ -601,8 +596,8 @@ contains
             StringHeaderIn = &
             'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
             nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
-            //' Ro_PFSSM Rs_PFSSM', &
-            ParamIn_I = (/ rMin, rMax /), &
+            //' Ro_PFSSM Rs_PFSSM LongCR CR', &
+            ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
             nDimIn=3, VarIn_VIII=b_DX(:,:,1:nPhiOut,1:nTheta), &
             Coord1In_I=RadiusNode_I, &
             Coord2In_I=Phi_I(1:nPhiOut), &
@@ -661,20 +656,18 @@ contains
 
        if(UseLogRadius)then
           call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = &
-               'logRadius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
-               nameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax', &
-               ParamIn_I = (/ rMin, rMax /), &
+               StringHeaderIn = trim(StringMagHeader),&
+               nameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
+               ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
                nDimIn=3, VarIn_VIII=b_DX, &
                Coord1In_I=log10(RadiusNode_I), &
                Coord2In_I=Phi_I(1:nPhiOut), &
                Coord3In_I=Lat_I)
        else
           call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = &
-               'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
-               nameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax', &
-               ParamIn_I = (/ rMin, rMax /), &
+               StringHeaderIn = trim(StringMagHeader), &
+               nameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
+               ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
                nDimIn=3, VarIn_VIII=b_DX, &
                Coord1In_I=RadiusNode_I, &
                Coord2In_I=Phi_I(1:nPhiOut), &
@@ -684,12 +677,12 @@ contains
 
     end if
 
-
     if (.not. UseWedge) then
        nPhiOut = nPhiAll+1
     else
        nPhiOut = nPhiAll
     endif
+
     if(DoSaveTecplot)then
        open(unit = UnitTmp_, file=NameFileTecplot, status='replace')
 
