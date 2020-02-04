@@ -35,9 +35,9 @@ module ModMagHarmonics
   ! Name of output file
   character (len=100):: NameFileOut='harmonics.dat'
 
-  integer:: i,n,m,iTheta,iPhi,iR,mm,nn
+  integer, public:: i,n,m,iTheta,iPhi,iR,mm,nn
   real, allocatable, dimension(:,:):: g_nm, h_nm, Br_II
-  real:: dR=1.0 !, dPhi=1.0, dTheta, dSinTheta=1.0
+  real:: dR=1.0
   integer:: nPhi=72, nTheta=29
 
   integer, parameter:: MaxHarmonics = 180
@@ -138,11 +138,11 @@ contains
     !  modified - remesed magnetogram data
 
     use ModReadMagnetogram, ONLY: Br0_II, nTheta0, nPhi0, UseChebyshevNode, &
-         iCarringtonRotation, iLong0, UseCosTheta, nThetaorig, nPhiorig, &
-         ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta
+         CarringtonRotation, LongShift, UseCosTheta, nThetaorig, nPhiorig, &
+         ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta, StringMagHeader
 
     integer :: iUnit, iError, iTheta, iPhi, m,inm, nn, mm
-    real    :: dThetaChebyshev
+    real    :: dThetaChebyshev, LongPhi = 0.0
     real, allocatable:: Br_II(:,:)
 
     !-------------------------------------------------------------------------
@@ -168,6 +168,11 @@ contains
        nTheta = nThetaorig
        nPhi   = nPhiorig
     endif
+
+    ! Adding a shift to the cell center in the 
+    ! Phi direction to the original 
+    ! longitude shift.
+    LongPhi = LongShift + 180.0/nPhi
 
     allocate(Br_II(0:nPhi-1,0:nTheta-1))
     Br_II=Br0_II
@@ -319,13 +324,13 @@ contains
        stop
     end if
 
-    write ( iUnit, '(a19,I3,a10,I4.4,a1,i3.3)' ) &
+    write ( iUnit, '(a19,I3,a10,f10.5,a1,f5.1)' ) &
          'Coefficients order=',nHarmonics, &
-         ' Central=CT',iCarringtonRotation,':',mod(iLong0+180,360)
-    write ( iUnit, '(a)' ) 'Observation time'
+         ' Central=CT',CarringtonRotation,':',mod(LongPhi+180.,360.)
+    write ( iUnit, * )
+    write ( iUnit, '(a)' ) trim(StringMagHeader)
     write ( iUnit, '(a45,I3)' ) &
          'B0 angle & Nmax:        0          ',nHarmonics
-    write ( iUnit, * )
     write ( iUnit, * )
     write ( iUnit, * )
     write ( iUnit, * )

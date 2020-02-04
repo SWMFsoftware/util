@@ -131,7 +131,7 @@ contains
   subroutine get_hlcmm(Head_PFSSM,Shift)
     character (LEN=80),intent(inout):: Head_PFSSM
     real,intent(inout)::Shift
-    real::HLCMM     !Heliographic Longitudee of the central meridian of map
+    real::HLCMM     !Heliographic Longitude of the central meridian of map
     integer::iHLCMM !The same, but HLCMM is integer at WSO magnetograms
     integer::iErrorRead,iPosition
     iPosition=index(Head_PFSSM,'Centered')	
@@ -146,7 +146,7 @@ contains
             Head_PFSSM(iPosition+1:len(Head_PFSSM))
        read(Head_PFSSM,'(i3)',iostat=iErrorRead)iHLCMM
        if(iErrorRead>0)call Con_stop(&
-            'Can nod find HLCMM, '//File_PFSSM//&
+            'Cannot find HLCMM, '//File_PFSSM//&
             ' is not a true WSO magnetogram')
        Shift=modulo(iHLCMM-180-dLongitudeHgrDeg, 360.0) 
        if(iProc==0)then
@@ -163,7 +163,7 @@ contains
             Head_PFSSM(iPosition+1:len(Head_PFSSM))
        read(Head_PFSSM,*,iostat=iErrorRead)HLCMM
        if(iErrorRead>0)call CON_stop(&
-            'Can nod find HLCMM, '//File_PFSSM//&
+            'Cannot find HLCMM, '//File_PFSSM//&
             ' is not a true MDI magnetogram')
        Shift=modulo(HLCMM-180-dLongitudeHgrDeg, 360.0) 
        if(iProc==0)then
@@ -355,6 +355,10 @@ contains
     ! Leave out monopole (n=0) term::
     !/
     g_nm(1,1) = 0.0
+    
+    
+    
+
   end subroutine read_harmonics
   !\
   !Routine: set_magnetogram
@@ -774,8 +778,6 @@ contains
     call read_plot_file(NamePotentialFieldFile, TypeFileIn='real8', &
          nOut_D=n_D, nParamOut=nParam, ParamOut_I=Param_I)
 
-    !!!write(*,*)'nParam = ',nParam
-
     Ro_PFSSM = Param_I(1)
     Rs_PFSSM = Param_I(2)
     PhiOffset = 0.0
@@ -967,6 +969,8 @@ contains
 
     !\
     ! Transform Phi_PFSSM from the component's frame to the magnetogram's frame
+    ! PhiOffset is the longitudinal shift from the original map +
+    ! shift to the cell center.
     !/
     Phi_PFSSM = Phi_PFSSM - PhiOffset*cDegToRad
 
