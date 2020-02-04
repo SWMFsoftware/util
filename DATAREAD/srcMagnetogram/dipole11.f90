@@ -20,9 +20,9 @@ program dipole11
   integer:: iPhi, iTheta
   !---------------------------------------------------------------------------
 
-  ! Uniform in Phi
+  ! Uniform in Phi, Cell centered
   do iPhi = 1, nPhi
-     Phi_I(iPhi) = dPhi*(iPhi - 1)
+     Phi_I(iPhi) = dPhi*(iPhi - 0.5)
   end do
 
   ! Uniform in sin(theta) and start from Theta = Pi (!) and finish at 0
@@ -58,7 +58,7 @@ program dipole11
   call save_plot_file('dipole11.out', &
        StringHeaderIn = 'DIPOLE11 output: [deg] [G]', &
        NameVarIn = 'Longitude Latitude Br LongitudeShift CR', &
-       ParamIn_I = (/ 0.50, 0.0/), &
+       ParamIn_I = (/ 0.0, 0.0/), &
        Coord1In_I = cRadToDeg*Phi_I, &
        Coord2In_I = 90.0 - cRadToDeg*Theta_I, &
        VarIn_II  = Br_II)
@@ -79,7 +79,7 @@ program dipole11
   call save_plot_file('dipole11uniform.out', &
        StringHeaderIn = 'DIPOLE11 output: [deg] [G]', &
        NameVarIn = 'Longitude Latitude Br LongitudeShift CR', &
-       ParamIn_I = (/0.50, 0.0/), &
+       ParamIn_I = (/0.0, 0.0/), &
        Coord1In_I = cRadToDeg*Phi_I, &
        Coord2In_I = 90.0 - cRadToDeg*Theta_I, &
        VarIn_II  = Br_II)
