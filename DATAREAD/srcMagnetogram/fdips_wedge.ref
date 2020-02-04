@@ -40,7 +40,7 @@ ascii						TypeFileField (ascii, real4 or real8)
 ghostface					TypeOutput
 fdips_ghostface.out		NameFilePotential		NameFileGhostFace
 ascii						TypeFilePotential		TypeFileGhostFace
- read_orig_magnetogram: nTheta0, nPhi0, LongitudeShift =  60 60   3.0000000000000000
+ read_orig_magnetogram: nTheta0, nPhi0, LongitudeShift =  60 60   3.0000000000000000   0.0000000000000000
  nThetaLgr =  8 nThetaSml =  7
  nPhiLgr   =  15 nPhiSml   =  15
  Partitioning in nThetaAll gives:  15 Actual nThetaAll is:  15
