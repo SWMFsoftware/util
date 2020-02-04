@@ -43,12 +43,12 @@ ascii			TypeFileField (ascii, real4 or real8)
 bxyz			TypeOutput    (field, bxyz, potential, or tecplot)
 fdips_bxyz.out		NameFileField		NameFileBxyz
 ascii			TypeFileField (ascii, real4 or real8)		TypeFileBxyz
- read_orig_magnetogram: nTheta0, nPhi0, LongitudeShift =  180 360 0
- read_orig_magnetogram: Removing BrAverage =   7.0930915462162783E-19
+ read_orig_magnetogram: nTheta0, nPhi0, LongitudeShift =  180 360   0.0000000000000000   0.0000000000000000
+ read_orig_magnetogram: Removing BrAverage =   3.3101093882342630E-18
  nThetaLgr =  10 nThetaSml =  10
  nPhiLgr   =  10 nPhiSml   =  10
  Partitioning in nThetaAll gives:  20 Actual nThetaAll is:  20
  Partitioning in nPhiAll gives:    20 Actual nPhiAll is:    20
- nIter, Tolerance, iError= 68   5.8504803489758123E-11 0
- max(abs(divb)) =    1.1343718787718305E-09
+ nIter, Tolerance, iError= 72   9.2142892232256361E-11 0
+ max(abs(divb)) =    5.9010161201911160E-09
  nProcTheta, nProcPhi= 2 2
