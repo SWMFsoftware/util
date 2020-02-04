@@ -27,23 +27,25 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         if not specified, the output grid will be the same type
     If nlat, nlong and out_grid are ALL left out, no remapping is done,
         and the code simply reformats.
-    Note that ADAPT files may have multiple maps.  Only the 1st is utilized.
+    Note that ADAPT files may have multiple maps.  Only the 1st is utilized unless specified otherwise.
     My MATLAB code remap_mag.m uses the same algorithm but runs much faster.
        by Richard Frazin, July 2014 - Feb 2015
     """
     pi = 3.141592653589793
-
     if ( (out_grid != 'sin(lat)') and (out_grid != 'uniform') and (out_grid != 'unspecified') ):
         print ("Unknown output grid type.  Choices are blank, 'unspecified', 'uniform' and 'sin(lat)' ")
         return(-1)
     
     cc =  FITS_RECOGNIZE(inputfile)
+
     if cc == -1:
         print ("Input file not recognized.")
         return(-1)
     else:
         magtype = cc[0]
         grid_type = cc[1]
+        map_data = cc[2]
+        input_grid = grid_type
 
     if out_grid == 'unspecified':
         out_grid = grid_type
@@ -86,7 +88,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     
     g[0].header['NAXIS1'] = nlong # new number of longitude points
     g[0].header['NAXIS2'] = nlat  #               latitude
-    
+
     try:
         g[0].header['GRID'] = out_grid #change the existing header value
     except KeyError as er:
@@ -193,13 +195,23 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
 
     #try to get some context information from the FITS file to include in output
     try:
-        CRnumber = str(int(g[0].header['MAPCR']))  #works for ADAPT
+        CRnumber = str(g[0].header['MAPCR'])  #works for ADAPT - Center of CM 
+        CR = str(int(g[0].header['MAPCR']))  #works for ADAPT
     except KeyError as er:
         CRnumber = '0'
 
-    if CRnumber == '0':    
+    if CRnumber == '0':
         try :
-            CRnumber = str(g[0].header['CAR_ROT']) #works on GONG and MDI
+            CRnumber = str(g[0].header['CRCENTER']) #works on GONG and MDI
+        except KeyError as er:
+            CRnumber = '0'
+        try :
+            CR = str(g[0].header['CAR_ROT']) #works on GONG and MDI
+        except KeyError as er:
+            CR ='0'
+    if CRnumber == '0':
+        try :
+            CRnumber = str(g[0].header['CAR_ROT'])
         except KeyError as er:
             CRnumber = '0'
 
@@ -219,7 +231,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
 
         if mapdate == '0000-00-00T00:00:00':    
             try :
-                mapdate = g[0].header['T_OBS']  #works for MDI
+                mapdate = g[0].header['T_OBS']  #works for MDI, HMI
             except KeyError as er:
                 mapdate = '0000-00-00T00:00:00'
     try:
@@ -233,43 +245,40 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         long0 = 0
     if long0 == 0:
         try :
-            long0 = g[0].header['CRLNGEDG']
+            long0 = g[0].header['CRLNGEDG']   #works on ADAPT
         except KeyError as er:
             long0 = 0
 
-
     #ascii output file, Gabor format, the first line is arbitary
+
     fid = open(outputfile,'w')
-    
-    line0 = 'magnetogram type = '+magtype+', grid_type = '+out_grid+', CR'+CRnumber+ ', MapDate = '+mapdate+', units: ['+bunit+'], created at: '+time.ctime()+'\n' 
+    if magtype == 'ADAPT Synchronic':
+        line0 = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
+            +str(imdex+1)+ '; InstrumentName = '+map_data+';InputLatGrid = '\
+            +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
+            +bunit+'; InputMapResolution = '+str(nlo)+','+str(nla)+'; MagnetogramDate = '\
+            +mapdate+'; CentralMeridianLong = '+CRnumber+'; InputFile = ' \
+            +str(inputfile)+'; ASCIIFileCreationDate = '+time.strftime("%Y-%m-%dT%H:%M:%S")+'\n' 
+    else:
+        line0 = 'MagnetogramType = '+magtype+'; InstrumentName = '+map_data+'; InputLatGrid = '\
+            +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = '+bunit+'; InputMapResolution = '\
+            +str(nlo)+','+str(nla)+'; MagnetogramDate = '+mapdate+'; CentralMeridianLong = '\
+            +CRnumber+'; InputFile = "'+str(inputfile)+'"; ASCIIFileCreationDate = '\
+            +time.strftime("%Y-%m-%dT%H:%M:%S")+'\n' 
+
     fid.write(line0)
     line0 = '       0      0.00000       2       2       1 \n'
     fid.write(line0)
     fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
-    fid.write(str(long0 + 0.5*360./nlong) +'  '+str(CRnumber)+' \n') #longitude shift (important for GONG Hourly)
-    fid.write('Longitude Latitude Br LongitudeShift CR \n')
+    # Only adding the original longitude shift as read from the FITS file and the CM of the CR
+    fid.write(str(long0) +'  '+str(CRnumber)+' \n') #longitude shift (important for GONG Hourly)
+    fid.write('Longitude Latitude Br LongitudeShift CarringtonRotation \n')
     
     for k in np.arange(nlat):
-         for l in np.arange(nlong):
-             line0 = str(l*360./nlong) + ' ' + str(newlat[k]) + ' ' + str(newmap[k,l]) + ' \n'
-             fid.write(line0)
-
-    #old output format
-    ## fid.write('#CR\n')
-    ## try:
-    ##     fid.write(str(g[0].header['CRROTEDG']) + '\n')
-    ## except KeyError as er:
-    ##     fid.write('-1')
-    ## fid.write('#nMax\n')
-    ## fid.write(str(-1) + '\n')
-    ## fid.write('#ARRAYSIZE\n')
-    ## fid.write(str(nlong) + '\n')
-    ## fid.write(str(nlat) + '\n')
-    ## fid.write('#START\n')
-    ## for k in np.arange(nlat):
-    ##     for l in np.arange(nlong):
-    ##         fid.write(str(newmap[k,l]) + '\n')
-
+        for l in np.arange(nlong):
+            # Phi grid is also written out as cell centered similar to the latitude grid
+            line0 = str((l+0.5)*360./nlong) + ' ' + str(newlat[k]) + ' ' + str(newmap[k,l]) + ' \n'
+            fid.write(line0)
     g.close()
     fid.close()
     return(newmap,d)
@@ -286,11 +295,12 @@ def FITS_RECOGNIZE(inputfile):
       GONG Hourly updated, sin(lat)
       MDI Synoptic, sin(lat)
     This function returns a tuple with this information.  The output tuple is:
-      (magnetogram_type,grid_type)
+      (magnetogram_type,grid_type,InstrumentType)
     """
 
     magnetogram_type = 'unknown'
     grid_type = 'unknown'
+    map_data = 'unknown'
     g = fits.open(inputfile)
     g.info()
     header0 = g[0].header
@@ -302,19 +312,24 @@ def FITS_RECOGNIZE(inputfile):
 
 
     try:
-        telescope = g[0].header['TELESCOP'] #works for MDI, GONG
+        telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI
     except KeyError as er:
         telescope = 'unknown'
         
     try:
-        inst = g[0].header['INSTRUME'] #works for MDI
+        inst = g[0].header['INSTRUME'] #works for MDI, HMI
     except KeyError as er:
         inst = 'unknown'
 
     try:
-        ctyp = g[0].header['CTYPE2'] #works for MDI, GONG
+        ctyp = g[0].header['CTYPE2'] #works for MDI, GONG, HMI
     except KeyError as er:
         ctyp = 'unknown'
+
+    try:
+        cunit = g[0].header['CUNIT2'] #works for MDI, GONG, HMI
+    except KeyError as er:
+       cunit = 'unknown'
 
     try:
         model = g[0].header['MODEL'] #works for ADAPT
@@ -340,7 +355,8 @@ def FITS_RECOGNIZE(inputfile):
         except KeyError as er:
             long0 = - 1
         if ctyp.find('CRLT-CEA') > -1:
-            grid_type = 'sin(lat)'
+            grid_type = 'sin(lat)'            
+            map_data = 'GONG'
         else:
             print ("unknown NSO-GONG magnetogram type")
             return(-1)
@@ -349,12 +365,22 @@ def FITS_RECOGNIZE(inputfile):
         if ( (inst.find('MDI') > -1) & (ctyp.find('Sine Latitude') > -1) ):
             magnetogram_type = 'MDI Synoptic'
             grid_type = 'sin(lat)'
-        else :
+            map_data = 'MDI'
+        else:
             print ("unknown SOHO magnetogram type")
             return(-1)
 
+    if telescope.find('SDO/HMI') > -1:
+        if ( (ctyp.find('CRLT-CEA') > -1) & (cunit.find('Sine Latitude') > -1) ):
+            magnetogram_type = 'HMI Synoptic'
+            grid_type = 'sin(lat)'
+            map_data = 'HMI'
+        else:
+            print ("unknown SDO magnetogram type")
+            return(-1)
+
     if model.find('ADAPT') > -1:
-        magnetogram_type = 'ADAPT Synchronic'
+        magnetogram_type ='ADAPT Synchronic'
         try:
             adapt_grid = g[0].header['GRID']
         except KeyError as er:
@@ -364,6 +390,11 @@ def FITS_RECOGNIZE(inputfile):
         else:
             print ("unknown ADAPT magnetogram type")
             return(-1)
+        try:
+            map_data = str(g[0].header['MAPDATA']) #works for ADAPT
+        except KeyError as er:
+            map_data = ' '
+
 
     if sft.find('Baseline / Assimilation') > -1:
         magnetogram_type = 'Hathaway Synchronic'
@@ -374,7 +405,7 @@ def FITS_RECOGNIZE(inputfile):
         return(-1)
                 
     print ("I think this is a",magnetogram_type,"magnetogram on a",str(nla),"X",str(nlo),grid_type,"grid.")
-    return( (magnetogram_type, grid_type) )
+    return( (magnetogram_type, grid_type, map_data) )
 
     
 
@@ -402,7 +433,8 @@ if __name__ == '__main__':
     ./remap_magnetogram.py test.fits test.out
     ./remap_magnetogram.py test.fits test.out 180 360
     ./remap_magnetogram.py test.fits test.out -grid=uniform
- 
+    ./remap_magnetogram.py test.fits -istart 1 -iend 12
+
     Within Python, the remapping is done with the remap function contained
     in this file.
     
@@ -432,11 +464,11 @@ if __name__ == '__main__':
     elif args.grid == 'uniform':
         grid_type = 'uniform'
 
-if args.istart == None:
-    args.istart = 0
-if args.iend < args.istart:
-    args.iend = args.istart
+    if args.istart == None:
+            args.istart = 0
+    if args.iend < args.istart:
+        args.iend = args.istart
 
-for i in range(args.istart,args.iend+1):
-    out=args.outputfile+'_'+str(i)+'.out' 
-    remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
+    for i in range(args.istart,args.iend+1):
+        out=args.outputfile+'_'+str(i)+'.out' 
+        remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
