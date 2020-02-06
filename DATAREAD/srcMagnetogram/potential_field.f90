@@ -4,6 +4,7 @@
 module ModPotentialField
 
   use ModUtilities, ONLY: CON_stop
+  use ModNumConst, ONLY: cDegToRad
 
   implicit none
 
@@ -184,34 +185,22 @@ contains
     Br_II = 0.0
 
     do iPhi = 1, nPhi
-       jPhi0 = nPhiRatio*(iPhi-1) - nPhiRatio/2 + 1
-       jPhi1 = nPhiRatio*(iPhi-1) + nPhiRatio/2 + 1
+       jPhi0 = nPhiRatio*(iPhi-1) + 1
+       jPhi1 = jPhi0 + nPhiRatio - 1
 
        do jPhi = jPhi0, jPhi1
-
-          if( modulo(nPhiRatio,2) == 0 .and. &
-               (jPhi == jPhi0 .or. jPhi == jPhi1) )then
-             ! For even coarsening ratio use 0.5 weight at the two ends
-             Weight = 0.5
-          else
-             Weight = 1.0
-          end if
-
-          ! Apply periodicity
-          kPhi = modulo(jPhi-1,nPhi0) + 1
 
           do iTheta = 1, nTheta
              iTheta0 = nThetaRatio*(iTheta-1) + 1
              iTheta1 = iTheta0 + nThetaRatio - 1
           
              Br_II(iTheta,iPhi) = Br_II(iTheta,iPhi) &
-                  + Weight * sum( Br0_II(iTheta0:iTheta1, kPhi))
+                  + sum( Br0_II(iTheta0:iTheta1, jPhi))
           end do
        end do
     end do
 
     Br_II = Br_II / (nThetaRatio*nPhiRatio)
-
 
     ! remove monopole
     BrAverage = sum(Br_II)/(nTheta*nPhi)
@@ -300,9 +289,10 @@ contains
        dThetaNode_I = dTheta
     end if
 
+    ! Cell Centered in Phi and Theta both
     dPhi = cTwoPi/nPhi
     do iPhi = 0, nPhi+1
-       Phi_I(iPhi) = (iPhi - 1)*dPhi
+       Phi_I(iPhi) = (iPhi - 0.5)*dPhi
     end do
     PhiNode_I = Phi_I(1:nPhi+1) - 0.5*dPhi
     dPhi_I = PhiNode_I(2:nPhi+1) - PhiNode_I(1:nPhi)
@@ -810,4 +800,3 @@ program potential_field
 
 end program potential_field
 !==============================================================================
-
