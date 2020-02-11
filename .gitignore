@@ -7,6 +7,8 @@
 
 Makefile.DEPEND
 Makefile.RULES
+
+AMREX
 HYPRE
 
 CRASH/doc/EvidenceFile.pdf
