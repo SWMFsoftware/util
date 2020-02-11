@@ -38,7 +38,17 @@ OBJECTS_FDIPS= \
 	FDIPS_nohypre.o \
 	FDIPS.o
 
-FDIPS.o: ModReadMagnetogram.o FDIPS_hypre.o FDIPS_module.o
+
+FDIPS.o:\
+        FDIPS_module.o \
+        ModReadMagnetogram.o
+
+FDIPS_hypre.o:\
+        FDIPS_module.o \
+        ModReadMagnetogram.o
+
+FDIPS_module.o:\
+        ModReadMagnetogram.o
 
 FDIPSEXE = ${BINDIR}/FDIPS.exe
 

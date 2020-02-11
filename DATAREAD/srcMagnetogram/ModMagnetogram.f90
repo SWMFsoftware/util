@@ -65,10 +65,6 @@ module ModMagnetogram
   !/
   real :: tMagnetogram = -1.0
 
-  ! logical for reading the potential field B_DN
-  logical :: DoSavePotentialField = .false.
-  character(len=100) :: NamePotentialFieldFile, NameNewPotentialField
-
   real, public :: dR=1.0,dPhi=1.0,dSinTheta=1.0,dInv_D(nDim)=1.0
   integer, public :: nThetaPerProc,nRExt=2
   integer, public :: nR=29, nPhi=72, nTheta=29
@@ -100,7 +96,6 @@ module ModMagnetogram
        correct_angles, interpolate_field, PhiOffset
 
   ! read the potential field source surface solution
-  public :: read_potential_field, read_new_potential_field
   public :: update_magnetogram
   
 contains
@@ -206,19 +201,6 @@ contains
     case("#B0GRID")
        call read_var('nR', nR)
 
-    case("#SAVEPOTENTIALFIELD")
-       call read_var('DoSavePotentialField', DoSavePotentialField)
-
-    case("#READPOTENTIALFIELD")
-       call read_var('NamePotentialFieldFile', NamePotentialFieldFile)
-       call read_var('HeightInnerBc',          H_PFSSM)
-       call read_var('UnitB',                  UnitB)
-
-   case("#READNEWPOTENTIALFIELD")
-       call read_var('NameNewPotentialField',  NameNewPotentialField)
-       call read_var('HeightInnerBc',          H_PFSSM)
-       call read_var('UnitB',                  UnitB)
-
     case default
        call CON_stop(NameSub//' invalid NameCommand='//NameCommand)
     end select
@@ -276,7 +258,7 @@ contains
 
     PhiOffset = OldPhiShift
     File_PFSSM = NameOldFile
-    DoSavePotentialField = .false.
+
   end subroutine read_new_magnetogram_file
   !============================================================================
 
@@ -546,7 +528,7 @@ contains
     end if
 
     if(iProc==0)call write_Br_plot
-    if(iProc==0 .and. DoSavePotentialField)call save_potential_field
+
   contains
     subroutine set_auxiliary_arrays
 
@@ -716,123 +698,6 @@ contains
          VarIn_VII=State_VII)
 
   end subroutine Write_Br_plot
-
-  !==========================================================================
-
-  subroutine save_potential_field
-
-    use ModPlotFile, ONLY: save_plot_file
-
-    real, allocatable :: Radius_I(:), Theta_I(:), Phi_I(:)
-
-    integer :: iR, iTheta, iPhi
-    character(len=32) :: FileNameOut
-    !------------------------------------------------------------------------
-
-    allocate(Radius_I(-nRExt:nR), Phi_I(0:nPhi), Theta_I(0:nTheta))
-
-    do iR = -nRExt, nR
-       Radius_I(iR) = Ro_PFSSM + dR*iR
-    end do
-    do iPhi = 0, nPhi
-       Phi_I(iPhi) = real(iPhi)*dPhi
-    end do
-    do iTheta = 0, nTheta
-       Theta_I(iTheta) = r_latitude(iTheta)
-    end do
-
-    FileNameOut = trim(NameOutDir)//'potentialfield.outs'
-    call save_plot_file(FileNameOut, TypeFileIn='real8', StringHeaderIn = &
-         'Radius [Rs] Longitude [Deg] Latitude [Deg] B [G]', &
-         nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
-         //' Ro_PFSSM Rs_PFSSM', &
-         ParamIn_I = (/ Ro_PFSSM, Rs_PFSSM /), &
-         nDimIn=3, VarIn_VIII=B_DN, &
-         Coord1In_I=Radius_I, &
-         Coord2In_I=Phi_I, &
-         Coord3In_I=Theta_I)
-
-    deallocate(Radius_I, Theta_I, Phi_I)
-
-  end subroutine save_potential_field
-
-  !============================================================================
-
-  subroutine read_potential_field(NamePlotDir, iProcIn, nProcIn, iCommIn)
-    use ModPlotFile, ONLY: read_plot_file
-
-    character(len=*),intent(in) :: NamePlotDir
-    integer,         intent(in) :: iProcIn, nProcIn, iCommIn
-    
-    integer :: n_D(3), nParam
-    real :: Param_I(2)
-
-    character(len=*), parameter :: &
-         NameSub = 'ModMagnetogram::read_potential_field'
-    !--------------------------------------------------------------------------
-    iComm = iCommIn
-    nProc = nProcIn
-    iProc = iProcIn
-
-    n_D = 1
-    call read_plot_file(NamePotentialFieldFile, TypeFileIn='real8', &
-         nOut_D=n_D, nParamOut=nParam, ParamOut_I=Param_I)
-
-    Ro_PFSSM = Param_I(1)
-    Rs_PFSSM = Param_I(2)
-    PhiOffset = 0.0
-    nRExt = 0
-
-    nR = n_D(1) - 1
-    nPhi = n_D(2) - 1
-    nTheta = n_D(3) - 1
-
-    allocate(B_DN(3,-nRExt:nR,0:nPhi,0:nTheta))
-
-    call read_plot_file(NamePotentialFieldFile, TypeFileIn='real8', &
-         VarOut_VIII=B_DN)
-
-    ! recover public vaiables
-    dR = (Rs_PFSSM - Ro_PFSSM)/nR
-    dPhi = cTwoPi/nPhi
-    dSinTheta = 2.0/(nTheta+1)
-    dInv_D = 1.0/(/dR,dPhi,dSinTheta/)
-    nThetaPerProc = nTheta/nProc + 1
-
-    NameOutDir = NamePlotDir
-
-    if(iProc==0)call write_Br_plot
-    if(iProc==0 .and. DoSavePotentialField)call save_potential_field
-
-  end subroutine read_potential_field
-  !===================
-  subroutine read_new_potential_field(NamePlotDir, iProcIn, nProcIn, iCommIn)
-
-    character(len=*),intent(in) :: NamePlotDir
-    integer,         intent(in) :: iProcIn, nProcIn, iCommIn
-    character(LEN=100):: NameOldFile
-    real:: OldPhiShift
-    !--------------------------------------------------------------------------
-    NameOldFile = NamePotentialFieldFile
-    NamePotentialFieldFile = NameNewPotentialField
-    OldPhiShift = PhiOffset
-    call read_potential_field(&
-         NamePlotDir= NamePlotDir//'New'     , &
-         iProcIn=iProcIn                     , &
-         nProcIn=nProcIn                     , &
-         iCommIn=iCommIn)
-
-    !Allocate the magnetic field array, at the spherical grid.
-    if(allocated(BNew_DN))deallocate(BNew_DN)
-    allocate(BNew_DN(R_:Theta_,-nRExt:nR,0:nPhi,0:nTheta))
-
-    BNew_DN = B_DN
-
-    PhiOffset = OldPhiShift
-    NamePotentialFieldFile = NameOldFile
-    DoSavePotentialField = .false.
-  end subroutine read_new_potential_field
-
 
   !==========================================================================
   ! This subroutine corrects the angles Phi and Theta after every 
