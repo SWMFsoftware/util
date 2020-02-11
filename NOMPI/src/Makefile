@@ -4,7 +4,7 @@ SHELL=/bin/sh
 
 include ../../../Makefile.def
 include ../../../Makefile.conf
-include Makefile.RULES
+-include Makefile.RULES
 
 help:
 	@echo make targets:
@@ -29,5 +29,4 @@ clean: cleanfiles
 
 distclean: clean
 
-# keep this line
 

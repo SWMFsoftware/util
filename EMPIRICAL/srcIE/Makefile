@@ -6,8 +6,7 @@ include ../../../Makefile.conf
 
 MY_LIB = ${LIBDIR}/libEMPIRICALIE.a
 
-include Makefile.DEPEND
-#include Makefile.RULES
+-include Makefile.DEPEND
 
 OBJECTS = \
 	ModEIEConductance.o\
@@ -56,4 +55,3 @@ ${MY_LIB}: ${OBJECTS}
 clean: cleanfiles
 
 distclean: clean
-	rm -f Makefile.DEPEND

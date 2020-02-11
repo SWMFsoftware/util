@@ -3,9 +3,8 @@
 
 include ../../../Makefile.def
 include ../../../Makefile.conf
-include Makefile.DEPEND
-include Makefile.RULES  
-
+-include Makefile.DEPEND
+-include Makefile.RULES  
 
 MY_LIB = ${LIBDIR}/libCRASH.a
 
@@ -251,15 +250,6 @@ test_abs:
 	  ls -l *.diff
 	  rm -f test_re*
 
-clean: cleanfiles
-
-distclean: clean 
-	rm -f Makefile.DEPEND Makefile.RULES; \
-        rm -rf Tmp_;
-	rm -f test*diff *report*
-
-
-
 test_Fermi.o : ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
 
 test_Fermi: DEPEND
@@ -308,4 +298,10 @@ PROPACEOS: convert_propaceos.o
 		${Lflag1}    ; 
 	rm -rf Tmp_ 
 	./PROPACEOS.exe
+
+clean: cleanfiles
+
+distclean: clean
+	rm -rf Tmp_
+	rm -f test*diff *report*
 

@@ -6,8 +6,7 @@ include ../../../Makefile.conf
 
 MY_LIB = ${LIBDIR}/libINDICES.a
 
-include Makefile.DEPEND
-#include Makefile.RULES
+-include Makefile.DEPEND
 
 OBJECTS = \
 	ModIndicesInterfaces.o\
@@ -38,4 +37,3 @@ ${MY_LIB}: ${OBJECTS}
 clean: cleanfiles
 
 distclean: clean
-	rm -f Makefile.DEPEND

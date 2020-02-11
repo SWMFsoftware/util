@@ -9,8 +9,8 @@ include ../../../Makefile.conf
 
 MY_LIB = ${LIBDIR}/libEMPIRICALEE.a
 
-include Makefile.DEPEND
-include Makefile.RULES
+-include Makefile.DEPEND
+-include Makefile.RULES
 
 OBJECTS = \
 	EEE_ModCommonVariables.o \
@@ -57,4 +57,4 @@ ${BINDIR}/FRMAGNETOGRAM.exe: flux_rope_magnetogram.o
 clean: cleanfiles
 
 distclean: clean
-	rm -f Makefile.DEPEND
+
