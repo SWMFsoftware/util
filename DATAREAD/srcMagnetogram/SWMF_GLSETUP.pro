@@ -692,6 +692,26 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   print,FORMAT='(A25,5X,F6.2)','Poloidal flux [1E21 Mx]: ', GL_poloidal
   print,'-----------------------------------------'
 
+  openw,lun,'CME.in',/get_lun
+  printf,lun,'Recommended GL FLux Rope Parameters for use in PARAM.in'
+  printf,lun,''
+  printf,lun,'#CME'
+  printf,lun,'T                       UseCME'
+  printf,lun,'T                       DoAddFluxRope'
+  printf,lun,FORMAT='(F-6.2,5X,A25)',GL_Longitude,'LongitudeCme'
+  printf,lun,FORMAT='(F-6.2,5X,A24)',GL_Latitude,'LatitudeCme'
+  printf,lun,FORMAT='(F-6.2,5X,A27)',GL_Orientation,'OrientationCme'
+  printf,lun,'GL                      TypeCme'
+  printf,lun,FORMAT='(F-6.2,5X,A20)',Stretch,'Stretch'
+  printf,lun,FORMAT='(F-6.2,5X,A21)',Distance,'Distance'
+  printf,lun,FORMAT='(F-6.2,5X,A19)',GL_Radius,'Radius'
+  printf,lun,FORMAT='(F-6.2,5X,A22)',GL_BStrength,'BStrength'
+  printf,lun,FORMAT='(F-6.2,5X,A20)',0.0,'Density'
+  printf,lun,FORMAT='(F-6.2,5X,A26)',0.0,'ModulationRho'
+  printf,lun,FORMAT='(F-6.2,5X,A24)',0.0,'ModulationP'
+  close,lun
+  free_lun,lun
+  
   if keyword_set(CMEGrid) then begin
 ;Calculate the CME grid refinement parameters based on the flux rope
 ;location and size.
