@@ -18,6 +18,7 @@ pro fits_to_ascii, FileIn, FileOut, silent=silent
 if n_elements(FileIn)  eq 0 then FileIn  = 'fitsfile.fits'
 if n_elements(FileOut) eq 0 then FileOut = 'fitsfile'
 
+print,FileIn
 nMax=180
 
 FileHeader= FileOut + '.H'
@@ -25,7 +26,8 @@ FileTec   = FileOut + '_tec.dat'
 FileIdl   = FileOut + '.out' 
 DataName  = 'Br [G]'  
 
-Data = read_fits(FileIn, ImHeader, silent=silent)
+Data = readfits(FileIn, ImHeader, StringHeader, long0, CRnumber, type_grid, silent=silent)
+;StringHeader is the Header with details to be output
 
 if not keyword_set(silent) then begin
     print,''
@@ -65,17 +67,22 @@ if not keyword_set(silent) then begin
 endif
 
 openw, lun, FileIdl, /get_lun
-printf,lun,' Longitude [Deg], Latitude [Deg],',DataName
-printf,lun, 0, 0.0, 2, 1, 1
+printf,lun,StringHeader
+printf,lun, 0, 0.0, 2, 2, 1
 printf,lun, nLon,' ',nLat
-printf,lun, 180.0/nLon
-printf,lun,'Longitude Latitude Br LongitudeShift'
+printf,lun, long0, CRnumber
+printf,lun,'Longitude Latitude Br LongitudeShift CarringtonRotation'
 
+; Cell Centered Coordinates
 dLon = 360.0/nLon
 for i=0L,nLat-1 do begin
-   Latitude =  asin((2*i-nLat+1.0)/nLat)/!dtor
+   if(type_grid eq 1)then begin
+      Latitude =  (i + 0.5 - 90.)* (180./nLat)
+   endif else begin
+      Latitude =  asin((2*i-nLat+1.0)/nLat)/!dtor
+   endelse
    for j=0L,nLon-1 do begin
-      printf,lun,format ='(3e14.6)', j*dLon, Latitude, Data(j,i)
+      printf,lun,format ='(3e14.6)', (j+0.5)*dLon, Latitude, Data(j,i)
    endfor
 endfor
 
