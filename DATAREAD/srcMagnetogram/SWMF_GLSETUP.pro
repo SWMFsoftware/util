@@ -1,8 +1,9 @@
 pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
                   nSmooth=nSmooth, CMEspeed=CMEspeed, USEPIL=USEPIL,   $
                   CMEGrid=CMEGrid, ARMag=ARMag, ARSize_OFF=ARSize_OFF, $
-                  GLRadius=GLRadius, SizeFactor=SizeFactor,            $
-                  GLRadiusRange=GLRadiusRange, Help=Help
+                  GL_Radius=GL_Radius, SizeFactor=SizeFactor,            $
+                  GLRadiusRange=GLRadiusRange, Help=Help, GL_Latitude,$
+                  GL_Longitude,GL_Orientation, GL_Bstrength, GLRadius
 
 ;-----------------------------------------------------------------------
 ; NAME:
@@ -23,16 +24,16 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ; possible issues with cursor in Mac OS.
 ;
 ;
-; KEYWORDS: 
+; KEYWORDS:
 ;
 ;   FILE = input magnetogram file (can be FITS or SWMF format).
 ;   UseBATS = if set, will read BATS-R-US format (2D or 3D). Default
 ;             will read FITS format.
 ;   PlotRadius = Set up the layer of the magnetogram for 3D input
 ;         Cannot be used 2D file, requires /UseBATS. Default is 1.0.
-;   nSmooth = If nSmooth is ODD integer larger than 1, apply boxcar smoothing on the 
+;   nSmooth = If nSmooth is ODD integer larger than 1, apply boxcar smoothing on the
 ;             magnetic field. This can help finding the PIL. Default
-;             is 5.   
+;             is 5.
 ;   CMESpeed = Observed CME speed in km/s.
 ;
 ;   UsePIL = If set (default), the orientation of the flux rope will be
@@ -49,8 +50,8 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;
 ;   =================This group of paramaters serves to find GLRadius
 ;   There are three ways to set GLRadius:
-;   1. Explicitly: 
-; 
+;   1. Explicitly:
+;
 ;      /ARSize_OFF , GLRadius = GLRadius
 ;
 ;   2. In terms of Polarity Inversion Line length:
@@ -59,7 +60,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;
 ;      In this case the formula, GLRadius=PILLength/SizeFactor is
 ;      applied.  Default SizeFactor is 26.25.
-;   3.  In terms ofthe Active Region size (do not use /ARSize_OFF): 
+;   3.  In terms ofthe Active Region size (do not use /ARSize_OFF):
 ;
 ;      [GLRadiusRange=GLRadiusRange]
 ;
@@ -81,10 +82,10 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;   v0.2 06/05/2014 Added option to read binary data, remove the ASCII
 ;    template file dependance; added DemoMode and PlotRadius keywords.
 ;   v0.3 06/06/2014 Added option to calculate the GL orientation
-;    according to the PIL.         
+;    according to the PIL.
 ;   v0.4 11/24/2014 Added option to calculate the CME grid
 ;   v0.5 02/28/2015 Calculate the total magnetic field along the PIL
-;   v0.6 03/10/2015 Added option for determining the AR parameter 
+;   v0.6 03/10/2015 Added option for determining the AR parameter
 ;    information.
 ;   v0.7 03/16/2015 Added option to manually set the radius of the
 ;   flux rope
@@ -112,22 +113,24 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;    01/29/2016 Added option to change GL Radius range.
 ;    02/18/2016 Deleted DemoMode; Orientation Angle changed according
 ;    to the new definition; Seperate function for magnetogram reading;
-;    determine the flux rope helicity based on hemisphere 
+;    determine the flux rope helicity based on hemisphere
 ;    (North - Negative); improve code stability.
-;    03/16/2016 Igor Sokolov - edit the list of input parameters 
+;    03/16/2016 Igor Sokolov - edit the list of input parameters
 ;    03/18/2016 Igor Sokolov: (1) renaming xPositiveSelect=>
 ;    xPositive,...;(2) when the weighted centers are calculated, again
 ;    rename xPositiveWeighted=> xPositive...;(3) reordered the lines to
 ;    separate two visualization sessions (browser side in web app);
 ;    (4) some if loops (sometimes a couple of hundred lines apart) are
-;    merged to if endif else elseif. In a couple of occurences the 
+;    merged to if endif else elseif. In a couple of occurences the
 ;    non-tranferrable to python where construction is simplified. The
 ;    algorithm had not been modified even where this is hardly
 ;    desired. Some comments are added (need Meng's approval)
-;    03/19/2016 Igor Sokolov: sorted out calculations: each of them 
+;    03/19/2016 Igor Sokolov: sorted out calculations: each of them
 ;    is now done if and where is neded. Some redundant calculations
-;    are commented out. 
-;   
+;    are commented out.
+;    06/12/2019 M.Jin revised the method for dealing with complex active
+;    regions to generate stable/identical GL parameters.
+;
 ;------------------------------------------------------------------------
 
 ;Setup the color mode and a better IDL font.
@@ -141,7 +144,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
        PRINT,"IDL> SWMF_GLSETUP, FILE='FILE', /UseBATS, PlotRadius=PlotRadius,      $ "
        PRINT,'                    nSmooth=nSmooth, CMEspeed=CMEspeed, /usepil,      $ '
        PRINT,'                    /CMEGrid, ARMag=ARMag, /ARSize_OFF,               $ '
-       PRINT,'                    GLRadius=GLRadius, SizeFactor=SizeFactor,         $ ' 
+       PRINT,'                    GL_Radius=GL_Radius, SizeFactor=SizeFactor,         $ '
        PRINT,'                    GLRadiusRange=[Rmin,Rmax], /help                    '
        PRINT,'All parameters are optional, any order is allowed'
        RETURN
@@ -185,9 +188,9 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;set default for ARSize_OFF
   if not keyword_set(ARSize_OFF) then begin
      ARSize_OFF=0
-     if keyword_set(GLRadius) then begin
+     if keyword_set(GL_Radius) then begin
         print, $
-        'To set GLRadius explicitly, use /ARSize_OFF' 
+        'To set GL_Radius explicitly, use /ARSize_OFF'
         RETURN
      endif
      if keyword_set(SizeFactor) then begin
@@ -202,7 +205,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
         RETURN
      endif
    endelse
-         
+
 ;Setup default range for GL Radius
   if not keyword_set(GLRadiusRange) then GLRadiusRange=[0.2,2.0]
 
@@ -219,12 +222,12 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   br_field=mag_info.br_field
   btheta_field=mag_info.btheta_field
   bphi_field=mag_info.bphi_field
-  
+
 ;Smooth the image, NOTE: to get equivalent result in Python, one can
 ;use the following function:
 ;
 ; smoothed=scipy.ndimage.filters.uniform_filter(data,size=nsmooth)
-; 
+;
   if nSmooth gt 1 then begin
      br_field     = smooth(br_field, nsmooth, /edge_truncate)
      btheta_field = smooth(btheta_field, nsmooth, /edge_truncate)
@@ -242,7 +245,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;to the center of the positive/negative patterns is recommended.
 ;
 ;Note the solar latitude is expressed in pixel due to the non-uniform spacing. The latitude
-;is uniform in sin(latitude). This will be changed in the future to degree. 
+;is uniform in sin(latitude). This will be changed in the future to degree.
 
   br_field_show=br_field
   index=where(br_field lt -20)
@@ -256,25 +259,27 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
           title='SWMF Input Magnetogram (R ='$
           +strtrim(PlotRadius,2)+' Rs)',xtitle='Solar Longitude (Pixel)',$
           ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
-  
+
   print,'Please Select the CME Source Region (POSITIVE) with the left button'
   loadct,39
   !MOUSE.button = 0
   while(!MOUSE.button ne 1) do begin
      cursor,xPositive,yPositive,/data,/down
+     print,Latitude[round(xPositive),round(yPositive)]*180./!DPI,Longitude[round(xPositive),round(yPositive)]*180./!DPI
      if br_field[xPositive,yPositive] lt 0 then begin
-        print,'Negative Polarity! Please Select POSITIVE Polarity!'   
+        print,'Negative Polarity! Please Select POSITIVE Polarity!'
         !MOUSE.button=0
      endif else begin
-        plots,xPositive,yPositive,/data,psym=-2,color=250 
+        plots,xPositive,yPositive,/data,psym=-2,color=250
      endelse
   endwhile
   print,'Positive Source Region Selected: ',round(xPositive),round(yPositive)
   print,'Please Select the CME Source Region (NEGATIVE) with the right button'
   while(!MOUSE.button ne 4) do begin
      cursor,xNegative,yNegative,/data,/down
+     print,Latitude[round(xNegative),round(yNegative)]*180./!DPI,Longitude[round(xNegative),round(yNegative)]*180./!DPI
      if br_field[xNegative,yNegative] gt 0 then begin
-        print,'Positive Polarity! Please Select NEGATIVE Polarity!'   
+        print,'Positive Polarity! Please Select NEGATIVE Polarity!'
         !MOUSE.button=0
      endif else begin
         plots,xNegative,yNegative,/data,psym=-2,color=50
@@ -290,42 +295,154 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   boxsize = round(long(16)*nlon/360)
 
 ;Calculate the weighted center for the positive polarity.
+;Start from local Maximum as the the inital gauss
+  brm=max(br_field[round(xPositive)-boxsize/4:round(xPositive)+boxsize/4, $
+    round(yPositive)-boxsize/4:round(yPositive)+boxsize/4],brm_index)
+  brm_2dindex = ARRAY_INDICES(br_field[round(xPositive)-boxsize/4: $
+    round(xPositive)+boxsize/4, round(yPositive)-boxsize/4:$
+    round(yPositive)+boxsize/4], brm_index)
+  xPositive=round(xPositive)-boxsize/4+brm_2dindex[0]
+  yPositive=round(yPositive)-boxsize/4+brm_2dindex[1]
+
   xPositiveWeight=0.
   yPositiveWeight=0.
   TotalPositiveFlux=0.
-  for i=xPositive-boxsize/2,xPositive+boxsize/2 do begin
-     for j=yPositive-boxsize/2,yPositive+boxsize/2 do begin
-        if br_field[i,j] gt 0 then begin
+  for i=round(xPositive)-boxsize/2,round(xPositive)+boxsize/2 do begin
+     for j=round(yPositive)-boxsize/2,round(yPositive)+boxsize/2 do begin
+        if br_field[i,j] gt 0.0 then begin
            xPositiveWeight=xPositiveWeight+br_field[i,j]*i
            yPositiveWeight=yPositiveWeight+br_field[i,j]*j
            TotalPositiveFlux=TotalPositiveFlux+br_field[i,j]
         endif
      endfor
   endfor
+  xPositiveNew=xPositiveWeight/TotalPositiveFlux
+  yPositiveNew=yPositiveWeight/TotalPositiveFlux
+
+;Iterate until the position does not change any more
+  while(xPositiveNew ne xPositive or yPositiveNew ne yPositive) do begin
+    xPositive=xPositiveNew
+    yPositive=yPositiveNew
+    xPositiveWeight=0.
+    yPositiveWeight=0.
+    TotalPositiveFlux=0.
+    for i=round(xPositive)-boxsize/4,round(xPositive)+boxsize/4 do begin
+      for j=round(yPositive)-boxsize/4,round(yPositive)+boxsize/4 do begin
+          if br_field[i,j] gt 0.0 then begin
+            xPositiveWeight=xPositiveWeight+br_field[i,j]*i
+            yPositiveWeight=yPositiveWeight+br_field[i,j]*j
+            TotalPositiveFlux=TotalPositiveFlux+br_field[i,j]
+          endif
+      endfor
+    endfor
+    xPositiveNew=xPositiveWeight/TotalPositiveFlux
+    yPositiveNew=yPositiveWeight/TotalPositiveFlux
+  endwhile
+
+;Iterate one more time to due with small location difference
+  brm=max(br_field[round(xPositive)-boxsize/4:round(xPositive)+boxsize/4, $
+    round(yPositive)-boxsize/4:round(yPositive)+boxsize/4],brm_index)
+  brm_2dindex = ARRAY_INDICES(br_field[round(xPositive)-boxsize/4: $
+    round(xPositive)+boxsize/4, round(yPositive)-boxsize/4: $
+    round(yPositive)+boxsize/4], brm_index)
+  xPositive=round(xPositive)-boxsize/4+brm_2dindex[0]
+  yPositive=round(yPositive)-boxsize/4+brm_2dindex[1]
+  xPositiveWeight=0.
+  yPositiveWeight=0.
+  TotalPositiveFlux=0.
+  for i=round(xPositive)-boxsize/2,round(xPositive)+boxsize/2 do begin
+    for j=round(yPositive)-boxsize/2,round(yPositive)+boxsize/2 do begin
+        if br_field[i,j] gt 0.0 then begin
+          xPositiveWeight=xPositiveWeight+br_field[i,j]*i
+          yPositiveWeight=yPositiveWeight+br_field[i,j]*j
+          TotalPositiveFlux=TotalPositiveFlux+br_field[i,j]
+        endif
+    endfor
+  endfor
   xPositive=xPositiveWeight/TotalPositiveFlux
   yPositive=yPositiveWeight/TotalPositiveFlux
 
+  xPositive=round(xPositive)
+  yPositive=round(yPositive)
+  ;print,xPositive,yPositive
+
 ;Calculate the weighted center for the negative polarity.
+;Start from local Maximum as the the inital gauss
+  brm=min(br_field[round(xNegative)-boxsize/4:round(xNegative)+boxsize/4, $
+    round(yNegative)-boxsize/4:round(yNegative)+boxsize/4],brm_index)
+  brm_2dindex = ARRAY_INDICES(br_field[round(xNegative)-boxsize/4: $
+    round(xNegative)+boxsize/4, round(yNegative)-boxsize/4: $
+    round(yNegative)+boxsize/4], brm_index)
+  xNegative=round(xNegative)-boxsize/4+brm_2dindex[0]
+  yNegative=round(yNegative)-boxsize/4+brm_2dindex[1]
+
   xNegativeWeight=0.
   yNegativeWeight=0.
   TotalNegativeFlux=0.
-  for i=xNegative-boxsize/2,xNegative+boxsize/2 do begin
-     for j=yNegative-boxsize/2,yNegative+boxsize/2 do begin
-        if br_field[i,j] lt 0 then begin
+  for i=round(xNegative)-boxsize/2,round(xNegative)+boxsize/2 do begin
+     for j=round(yNegative)-boxsize/2,round(yNegative)+boxsize/2 do begin
+        if br_field[i,j] lt 0.0 then begin
            xNegativeWeight=xNegativeWeight+br_field[i,j]*i
            yNegativeWeight=yNegativeWeight+br_field[i,j]*j
            TotalNegativeFlux=TotalNegativeFlux+br_field[i,j]
         endif
      endfor
   endfor
+  xNegativeNew=xNegativeWeight/TotalNegativeFlux
+  yNegativeNew=yNegativeWeight/TotalNegativeFlux
+
+;Iterate until the position does not change any more
+  while(xNegativeNew ne xNegative or yNegativeNew ne yNegative) do begin
+    xNegative=xNegativeNew
+    yNegative=yNegativeNew
+    xNegativeWeight=0.
+    yNegativeWeight=0.
+    TotalNegativeFlux=0.
+    for i=round(xNegative)-boxsize/4,round(xNegative)+boxsize/4 do begin
+      for j=round(yNegative)-boxsize/4,round(yNegative)+boxsize/4 do begin
+          if br_field[i,j] lt 0.0 then begin
+            xNegativeWeight=xNegativeWeight+br_field[i,j]*i
+            yNegativeWeight=yNegativeWeight+br_field[i,j]*j
+            TotalNegativeFlux=TotalNegativeFlux+br_field[i,j]
+          endif
+      endfor
+    endfor
+    xNegativeNew=xNegativeWeight/TotalNegativeFlux
+    yNegativeNew=yNegativeWeight/TotalNegativeFlux
+  endwhile
+
+;Iterate one more time to due with small location difference
+  brm=min(br_field[round(xNegative)-boxsize/4:round(xNegative)+boxsize/4, $
+    round(yNegative)-boxsize/4:round(yNegative)+boxsize/4],brm_index)
+  brm_2dindex = ARRAY_INDICES(br_field[round(xNegative)-boxsize/4: $
+    round(xNegative)+boxsize/4, round(yNegative)-boxsize/4: $
+    round(yNegative)+boxsize/4], brm_index)
+  xNegative=round(xNegative)-boxsize/4+brm_2dindex[0]
+  yNegative=round(yNegative)-boxsize/4+brm_2dindex[1]
+  xNegativeWeight=0.
+  yNegativeWeight=0.
+  TotalNegativeFlux=0.
+  for i=round(xNegative)-boxsize/2,round(xNegative)+boxsize/2 do begin
+    for j=round(yNegative)-boxsize/2,round(yNegative)+boxsize/2 do begin
+        if br_field[i,j] lt 0.0 then begin
+          xNegativeWeight=xNegativeWeight+br_field[i,j]*i
+          yNegativeWeight=yNegativeWeight+br_field[i,j]*j
+          TotalNegativeFlux=TotalNegativeFlux+br_field[i,j]
+        endif
+    endfor
+  endfor
   xNegative=xNegativeWeight/TotalNegativeFlux
   yNegative=yNegativeWeight/TotalNegativeFlux
+
+  xNegative=round(xNegative)
+  yNegative=round(yNegative)
+  ;print,xNegative,yNegative
 
 ;Distance between the spot centers
   Dis_Weight=sqrt((xNegative-xPositive)^2+(yNegative-yPositive)^2)
 
 
-;Extract the profile along the two weighted centers in order to determine the 
+;Extract the profile along the two weighted centers in order to determine the
 ;find center of the flux rope.
   nProfile = max([round(abs(xPositive-xNegative)), $
                  round(abs(yPositive-yNegative))]) +1
@@ -378,7 +495,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 
   sizemap_p=br_field*ARmap_p*Regionmap_p
   sizemap_n=br_field*ARmap_n*Regionmap_n
- 
+
 ;Calculate the gradient of the Br field
   ddx=(shift(br_field,-1,0)-shift(br_field,1,0))/2.
   ddy=(shift(br_field,0,-1)-shift(br_field,0,1))/2.
@@ -393,7 +510,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   bitmap_gradient[where(br_field_gradient lt 0.5)]=0.0
 
 ;Cell size is used to divide the magnetogram to sub regions in order to determine
-;the PIL. 
+;the PIL.
   cell_size=1
 
 ;Setup the threshold for selecting cells near the PIL.
@@ -410,13 +527,13 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
                      lt -flux_threshold  and                                      $
            max(br_field[i*cell_size:(i+1)*cell_size,j*cell_size:(j+1)*cell_size]) $
                      gt flux_threshold) then begin
-           ;PIL indersects this quadrant. Even among these 4 points 
-           ;we do not include those in which the graient is too small: 
+           ;PIL indersects this quadrant. Even among these 4 points
+           ;we do not include those in which the graient is too small:
            bitmap[i*cell_size:(i+1)*cell_size,j*cell_size:(j+1)*cell_size]=       $
               bitmap_gradient[i*cell_size:(i+1)*cell_size,j*cell_size:(j+1)*cell_size]
         endif
      endfor
-  endfor  
+  endfor
 
 
 ;Distance cut-off for determining the PIL.
@@ -435,7 +552,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   wmap=bitmap*br_field*dismap
 
   if keyword_set(USEPIL) then begin
-;Calculate the orientation of the flux rope according to PIL 
+;Calculate the orientation of the flux rope according to PIL
 ;(make it perpendicular to PIL).
      dismap[where(Discenter gt Dis_threshold_s)]=0
      wmap_s=bitmap*br_field*dismap
@@ -447,11 +564,11 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
         PIL_y[i]=floor(PILpoints[i]/nlon)
         PIL_x[i]=PILpoints[i]-(PIL_y[i]*nlon)
      endfor
-     
+
      PIL_xx=PIL_x[sort(PIL_x)]
      PIL_yy=PIL_y[sort(PIL_x)]
-     PIL_fit=ladfit(PIL_xx,PIL_yy,/double)  
-        
+     PIL_fit=ladfit(PIL_xx,PIL_yy,/double)
+
      if PIL_fit[1] eq 0 then begin
         if br_field(ar_center[0],ar_center[1]-2) lt 0 then r1=[0,-1] else r1=[0,1]
      endif else begin
@@ -470,8 +587,8 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
            if ave_field lt 0 then r1=[-signum(aa_PIL),-signum(aa_PIL)*aa_PIL] $
            else r1=[signum(aa_PIL),signum(aa_PIL)*aa_PIL]
         endelse
-     endelse   
-        
+     endelse
+
      if array_equal(PIL_xx,PIL_xx[0]) then begin
         if br_field(ar_center[0]-2,ar_center[1]) lt 0 then r1=[-1,0] else r1=[1,0]
      endif
@@ -485,7 +602,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   if r1[1] lt 0 then begin
      GL_Orientation=360-GL_Orientation
   endif
-  
+
 ;Calculate the poloidal flux needed for the observed CME velocity.
 ;These relationships are based on the GONG magnetogram with nsmooth = 5
   if ARMag eq 1 then begin
@@ -512,27 +629,16 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
      bt_pil=bt_pil/nn
      GL_poloidal=(CMESpeed*bt_pil^0.58148678-2814.1030)/507.60065
   endelse
-  
-;Print WARNING information is GL_Bstrength is negative                                               
-  if GL_poloidal le 0 then begin
-     print,'*********************************************'
-     print,'WARNING: CALCULATION FAILED!USE WITH CAUTION!'
-     print,'Either the active region is too weak or the'    
-     print,'CME speed is too small!'
-     print,'GL Poloidal Flux is set to 0!'
-     print,'*********************************************'
-     GL_poloidal = 0.0
-  endif
 
-;Relationship between the PIL length and the GL flux rope Radius.   
-;This factor is now based on the 2011 March 7 CME. More tests  
-;are needed in order to get a more precise value.  
+;Relationship between the PIL length and the GL flux rope Radius.
+;This factor is now based on the 2011 March 7 CME. More tests
+;are needed in order to get a more precise value.
   if  ARSize_OFF then begin
-     if not keyword_set(GLRadius) then begin
-;At this moment, the PIL length is represented by degree and does not 
-;take into account the effect of different latitude. It will be improved later. 
+     if not keyword_set(GL_Radius) then begin
+;At this moment, the PIL length is represented by degree and does not
+;take into account the effect of different latitude. It will be improved later.
         PIL_Length=(n_elements(where(wmap lt 0))+n_elements(where(wmap gt 0)))/2.*360./nlon
-        GLRadius=PIL_Length/SizeFactor
+        GL_Radius=PIL_Length/SizeFactor
      endif
 
 ;Use Active Region size to specify the GL flux rope Radius.
@@ -540,18 +646,30 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
      ARSize=n_elements(where(abs(sizemap_p) ne 0))+n_elements(where(abs(sizemap_n) ne 0))
 ;Redundant?
 ;    ARStrength=(total(sizemap_p)+total(abs(sizemap_n)))/float(ARSize)
-     GLRadius=0.8/280.*ARSize
-     if GLRadius gt GLRadiusRange[1] then GLRadius=GLRadiusRange[1]
-     if GLRadius lt GLRadiusRange[0] then GLRadius=GLRadiusRange[0]
+     GL_Radius=0.8/280.*ARSize
+     if GL_Radius gt GLRadiusRange[1] then GL_Radius=GLRadiusRange[1]
+     if GL_Radius lt GLRadiusRange[0] then GL_Radius=GLRadiusRange[0]
   endelse
+
+
+;Print WARNING information is GL_Bstrength is negative
+  if GL_poloidal le 0 then begin
+     print,'*********************************************'
+     print,'WARNING: CALCULATION FAILED!USE WITH CAUTION!'
+     print,'Either the active region is too weak or the'
+     print,'CME speed is too small!'
+     print,'GL Poloidal Flux is set to 0!'
+     print,'*********************************************'
+     GL_poloidal = 0.0
+  endif
 
 ;Relationship between the GL Poloidal flux and GL Bstrength.
 ;Flux rope helicity is determined by the hemisphere, northern
 ;hemisphere - negative helicity.
- 
-  GL_Bstrength=GL_poloidal/(21.457435*GLRadius^4)
+
+  GL_Bstrength=GL_poloidal/(21.457435*GL_Radius^4)
   if GL_Latitude gt 0 then GL_Bstrength = -GL_Bstrength
- 
+
 
 ;Recommended GL flux rope parameters
   Distance = 1.8
@@ -563,23 +681,43 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   print,FORMAT='(A25,5X,F6.2)','Latitude: ',GL_Latitude
   print,FORMAT='(A25,5X,F6.2)','Longitude: ',GL_Longitude
   print,FORMAT='(A25,5X,F6.2)','Orientation: ',GL_Orientation
-  print,FORMAT='(A25,5X,F6.2)','Radius: ', GLRadius
+  print,FORMAT='(A25,5X,F6.2)','Radius: ', GL_Radius
   print,FORMAT='(A25,5X,F6.2)','Bstrength: ',GL_Bstrength
   print,FORMAT='(A25,5X,F6.2)','Stretch (FIXED): ',Stretch
   print,FORMAT='(A25,5X,F6.2)','Distance (FIXED): ',Distance
   print,FORMAT='(A25,5X,F6.2)','Height [Rs]: ', $
-        GLRadius + Distance - Stretch - 1.0
+        GL_Radius + Distance - Stretch - 1.0
   print,FORMAT='(A25,5X,F6.2)','Angular size [deg]: ', $
-        2*GLRadius/Distance/!dtor
+        2*GL_Radius/Distance/!dtor
   print,FORMAT='(A25,5X,F6.2)','Poloidal flux [1E21 Mx]: ', GL_poloidal
   print,'-----------------------------------------'
 
+  openw,lun,'CME.in',/get_lun
+  printf,lun,'Recommended GL FLux Rope Parameters for use in PARAM.in'
+  printf,lun,''
+  printf,lun,'#CME'
+  printf,lun,'T                       UseCME'
+  printf,lun,'T                       DoAddFluxRope'
+  printf,lun,FORMAT='(F-6.2,5X,A25)',GL_Longitude,'LongitudeCme'
+  printf,lun,FORMAT='(F-6.2,5X,A24)',GL_Latitude,'LatitudeCme'
+  printf,lun,FORMAT='(F-6.2,5X,A27)',GL_Orientation,'OrientationCme'
+  printf,lun,'GL                      TypeCme'
+  printf,lun,FORMAT='(F-6.2,5X,A20)',Stretch,'Stretch'
+  printf,lun,FORMAT='(F-6.2,5X,A21)',Distance,'Distance'
+  printf,lun,FORMAT='(F-6.2,5X,A19)',GL_Radius,'Radius'
+  printf,lun,FORMAT='(F-6.2,5X,A22)',GL_BStrength,'BStrength'
+  printf,lun,FORMAT='(F-6.2,5X,A20)',0.0,'Density'
+  printf,lun,FORMAT='(F-6.2,5X,A26)',0.0,'ModulationRho'
+  printf,lun,FORMAT='(F-6.2,5X,A24)',0.0,'ModulationP'
+  close,lun
+  free_lun,lun
+  
   if keyword_set(CMEGrid) then begin
 ;Calculate the CME grid refinement parameters based on the flux rope
-;location and size.                                                
+;location and size.
 
-     CMEbox_Start=[1.1,GL_Longitude-40.*GLRadius,GL_Latitude-20.*GLRadius]
-     CMEbox_End=[20.0,GL_Longitude+40.*GLRadius,GL_Latitude+20.*GLRadius]
+     CMEbox_Start=[1.1,GL_Longitude-40.*GL_Radius,GL_Latitude-20.*GL_Radius]
+     CMEbox_End=[20.0,GL_Longitude+40.*GL_Radius,GL_Latitude+20.*GL_Radius]
 
      print,'=========================================='
      print,'The Recommended Grid Refinement Parameters'
@@ -592,7 +730,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
      print,FORMAT='(A25,5X,F6.2)','Latitude_End: ', CMEbox_end[2]
      print,'-----------------------------------------'
   endif
-; Final magnetogram (large) 
+; Final magnetogram (large)
 ;Plot the weighted centers on the magnetogram.
   device,decomposed=0
   loadct,0
@@ -603,11 +741,11 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   loadct,39
   plots,xPositive,yPositive,/data,psym=-2,color=250
   plots,xNegative,yNegative,/data,psym=-2,color=50
-;plot center of the flux rope 
+;plot center of the flux rope
   plots,ar_center[0],ar_center[1],/data,psym=-2,color=150
 ; Showing positive and negative spots
   contour,abs(sizemap_p),/overplot,c_color=100
-  contour,abs(sizemap_n),/overplot,c_color=100  
+  contour,abs(sizemap_n),/overplot,c_color=100
 ;Showing the PIL
   showpoints=where(wmap gt 0)
   NN=n_elements(showpoints)
@@ -630,13 +768,13 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 
   device,decomposed=0
   loadct,0
-  
+
   sub_x1=max([ar_center[0]-RegionSize/2,0])
   sub_x2=min([ar_center[0]+RegionSize/2,nlon-1])
   sub_y1=max([ar_center[1]-RegionSize/2,0])
   sub_y2=min([ar_center[1]+RegionSize/2,nlat-1])
 
-  contour,br_field_show[sub_x1:sub_x2,sub_y1:sub_y2],$                        
+  contour,br_field_show[sub_x1:sub_x2,sub_y1:sub_y2],$
           min=-20,max=20,charsize=3,title='CME Source Region (R ='$
           +strtrim(PlotRadius,2)+' Rs)',xtitle='Solar Longitude (Degree)',$
           ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
@@ -660,7 +798,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   endfor
 
 ;------------------------------
-;Save data for testing purpose. 
+;Save data for testing purpose.
 ;WARNING!!!Uncomment pillines which is currently commented out!!!
 ;------------------------------
   ;save,pillines,ar_center,filename='AR6.sav'

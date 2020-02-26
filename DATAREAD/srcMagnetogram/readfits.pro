@@ -5,7 +5,7 @@
 ; Reading FITS files into IDL.
 ;
 ; This file contains all functions and procedures needed for
-; the basic features of the readfits function.
+; the basic features of the ts function.
 ;
 ; Basic usage:
 ;
@@ -301,7 +301,7 @@ function SXPAR, hdr, name, abort, COUNT=matches, COMMENT = comments, $
 ;               returned for T, and 0b is returned for F.
 ;               If Name was of form 'keyword*' then a vector of values
 ;               are returned.
-;
+;    
 ; SIDE EFFECTS:
 ;       !ERR is set to -1 if parameter not found, 0 for a scalar
 ;       value returned.  If a vector is returned it is set to the
@@ -970,9 +970,10 @@ REPLACE:
 ;       reading FITS files with IDL.   
 ;
 ; CALLING SEQUENCE:
-;       Result = READFITS( Filename/Fileunit,[ Header, heap, /NOSCALE, EXTEN_NO=,
-;                     NSLICE=, /SILENT , STARTROW =, NUMROW = , HBUFFER=,
-;                     /CHECKSUM, /COMPRESS, /No_Unsigned, NaNVALUE = ]
+;       Result = READFITS( Filename/Fileunit,[ Header,StringHeader,
+;                   long0, CRnumber,type_grid, heap, /NOSCALE, EXTEN_NO=,
+;                   NSLICE=, /SILENT , STARTROW =, NUMROW = , HBUFFER=,
+;                   /CHECKSUM, /COMPRESS, /No_Unsigned, NaNVALUE = ]
 ;
 ; INPUTS:
 ;       Filename = Scalar string containing the name of the FITS file  
@@ -1003,6 +1004,10 @@ REPLACE:
 ;              not supplying this parameter.    Note however, that omitting 
 ;              the header can imply /NOSCALE, i.e. BSCALE and BZERO values
 ;              may not be applied.
+;       StringHeader = String array containing the details from the
+;              FITS file to be included in the output file.
+;       long0  = Longitude Shift
+;       CRnumber = Carrington Rotation Number of Central Meridian
 ;       heap = For extensions, the optional heap area following the main
 ;              data array (e.g. for variable length binary extensions).
 ;
@@ -1163,7 +1168,7 @@ REPLACE:
 ;       Restored NaNVALUE keyword for backwards compatibility,
 ;               William Thompson, 16-Aug-2004, GSFC
 ;-
-function READFITS, filename, header, heap, CHECKSUM=checksum, $ 
+function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, heap, CHECKSUM=checksum, $ 
                    COMPRESS = compress, HBUFFER=hbuf, EXTEN_NO = exten_no, $
                    NOSCALE = noscale, NSLICE = nslice, $
                    NO_UNSIGNED = no_unsigned,  NUMROW = numrow, $
@@ -1175,361 +1180,445 @@ function READFITS, filename, header, heap, CHECKSUM=checksum, $
 
 ; Check for filename input
 
-   if N_params() LT 1 then begin                
-      print,'Syntax - im = READFITS( filename, [ h, heap, /NOSCALE, /SILENT,'
-      print,'                 EXTEN_NO =, STARTROW = , NUMROW=, NSLICE = ,'
-      print,'                 HBUFFER = ,/NO_UNSIGNED, /CHECKSUM, /COMPRESS]'
-      return, -1
-   endif
+  if N_params() LT 1 then begin                
+     print,'Syntax - im = READFITS( filename, [ h, heap, /NOSCALE, /SILENT,'
+     print,'                 EXTEN_NO =, STARTROW = , NUMROW=, NSLICE = ,'
+     print,'                 HBUFFER = ,/NO_UNSIGNED, /CHECKSUM, /COMPRESS]'
+     return, -1
+  endif
 
-   unitsupplied = size(filename,/TNAME) NE 'STRING'
+  unitsupplied = size(filename,/TNAME) NE 'STRING'
 
 ; Set default keyword values
 
-   silent = keyword_set( SILENT )
-   do_checksum = keyword_set( CHECKSUM )
-   if N_elements(exten_no) EQ 0 then exten_no = 0
+  silent = keyword_set( SILENT )
+  do_checksum = keyword_set( CHECKSUM )
+  if N_elements(exten_no) EQ 0 then exten_no = 0
 
 ;  Check if this is a Unix compressed file.   (gzip files are handled 
 ;  separately using the /compress keyword to OPENR).
 
-    unixZ = 0                
-    if unitsupplied then unit = filename else begin
-    len = strlen(filename)
-    gzip = strmid(filename,len-3,3) EQ '.gz'
-    compress = keyword_set(compress) or gzip
-    unixZ =  (strmid(filename, len-2, 2) EQ '.Z') and $
-             (!VERSION.OS_FAMILY EQ 'unix') 
+  unixZ = 0                
+  if unitsupplied then unit = filename else begin
+     len = strlen(filename)
+     gzip = strmid(filename,len-3,3) EQ '.gz'
+     compress = keyword_set(compress) or gzip
+     unixZ =  (strmid(filename, len-2, 2) EQ '.Z') and $
+              (!VERSION.OS_FAMILY EQ 'unix') 
 
 ;  Go to the start of the file.
 
-   openr, unit, filename, ERROR=error,/get_lun,/BLOCK,/binary, $
-                COMPRESS = compress, /swap_if_little_endian
-   if error NE 0 then begin
+     openr, unit, filename, ERROR=error,/get_lun,/BLOCK,/binary, $
+            COMPRESS = compress, /swap_if_little_endian
+     if error NE 0 then begin
         message,/con,' ERROR - Unable to locate file ' + filename
         return, -1
-   endif
+     endif
 
 ;  Handle Unix compressed files.   On some Unix machines, users might wish to 
 ;  force use of /bin/sh in the line spawn, ucmprs+filename, unit=unit,/sh
 
-        if unixZ then begin
-                free_lun, unit
-                spawn, 'uncompress -c '+filename, unit=unit                 
-                gzip = 1b
-        endif 
+     if unixZ then begin
+        free_lun, unit
+        spawn, 'uncompress -c '+filename, unit=unit                 
+        gzip = 1b
+     endif 
   endelse
   if keyword_set(POINTLUN) then begin
-       if gzip then  readu,unit,bytarr(pointlun,/nozero) $
-               else point_lun, unit, pointlun
+     if gzip then  readu,unit,bytarr(pointlun,/nozero) $
+     else point_lun, unit, pointlun
   endif
   doheader = arg_present(header) or do_checksum
   if doheader  then begin
-          if N_elements(hbuf) EQ 0 then hbuf = 180 else begin
-                  remain = hbuf mod 36
-                  if remain GT 0 then hbuf = hbuf + 36-remain
-           endelse
+     if N_elements(hbuf) EQ 0 then hbuf = 180 else begin
+        remain = hbuf mod 36
+        if remain GT 0 then hbuf = hbuf + 36-remain
+     endelse
   endif else hbuf = 36
 
   for ext = 0L, exten_no do begin
-               
+     
 ;  Read the next header, and get the number of bytes taken up by the data.
 
-       block = string(replicate(32b,80,36))
-       w = [-1]
-       if ((ext EQ exten_no) and (doheader)) then header = strarr(hbuf) $
-                                             else header = strarr(36)
-       headerblock = 0L
-       i = 0L      
+     block = string(replicate(32b,80,36))
+     w = [-1]
+     if ((ext EQ exten_no) and (doheader)) then header = strarr(hbuf) $
+     else header = strarr(36)
+     headerblock = 0L
+     i = 0L      
 
-       while w[0] EQ -1 do begin
-          
-       if EOF(unit) then begin 
-            message,/ CON, $
-               'EOF encountered attempting to read extension ' + strtrim(ext,2)
-            if not unitsupplied then free_lun,unit
-            return,-1
-       endif
+     while w[0] EQ -1 do begin
+        
+        if EOF(unit) then begin 
+           message,/ CON, $
+                   'EOF encountered attempting to read extension ' + strtrim(ext,2)
+           if not unitsupplied then free_lun,unit
+           return,-1
+        endif
 
-      readu, unit, block
-      headerblock = headerblock + 1
-      w = where(strlen(block) NE 80, Nbad)
-      if (Nbad GT 0) then begin
+        readu, unit, block
+        headerblock = headerblock + 1
+        w = where(strlen(block) NE 80, Nbad)
+        if (Nbad GT 0) then begin
            message,'Warning-Invalid characters in header',/INF,NoPrint=Silent
            block[w] = string(replicate(32b, 80))
-      endif
-      w = where(strmid(block, 0, 8) eq 'END     ', Nend)
-      if (headerblock EQ 1) or ((ext EQ exten_no) and (doheader)) then begin
-              if Nend GT 0 then  begin
-             if headerblock EQ 1 then header = block[0:w[0]]   $
-                                 else header = [header[0:i-1],block[0:w[0]]]
-             endif else begin
-                header[i] = block
-                i = i+36
-                if i mod hbuf EQ 0 then $
-                              header = [header,strarr(hbuf)]
+        endif
+        w = where(strmid(block, 0, 8) eq 'END     ', Nend)
+        if (headerblock EQ 1) or ((ext EQ exten_no) and (doheader)) then begin
+           if Nend GT 0 then  begin
+              if headerblock EQ 1 then header = block[0:w[0]]   $
+              else header = [header[0:i-1],block[0:w[0]]]
+           endif else begin
+              header[i] = block
+              i = i+36
+              if i mod hbuf EQ 0 then $
+                 header = [header,strarr(hbuf)]
            endelse
-          endif
-      endwhile
+        endif
+     endwhile
 
-      if (ext EQ 0 ) and (keyword_set(pointlun) EQ 0) then $
-             if strmid( header[0], 0, 8)  NE 'SIMPLE  ' then begin
-              message,/CON, $
-                 'ERROR - Header does not contain required SIMPLE keyword'
-                if not unitsupplied then free_lun, unit
-                return, -1
-      endif
+     if (ext EQ 0 ) and (keyword_set(pointlun) EQ 0) then $
+        if strmid( header[0], 0, 8)  NE 'SIMPLE  ' then begin
+        message,/CON, $
+                'ERROR - Header does not contain required SIMPLE keyword'
+        if not unitsupplied then free_lun, unit
+        return, -1
+     endif
 
-                
+; Get Parameters that determine the type of magnetogram file
+     model = sxpar(header,'MODEL')
+     if(!err NE -1)then begin
+        intype = 1              ; ADAPT
+     endif else begin
+        intype = 2              ; GONG, MDI, HMI
+     endelse
+     type_grid = 0              ; 1 for uniform, 0 for sintheta, default is sin theta
+     case intype OF
+        1: begin
+           magnetogram_type = 'ADAPT Synchronic'
+           map_data = sxpar(header,'MAPDATA')
+           adapt_grid = sxpar(header,'GRID')
+           mapdate = sxpar(header,'MAPTIME')
+           bunit = 'GAUSS'
+           if (adapt_grid EQ 1)then begin
+              grid_type = 'uniform'
+              type_grid = 1
+           endif else print,"unknown ADAPT magnetogram type"
+           img = sxpar(header,'NAXIS3')
+           CR = sxpar(header,'MAPCR')
+           CRNumber = CR
+           long0 = sxpar(header,'CRLNGEDG')
+           print,'This is an ADAPT-Synchronic Map using ',$
+                 strtrim(map_data),' data containing ',strtrim(img,2),' realizations.'
+        end
+        2: begin
+           telescope = sxpar(header, 'TELESCOP')   ; MDI, HMI, GONG                                
+           instrument = sxpar(header, 'INSTRUME')  ; MDI, HMI                                      
+           ctyp = sxpar(header, 'CTYPE2')
+           cunit = sxpar(header, 'CUNIT2')
+           CRnumber = sxpar(header,'CRCENTER')
+           CR = sxpar(header,'CAR_ROT')
+           bunit = sxpar(header,'BUNIT')
+           if(telescope EQ 'NSO-GONG')then begin
+              magnetogram_type = 'NSO-GONG Synoptic'
+              map_data = 'GONG'
+              mapdate = sxpar(header,'DATE')
+              long0 = sxpar(header,'LONG0')
+              if(long0 GT 0.)then magnetogram_type = 'NSO-GONG Hourly'
+              if(ctyp EQ 'CRLT-CEA')then begin
+                 grid_type = 'sin(lat)'
+                 type_grid = 0
+              endif else print,'unknown NSO-GONG magnetogram type'
+              print,'This is an GONG-Synoptic Map.'
+           endif
+
+           if(telescope EQ 'SDO/HMI')then begin
+              magnetogram_type = 'HMI Synoptic'
+              map_data = 'HMI'
+              mapdate = sxpar(header,'T_OBS')
+              if(ctyp EQ 'CRLT-CEA' and cunit EQ 'Sine Latitude')then begin
+                 grid_type = 'sin(lat)'
+                 type_grid = 0
+              endif else print,'unknown SDO magnetogram type'
+              print,'This is an HMI-Synoptic Map.'
+           endif
+           if(telescope EQ 'SOHO')then begin
+              mapdate = sxpar(header,'T_OBS')
+              if(instrument EQ 'MDI' and ctyp EQ 'Sine Latitude')then begin
+                 magnetogram_type = 'MDI Synoptic'
+                 map_data = 'MDI'
+                 grid_type = 'sin(lat)'
+                 type_grid = 0
+              endif else print,'unknown SOHO magnetogram type'
+              print,'This is an MDI-Synoptic Map.'
+           endif
+        end
+        else: print,' UNKNOWN Magnetogram Type'
+     endcase
+
+     nlo = sxpar(header,'NAXIS1')
+     nla = sxpar(header,'NAXIS2')
+     if(nlo LT 1)then print,'nLon should be a positive integer'
+     if(nla LT 1)then print,'nLat should be a positive integer'
+     
+     StringHeader = 'MagnetogramType = '+strtrim(magnetogram_type)+'; InstrumentName = '$
+                    +strtrim(map_data)+'; InputLatGrid = '+strtrim(grid_type)+$
+                    '; OutputLatGrid = '+strtrim(grid_type)+'; MagUnit = '$
+                    +strtrim(bunit)+'; InputMapResolution = '+strtrim(nlo,2)+','$
+                    +strtrim(nla,2)+'; MagnetogramDate = '+strtrim(mapdate)+$
+                    '; CentralMeridianLong = '+strtrim(CRnumber,2)+$
+                    '; InputFile = "'+strtrim(Filename)+$
+                    '"; ASCIIFileCreationDate = '+SYSTIME()
+
 ; Get parameters that determine size of data region.
-                
-       bitpix =  sxpar(header,'BITPIX')
-       naxis  = sxpar(header,'NAXIS')
-       gcount = sxpar(header,'GCOUNT') > 1
-       pcount = sxpar(header,'PCOUNT')
-                
-       if naxis GT 0 then begin 
-            dims = sxpar( header,'NAXIS*')           ;Read dimensions
-            ndata = dims[0]
-            if naxis GT 1 then for i = 2, naxis do ndata = ndata*dims[i-1]
-                        
-                endif else ndata = 0
-                
-                nbytes = (abs(bitpix) / 8) * gcount * (pcount + ndata)
+     
+     bitpix =  sxpar(header,'BITPIX')
+     naxis  = sxpar(header,'NAXIS')
+     gcount = sxpar(header,'GCOUNT') > 1
+     pcount = sxpar(header,'PCOUNT')
+     
+     if naxis GT 0 then begin 
+        dims = sxpar( header,'NAXIS*') ;Read dimensions
+        ndata = dims[0]
+        if naxis GT 1 then for i = 2, naxis do ndata = ndata*dims[i-1]
+        
+     endif else ndata = 0
+     
+     nbytes = (abs(bitpix) / 8) * gcount * (pcount + ndata)
 
 ;  Move to the next extension header in the file.   Although we could use
 ;  POINT_LUN with compressed files, a faster way is to simply read into the 
 ;  file
 
-      if ext LT exten_no then begin
-                nrec = long((nbytes + 2879) / 2880)
-                if nrec GT 0 then begin     
-                if gzip then begin 
-                        buf = bytarr(nrec*2880L,/nozero)
-                        readu,unit,buf 
-                        endif else  begin 
-                        point_lun, -unit,curr_pos
-                        point_lun, unit,curr_pos + nrec*2880L
-                endelse
-                endif
-       endif
-       endfor
+     if ext LT exten_no then begin
+        nrec = long((nbytes + 2879) / 2880)
+        if nrec GT 0 then begin     
+           if gzip then begin 
+              buf = bytarr(nrec*2880L,/nozero)
+              readu,unit,buf 
+           endif else  begin 
+              point_lun, -unit,curr_pos
+              point_lun, unit,curr_pos + nrec*2880L
+           endelse
+        endif
+     endif
+  endfor
 
- case BITPIX of 
-           8:   IDL_type = 1          ; Byte
-          16:   IDL_type = 2          ; Integer*2
-          32:   IDL_type = 3          ; Integer*4
-          64:   IDL_type = 14         ; Integer*8
-         -32:   IDL_type = 4          ; Real*4
-         -64:   IDL_type = 5          ; Real*8
-        else:   begin
-                message,/CON, 'ERROR - Illegal value of BITPIX (= ' +  $
+  case BITPIX of 
+     8:   IDL_type = 1                ; Byte
+     16:   IDL_type = 2               ; Integer*2
+     32:   IDL_type = 3               ; Integer*4
+     64:   IDL_type = 14              ; Integer*8
+     -32:   IDL_type = 4              ; Real*4
+     -64:   IDL_type = 5              ; Real*8
+     else:   begin
+        message,/CON, 'ERROR - Illegal value of BITPIX (= ' +  $
                 strtrim(bitpix,2) + ') in FITS header'
-                if not unitsupplied then free_lun,unit
-                return, -1
-                end
+        if not unitsupplied then free_lun,unit
+        return, -1
+     end
   endcase     
 
 ; Check for dummy extension header
 
- if Naxis GT 0 then begin 
-        Nax = sxpar( header, 'NAXIS*' )   ;Read NAXES
-        ndata = nax[0]
-        if naxis GT 1 then for i = 2, naxis do ndata = ndata*nax[i-1]
+  if Naxis GT 0 then begin 
+     Nax = sxpar( header, 'NAXIS*' ) ;Read NAXES
+     ndata = nax[0]
+     if naxis GT 1 then for i = 2, naxis do ndata = ndata*nax[i-1]
 
   endif else ndata = 0
 
   nbytes = (abs(bitpix)/8) * gcount * (pcount + ndata)
- 
+  
   if nbytes EQ 0 then begin
-        if not SILENT then message, $
-                "FITS header has NAXIS or NAXISi = 0,  no data array read",/CON
-        if do_checksum then begin
+     if not SILENT then message, $
+        "FITS header has NAXIS or NAXISi = 0,  no data array read",/CON
+     if do_checksum then begin
              ;;;result = FITS_TEST_CHECKSUM(header, data, ERRMSG = errmsg)
-             if not SILENT then begin
-               case result of 
-                1: message,/INF,'CHECKSUM keyword in header is verified'
-               -1: message,/CON, errmsg
-                else: 
-                endcase
-              endif
+        if not SILENT then begin
+           case result of 
+              1: message,/INF,'CHECKSUM keyword in header is verified'
+              -1: message,/CON, errmsg
+              else: 
+           endcase
         endif
-        if not unitsupplied then free_lun, unit
-        return,-1
- endif
+     endif
+     if not unitsupplied then free_lun, unit
+     return,-1
+  endif
 
 ; Check for FITS extensions, GROUPS
 
- groups = sxpar( header, 'GROUPS' ) 
- if groups then message,NoPrint=Silent, $
-           'WARNING - FITS file contains random GROUPS', /INF
+  groups = sxpar( header, 'GROUPS' ) 
+  if groups then message,NoPrint=Silent, $
+                         'WARNING - FITS file contains random GROUPS', /INF
 
 ; If an extension, did user specify row to start reading, or number of rows
 ; to read?
 
-   if not keyword_set(STARTROW) then startrow = 0
-   if naxis GE 2 then nrow = nax[1] else nrow = ndata
-   if not keyword_set(NUMROW) then numrow = nrow
-   if do_checksum then if ((startrow GT 0) or $
-      (numrow LT nrow) or (N_elements(nslice) GT 0)) then begin 
-      message,/CON, $
-      'Warning - CHECKSUM not applied when STARTROW, NUMROW or NSLICE is set'
-      do_checksum = 0
-   endif 
+  if not keyword_set(STARTROW) then startrow = 0
+  if naxis GE 2 then nrow = nax[1] else nrow = ndata
+  if not keyword_set(NUMROW) then numrow = nrow
+  if do_checksum then if ((startrow GT 0) or $
+                          (numrow LT nrow) or (N_elements(nslice) GT 0)) then begin 
+     message,/CON, $
+             'Warning - CHECKSUM not applied when STARTROW, NUMROW or NSLICE is set'
+     do_checksum = 0
+  endif 
 
-   if exten_no GT 0 then begin
-        xtension = strtrim( sxpar( header, 'XTENSION' , Count = N_ext),2)
-        if N_ext EQ 0 then message, /INF, NoPRINT = Silent, $
-                'WARNING - Header missing XTENSION keyword'
-   endif 
+  if exten_no GT 0 then begin
+     xtension = strtrim( sxpar( header, 'XTENSION' , Count = N_ext),2)
+     if N_ext EQ 0 then message, /INF, NoPRINT = Silent, $
+                                 'WARNING - Header missing XTENSION keyword'
+  endif 
 
-   if (exten_no GT 0) and ((startrow NE 0) or (numrow NE nrow)) then begin
-        if startrow GE nax[1] then begin
-           message,'ERROR - Specified starting row ' + strtrim(startrow,2) + $
-          ' but only ' + strtrim(nax[1],2) + ' rows in extension',/CON
-           if not unitsupplied then free_lun,unit
-           return,-1
+  if (exten_no GT 0) and ((startrow NE 0) or (numrow NE nrow)) then begin
+     if startrow GE nax[1] then begin
+        message,'ERROR - Specified starting row ' + strtrim(startrow,2) + $
+                ' but only ' + strtrim(nax[1],2) + ' rows in extension',/CON
+        if not unitsupplied then free_lun,unit
+        return,-1
+     endif 
+     nax[1] = nax[1] - startrow    
+     nax[1] = nax[1] < numrow
+     sxaddpar, header, 'NAXIS2', nax[1]
+     if gzip then begin
+        if startrow GT 0 then begin
+           tmp=bytarr(startrow*nax[0],/nozero)
+           readu,unit,tmp
         endif 
-        nax[1] = nax[1] - startrow    
-        nax[1] = nax[1] < numrow
-        sxaddpar, header, 'NAXIS2', nax[1]
-        if gzip then begin
-                if startrow GT 0 then begin
-                        tmp=bytarr(startrow*nax[0],/nozero)
-                        readu,unit,tmp
-                endif 
-        endif else begin 
-              point_lun, -unit, pointlun          ;Current position
-              point_lun, unit, pointlun + startrow*nax[0]
-    endelse
-    endif else if (N_elements(NSLICE) EQ 1) then begin
-        lastdim = nax[naxis-1]
-        if nslice GE lastdim then message,/CON, $
-        'ERROR - Value of NSLICE must be less than ' + strtrim(lastdim,2)
-        nax = nax[0:naxis-2]
-        sxdelpar,header,'NAXIS' + strtrim(naxis,2)
-        naxis = naxis-1
-        sxaddpar,header,'NAXIS',naxis
-        ndata = ndata/lastdim
-        nskip = nslice*ndata*abs(bitpix/8) 
-        if gzip then  begin 
-              if Ndata GT 0 then begin
-                  buf = bytarr(nskip,/nozero)
-                  readu,unit,buf
-               endif   
-        endif else begin 
-                   point_lun, -unit, currpoint          ;Current position
-                   point_lun, unit, currpoint + nskip
-        endelse
+     endif else begin 
+        point_lun, -unit, pointlun ;Current position
+        point_lun, unit, pointlun + startrow*nax[0]
+     endelse
+  endif else if (N_elements(NSLICE) EQ 1) then begin
+     lastdim = nax[naxis-1]
+     if nslice GE lastdim then message,/CON, $
+                                       'ERROR - Value of NSLICE must be less than ' + strtrim(lastdim,2)
+     nax = nax[0:naxis-2]
+     sxdelpar,header,'NAXIS' + strtrim(naxis,2)
+     naxis = naxis-1
+     sxaddpar,header,'NAXIS',naxis
+     ndata = ndata/lastdim
+     nskip = nslice*ndata*abs(bitpix/8) 
+     if gzip then  begin 
+        if Ndata GT 0 then begin
+           buf = bytarr(nskip,/nozero)
+           readu,unit,buf
+        endif   
+     endif else begin 
+        point_lun, -unit, currpoint ;Current position
+        point_lun, unit, currpoint + nskip
+     endelse
   endif
 
 
-  if not (SILENT) then begin   ;Print size of array being read
+  if not (SILENT) then begin    ;Print size of array being read
 
-         if exten_no GT 0 then message, $
-                     'Reading FITS extension of type ' + xtension, /INF
-         st = 'Now reading ' + strjoin(strtrim(NAX,2),' by ') + ' array'
-         if (exten_no GT 0) and (pcount GT 0) then st = st + ' + heap area'
-         message,/INF,st   
-   endif
+     if exten_no GT 0 then message, $
+        'Reading FITS extension of type ' + xtension, /INF
+     st = 'Now reading ' + strjoin(strtrim(NAX,2),' by ') + ' array'
+     if (exten_no GT 0) and (pcount GT 0) then st = st + ' + heap area'
+     message,/INF,st   
+  endif
 
 ; Read Data in a single I/O call.   Only need byteswapping for Unix compress
 ; files
 
-    data = make_array( DIM = nax, TYPE = IDL_type, /NOZERO)
-    readu, unit, data
+  data = make_array( DIM = nax, TYPE = IDL_type, /NOZERO)
+  readu, unit, data
     ;;; if unixZ then if not is_ieee_big() then ieee_to_host,data
-    if (exten_no GT 0) and (pcount GT 0) then begin
-        theap = sxpar(header,'THEAP')
-        skip = theap - N_elements(data)
-        if skip GT 0 then begin 
-                temp = bytarr(skip,/nozero)
-                readu, unit, skip
-        endif
-        heap = bytarr(pcount*gcount*abs(bitpix)/8)
-        readu, unit, heap
+  if (exten_no GT 0) and (pcount GT 0) then begin
+     theap = sxpar(header,'THEAP')
+     skip = theap - N_elements(data)
+     if skip GT 0 then begin 
+        temp = bytarr(skip,/nozero)
+        readu, unit, skip
+     endif
+     heap = bytarr(pcount*gcount*abs(bitpix)/8)
+     readu, unit, heap
         ;;;if do_checksum then $
         ;;;result = fits_test_checksum(header,[data,heap],ERRMSG=errmsg)
-    endif ;;; else if do_checksum then $
+  endif ;;; else if do_checksum then $
           ;;; result = fits_test_checksum(header, data, ERRMSG = errmsg)
-    if not unitsupplied then free_lun, unit
-    if do_checksum then if not SILENT then begin
-        case result of 
+  if not unitsupplied then free_lun, unit
+  if do_checksum then if not SILENT then begin
+     case result of 
         1: message,/INF,'CHECKSUM keyword in header is verified'
-       -1: message,/CON, 'CHECKSUM ERROR! ' + errmsg
+        -1: message,/CON, 'CHECKSUM ERROR! ' + errmsg
         else: 
-        endcase
-    endif
+     endcase
+  endif
 
 ; Scale data unless it is an extension, or /NOSCALE is set
 ; Use "TEMPORARY" function to speed processing.  
 
-   do_scale = not keyword_set( NOSCALE )
-   if (do_scale and (exten_no GT 0)) then do_scale = xtension EQ 'IMAGE' 
-   if do_scale then begin
+  do_scale = not keyword_set( NOSCALE )
+  if (do_scale and (exten_no GT 0)) then do_scale = xtension EQ 'IMAGE' 
+  if do_scale then begin
 
-          Nblank = 0
-          if bitpix GT 0 then begin
-                blank = sxpar( header, 'BLANK', Count = N_blank) 
-                if N_blank GT 0 then $ 
-                        blankval = where( data EQ blank, Nblank)
-          endif
+     Nblank = 0
+     if bitpix GT 0 then begin
+        blank = sxpar( header, 'BLANK', Count = N_blank) 
+        if N_blank GT 0 then $ 
+           blankval = where( data EQ blank, Nblank)
+     endif
 
-          Bscale = float( sxpar( header, 'BSCALE' , Count = N_bscale))
-          Bzero = float( sxpar(header, 'BZERO', Count = N_Bzero ))
- 
+     Bscale = float( sxpar( header, 'BSCALE' , Count = N_bscale))
+     Bzero = float( sxpar(header, 'BZERO', Count = N_Bzero ))
+     
 ; Check for unsigned integer (BZERO = 2^15) or unsigned long (BZERO = 2^31)
 
-          if not keyword_set(No_Unsigned) then begin
-            no_bscale = (Bscale EQ 1) or (N_bscale EQ 0)
-            unsgn_int = (bitpix EQ 16) and (Bzero EQ 32768) and no_bscale
-            unsgn_lng = (bitpix EQ 32) and (Bzero EQ 2147483648) and no_bscale
-            unsgn = unsgn_int or unsgn_lng
-           endif else unsgn = 0
+     if not keyword_set(No_Unsigned) then begin
+        no_bscale = (Bscale EQ 1) or (N_bscale EQ 0)
+        unsgn_int = (bitpix EQ 16) and (Bzero EQ 32768) and no_bscale
+        unsgn_lng = (bitpix EQ 32) and (Bzero EQ 2147483648) and no_bscale
+        unsgn = unsgn_int or unsgn_lng
+     endif else unsgn = 0
 
-          if unsgn then begin
-                 sxaddpar, header, 'BZERO', 0
-                 sxaddpar, header, 'O_BZERO', bzero, $
-                          'Original Data is unsigned Integer'
-                   if unsgn_int then $ 
-                        data =  uint(data) - 32768U else $
-                   if unsgn_lng then  data = ulong(data) - 2147483648UL 
-                
-          endif else begin
- 
-          if N_Bscale GT 0  then $ 
-               if ( Bscale NE 1. ) then begin
-                   data = temporary(data) * Bscale 
-                   sxaddpar, header, 'BSCALE', 1.
-                   sxaddpar, header, 'O_BSCALE', Bscale,' Original BSCALE Value'
-               endif
-
-         if N_Bzero GT 0  then $
-               if (Bzero NE 0) then begin
-                     data = temporary( data ) + Bzero
-                     sxaddpar, header, 'BZERO', 0.
-                     sxaddpar, header, 'O_BZERO', Bzero,' Original BZERO Value'
-               endif
+     if unsgn then begin
+        sxaddpar, header, 'BZERO', 0
+        sxaddpar, header, 'O_BZERO', bzero, $
+                  'Original Data is unsigned Integer'
+        if unsgn_int then $ 
+           data =  uint(data) - 32768U else $
+              if unsgn_lng then  data = ulong(data) - 2147483648UL 
         
-        endelse
-
-        if (Nblank GT 0) and ((N_bscale GT 0) or (N_Bzero GT 0)) then $
-                data[blankval] = blank
-
+     endif else begin
+        
+        if N_Bscale GT 0  then $ 
+           if ( Bscale NE 1. ) then begin
+           data = temporary(data) * Bscale 
+           sxaddpar, header, 'BSCALE', 1.
+           sxaddpar, header, 'O_BSCALE', Bscale,' Original BSCALE Value'
         endif
+
+        if N_Bzero GT 0  then $
+           if (Bzero NE 0) then begin
+           data = temporary( data ) + Bzero
+           sxaddpar, header, 'BZERO', 0.
+           sxaddpar, header, 'O_BZERO', Bzero,' Original BZERO Value'
+        endif
+        
+     endelse
+
+     if (Nblank GT 0) and ((N_bscale GT 0) or (N_Bzero GT 0)) then $
+        data[blankval] = blank
+
+  endif
 
 ; Return array.  If necessary, first convert NaN values.
 
-        if n_elements(nanvalue) eq 1 then begin
-            w = where(finite(data,/nan),count)
-            if count gt 0 then data(w) = nanvalue
-        endif
-        return, data    
+  if n_elements(nanvalue) eq 1 then begin
+     w = where(finite(data,/nan),count)
+     if count gt 0 then data(w) = nanvalue
+  endif
+  return, data    
 
 ; Come here if there was an IO_ERROR
-    
- BAD:   print,!ERROR_STATE.MSG
-        if (not unitsupplied) and (N_elements(unit) GT 0) then free_lun, unit
-        if N_elements(data) GT 0 then return,data else return, -1
+  
+  BAD:   print,!ERROR_STATE.MSG
+  if (not unitsupplied) and (N_elements(unit) GT 0) then free_lun, unit
+  if N_elements(data) GT 0 then return,data else return, -1
 
- end 
+end 

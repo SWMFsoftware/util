@@ -254,7 +254,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     fid = open(outputfile,'w')
     if magtype == 'ADAPT Synchronic':
         line0 = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
-            +str(imdex+1)+ '; InstrumentName = '+map_data+';InputLatGrid = '\
+            +str(imdex+1)+ '; InstrumentName = '+map_data+'; InputLatGrid = '\
             +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
             +bunit+'; InputMapResolution = '+str(nlo)+','+str(nla)+'; MagnetogramDate = '\
             +mapdate+'; CentralMeridianLong = '+CRnumber+'; InputFile = ' \
