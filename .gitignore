@@ -29,3 +29,4 @@ DATAREAD/srcMagnetogram/fitsfile.dat
 DATAREAD/srcMagnetogram/harmonics11uniform.dat
 DATAREAD/srcMagnetogram/potentialfield.dat
 DATAREAD/srcMagnetogram/*.exe
+DATAREAD/srcMagnetogram/adapt*
