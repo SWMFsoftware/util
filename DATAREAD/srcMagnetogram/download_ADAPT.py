@@ -11,7 +11,14 @@ def download_ADAPT_magnetogram():
     import gzip
     import shutil
     import math
-    
+    import sys
+
+    # Ensure that we are using a version of python >= 3
+    if sys.version_info < (3,0):
+        print('ERROR: Python version must be >= 3')
+        print('Current version: '+sys.version)
+        exit(-1)
+
     yyyy = int(input('Enter year: ' ))
     mm   = int(input('Enter month: '))
     dd   = int(input('Enter day: '  ))
