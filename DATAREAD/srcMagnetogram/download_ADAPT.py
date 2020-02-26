@@ -3,8 +3,8 @@
 
 def download_ADAPT_magnetogram():
     '''
-    This routine reads the PARAM.in and download the corresponding ADAPT GONG
-    magnetogram from #STARTTIME
+    This routine reads the date and type infomration from the command 
+    line and download the corresponding ADAPT map.
     '''
     
     from ftplib import FTP
