@@ -3,15 +3,22 @@
 
 def download_ADAPT_magnetogram():
     '''
-    This routine reads the PARAM.in and download the corresponding ADAPT GONG
-    magnetogram from #STARTTIME
+    This routine reads the date and type infomration from the command 
+    line and download the corresponding ADAPT map.
     '''
     
     from ftplib import FTP
     import gzip
     import shutil
     import math
-    
+    import sys
+
+    # Ensure that we are using a version of python >= 3
+    if sys.version_info < (3,0):
+        print('ERROR: Python version must be >= 3')
+        print('Current version: '+sys.version)
+        exit(-1)
+
     yyyy = int(input('Enter year: ' ))
     mm   = int(input('Enter month: '))
     dd   = int(input('Enter day: '  ))
