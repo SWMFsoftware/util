@@ -971,7 +971,7 @@ REPLACE:
 ;
 ; CALLING SEQUENCE:
 ;       Result = READFITS( Filename/Fileunit,[ Header,StringHeader,
-;                   long0, CRnumber,type_grid, heap, /NOSCALE, EXTEN_NO=,
+;                   LongShift, CRnumber,IsUniformLat, heap, /NOSCALE, EXTEN_NO=,
 ;                   NSLICE=, /SILENT , STARTROW =, NUMROW = , HBUFFER=,
 ;                   /CHECKSUM, /COMPRESS, /No_Unsigned, NaNVALUE = ]
 ;
@@ -1006,7 +1006,7 @@ REPLACE:
 ;              may not be applied.
 ;       StringHeader = String array containing the details from the
 ;              FITS file to be included in the output file.
-;       long0  = Longitude Shift
+;       LongShift  = Longitude Shift
 ;       CRnumber = Carrington Rotation Number of Central Meridian
 ;       heap = For extensions, the optional heap area following the main
 ;              data array (e.g. for variable length binary extensions).
@@ -1168,7 +1168,7 @@ REPLACE:
 ;       Restored NaNVALUE keyword for backwards compatibility,
 ;               William Thompson, 16-Aug-2004, GSFC
 ;-
-function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, heap, CHECKSUM=checksum, $ 
+function READFITS, filename, header, StringHeader, LongShift, CRnumber, IsUniformLat, heap, CHECKSUM=checksum, $ 
                    COMPRESS = compress, HBUFFER=hbuf, EXTEN_NO = exten_no, $
                    NOSCALE = noscale, NSLICE = nslice, $
                    NO_UNSIGNED = no_unsigned,  NUMROW = numrow, $
@@ -1292,7 +1292,7 @@ function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, h
      endif else begin
         intype = 2              ; GONG, MDI, HMI
      endelse
-     type_grid = 0              ; 1 for uniform, 0 for sintheta, default is sin theta
+     IsUniformLat = 0              ; 1 for uniform, 0 for sintheta, default is sin theta
      case intype OF
         1: begin
            magnetogram_type = 'ADAPT Synchronic'
@@ -1302,12 +1302,12 @@ function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, h
            bunit = 'GAUSS'
            if (adapt_grid EQ 1)then begin
               grid_type = 'uniform'
-              type_grid = 1
+              IsUniformLat = 1
            endif else print,"unknown ADAPT magnetogram type"
            img = sxpar(header,'NAXIS3')
            CR = sxpar(header,'MAPCR')
            CRNumber = CR
-           long0 = sxpar(header,'CRLNGEDG')
+           LongShift = sxpar(header,'CRLNGEDG')
            print,'This is an ADAPT-Synchronic Map using ',$
                  strtrim(map_data),' data containing ',strtrim(img,2),' realizations.'
         end
@@ -1323,11 +1323,11 @@ function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, h
               magnetogram_type = 'NSO-GONG Synoptic'
               map_data = 'GONG'
               mapdate = sxpar(header,'DATE')
-              long0 = sxpar(header,'LONG0')
-              if(long0 GT 0.)then magnetogram_type = 'NSO-GONG Hourly'
+              LongShift = sxpar(header,'LONG0')
+              if(LongShift GT 0.)then magnetogram_type = 'NSO-GONG Hourly'
               if(ctyp EQ 'CRLT-CEA')then begin
                  grid_type = 'sin(lat)'
-                 type_grid = 0
+                 IsUniformLat = 0
               endif else print,'unknown NSO-GONG magnetogram type'
               print,'This is an GONG-Synoptic Map.'
            endif
@@ -1338,7 +1338,7 @@ function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, h
               mapdate = sxpar(header,'T_OBS')
               if(ctyp EQ 'CRLT-CEA' and cunit EQ 'Sine Latitude')then begin
                  grid_type = 'sin(lat)'
-                 type_grid = 0
+                 IsUniformLat = 0
               endif else print,'unknown SDO magnetogram type'
               print,'This is an HMI-Synoptic Map.'
            endif
@@ -1348,7 +1348,7 @@ function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, h
                  magnetogram_type = 'MDI Synoptic'
                  map_data = 'MDI'
                  grid_type = 'sin(lat)'
-                 type_grid = 0
+                 IsUniformLat = 0
               endif else print,'unknown SOHO magnetogram type'
               print,'This is an MDI-Synoptic Map.'
            endif
@@ -1511,7 +1511,6 @@ function READFITS, filename, header, StringHeader, long0, CRnumber, type_grid, h
         point_lun, unit, currpoint + nskip
      endelse
   endif
-
 
   if not (SILENT) then begin    ;Print size of array being read
 

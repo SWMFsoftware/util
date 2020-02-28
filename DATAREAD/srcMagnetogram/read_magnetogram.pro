@@ -98,7 +98,15 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
                                 ;transfering to Python, read_fits
                                 ;function can be replaced by astropy
                                 ;function.
-     br_field=read_fits(file,index,/noscale)
+
+     ; read_fits and readfits give the same result.
+     ;except readfits now has options to recognize 
+     ;sintheta/theta grids in latitude
+
+
+;     br_field=readfits(file,index,/noscale)
+     br_field=readfits(file,index,StringHeader,LongShift,CRnumber,IsUniformLat,/noscale)
+     
      s=size(br_field)
      nlon=s[1]
      nlat=s[2]
@@ -111,9 +119,18 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
                  bphi_field:fltarr(nlon,nlat),$
                  btheta_field:fltarr(nlon,nlat),$
                  neqpar:0, eqpar:fltarr(1)}
+     
+    ;;;; already assumes that it is sin theta grid
 
-     lat=findgen(nlat)*2./nlat
-     lat=asin(lat-lat[nlat-1]/2.)
+
+     if(IsUniformLat EQ 0)then begin
+        lat=findgen(nlat)*2./nlat
+        lat=asin(lat-lat[nlat-1]/2.)
+     endif else begin
+        lat=findgen(nlat)*!dtor
+        lat = lat - lat[nlat-1]/2.
+     endelse
+     print,lat/!dtor
      lon=findgen(nlon)*!DPI*2./nlon
      latitude=fltarr(nlon,nlat)
      longitude=fltarr(nlon,nlat)
