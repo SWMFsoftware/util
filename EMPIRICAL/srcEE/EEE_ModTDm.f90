@@ -227,8 +227,10 @@ contains
 
     FuncAf = ((2-kStarF**2)*EllipticKf - 2*EllipticEf) / kStarF
     dFuncAf = (2-kStarF**2)/(kStarF**2*(1-kStarF**2)) * EllipticEf - 2/(kStarF**2) * EllipticKf
-    d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) * EllipticEf - (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2)) * EllipticKf
-    d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12)/(kStarF**4*(1-kStarF**2)**3) * EllipticEf - (19*kStarF**4-27*kStarF**2+12)/(kStarF**4*(1-kStarF**2)**2) * EllipticKf
+    d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) * EllipticEf - &
+         (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2)) * EllipticKf
+    d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12)/(kStarF**4*(1-kStarF**2)**3) * EllipticEf - &
+         (19*kStarF**4-27*kStarF**2+12)/(kStarF**4*(1-kStarF**2)**2) * EllipticKf
 
     ! curly-A function for k_(five-sided-star)
     RhoStarG = TdA*(1+Delta*SewingG)
@@ -240,16 +242,22 @@ contains
     call calc_elliptic_int_2kind(kStarG,EllipticEg)
 
     FuncAg = ((2-kStarG**2)*EllipticKg - 2*EllipticEg) / kStarG
-    dFuncAg = (2-kStarG**2)/(kStarG**2*(1-kStarG**2)) * EllipticEg - 2/(kStarG**2) * EllipticKg
-    d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) * EllipticEg - (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2)) * EllipticKg
-    d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12)/(kStarG**4*(1-kStarG**2)**3) * EllipticEg - (19*kStarG**4-27*kStarG**2+12)/(kStarG**4*(1-kStarG**2)**2) * EllipticKg
+    dFuncAg = (2-kStarG**2)/(kStarG**2*(1-kStarG**2)) * EllipticEg - &
+         2/(kStarG**2) * EllipticKg
+    d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) * EllipticEg - &
+         (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2)) * EllipticKg
+    d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12)/(kStarG**4*(1-kStarG**2)**3) * EllipticEg - &
+         (19*kStarG**4-27*kStarG**2+12)/(kStarG**4*(1-kStarG**2)**2) * EllipticKg
 
 
     ! ---- ring current field B_I ----
 
-    Ai = CurrentI/cTwoPi*sqrt(TdR/rVert) * (FuncAf+dFuncAf*(VarK-kStarF)+0.5*d2FuncAf*(VarK-kStarF)**2)
-    dAIdX = CurrentI/cTwoPi*sqrt(TdR/rVert) * (dFuncAf*dKdX+d2FuncAf*dKdX*(VarK-kStarF)+0.5*d3FuncAf*dKSFdX*(VarK-kStarF)**2)
-    dAIdR = CurrentI/cTwoPi*sqrt(TdR/rVert) * (dFuncAf*dKdR+d2FuncAf*dKdR*(VarK-kStarF)+0.5*d3FuncAf*dKSFdR*(VarK-kStarF)**2) - Ai/(2*rVert)
+    Ai = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
+         (FuncAf+dFuncAf*(VarK-kStarF)+0.5*d2FuncAf*(VarK-kStarF)**2)
+    dAIdX = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
+         (dFuncAf*dKdX+d2FuncAf*dKdX*(VarK-kStarF)+0.5*d3FuncAf*dKSFdX*(VarK-kStarF)**2)
+    dAIdR = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
+         (dFuncAf*dKdR+d2FuncAf*dKdR*(VarK-kStarF)+0.5*d3FuncAf*dKSFdR*(VarK-kStarF)**2) - Ai/(2*rVert)
 
     bI_D = - dAIdX * rVertHat_D + (dAIdR+Ai/rVert) * xHat_D
 
@@ -259,13 +267,26 @@ contains
     dGdX = 4*(d2FuncAf*dKSFdX*(VarK-kStarF)+dFuncAf*(dKdX-dKSFdX))
     dGdR = 4*(d2FuncAf*dKSFdR*(VarK-kStarF)+dFuncAf*(dKdR-dKSFdR))
 
-    TmpH = (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*dFuncAg + TdA**2*kStarG**3*d2FuncAg*(VarK-kStarG)
-    dHdR = (3*VarK**2*dKdR*(x**2+TdR**2-rVert**2)-2*VarK**3*rVert-3*TdA**2*kStarG**2*dKSGdR)*dFuncAg + (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*d2FuncAg*dKSGdR + TdA**2*( (3*kStarG**2*dKSGdR*(VarK-kStarG)+kStarG**3*(dKdR-dKSGdR))*d2FuncAg + kStarG**3*(VarK-kStarG)*d3FuncAg*dKSGdR )
+    TmpH = (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*dFuncAg + &
+         TdA**2*kStarG**3*d2FuncAg*(VarK-kStarG)
+    dHdR = (3*VarK**2*dKdR*(x**2+TdR**2-rVert**2)-2*VarK**3*rVert-&
+         3*TdA**2*kStarG**2*dKSGdR)*dFuncAg + &
+         (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*d2FuncAg*dKSGdR + &
+         TdA**2*( (3*kStarG**2*dKSGdR*(VarK-kStarG)+kStarG**3*(dKdR-dKSGdR))*d2FuncAg + &
+         kStarG**3*(VarK-kStarG)*d3FuncAg*dKSGdR )
 
-    Afx = AxialFlux/(4*cPi*rVert)*sqrt(TdR/rVert) * ( FuncAg + (TdA**2*kStarG**3)/(4*rVert*TdR)*dFuncAg + TmpG**(5./2.)/(30*sqrt(3.)) - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*rVert*TdR)*TmpH )
+    Afx = AxialFlux/(4*cPi*rVert)*sqrt(TdR/rVert) * &
+         ( FuncAg + (TdA**2*kStarG**3)/(4*rVert*TdR)*dFuncAg + TmpG**(5./2.)/(30*sqrt(3.)) &
+         - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*rVert*TdR)*TmpH )
 
-    dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*rVert)/sqrt(rVert*TdR) * (1.5*sqrt(TmpG)*dGdX*x*VarK**3*dFuncAf + sqrt(TmpG)**3*(x*VarK**3*d2FuncAf*dKSFdX+(VarK**3+3*x*VarK**2*dKdX)*dFuncAf))
-    dAFXdR = (AxialFlux*sqrt(TdR))/(4*cPi)*rVert**(-3./2.) * ( dFuncAg*dKSGdR + TdA**2/(4*TdR)*((3*kStarG**2*rVert*dKSGdR-kStarG**3)/(rVert**2)*dFuncAg + kStarG**3/rVert*d2FuncAg*dKSGdR) + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + 1./(12*sqrt(3.)*TdR)*((1.5*sqrt(TmpG)*dGdR*rVert-TmpG**(3./2.))/(rVert**2)*TmpH + TmpG**(3./2.)/rVert*dHdR) ) - 3./(2*rVert)*Afx
+    dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*rVert)/sqrt(rVert*TdR) * &
+         (1.5*sqrt(TmpG)*dGdX*x*VarK**3*dFuncAf + &
+         sqrt(TmpG)**3*(x*VarK**3*d2FuncAf*dKSFdX+(VarK**3+3*x*VarK**2*dKdX)*dFuncAf))
+    dAFXdR = (AxialFlux*sqrt(TdR))/(4*cPi)*rVert**(-3./2.) * ( dFuncAg*dKSGdR + &
+         TdA**2/(4*TdR)*((3*kStarG**2*rVert*dKSGdR-kStarG**3)/(rVert**2)*dFuncAg + &
+         kStarG**3/rVert*d2FuncAg*dKSGdR) + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
+         1./(12*sqrt(3.)*TdR)*((1.5*sqrt(TmpG)*dGdR*rVert-TmpG**(3./2.))/(rVert**2)*TmpH + &
+         TmpG**(3./2.)/rVert*dHdR) ) - 3./(2*rVert)*Afx
 
     bTheta_D = (dAFRdX-dAFXdR) * ThetaHat_D
 
