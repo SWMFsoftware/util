@@ -46,7 +46,6 @@ contains
       call read_var('AnalyticTdCoeffR', AnalyticTdCoeffR)
       call read_var('AnalyticTdCoeffA', AnalyticTdCoeffA)
       call read_var('AnalyticTdCoeffD', AnalyticTdCoeffD)
-      call read_var('AnalyticTdCoeffL', AnalyticTdCoeffL)
       call read_var('Rotation', AnalyticTdLocRot)
       if (.not.IsCartesian) then
         call read_var('Longitude', AnalyticTdLocLon)
@@ -138,8 +137,8 @@ contains
 
     real, parameter :: Delta = 0.1
     ! real, parameter :: cF0 = -0.406982224701535, cF1 = -1.5464309982239, cF2 = -0.249947772314288, cG1 = -2.38261647628
-    real, save :: TdR, TdA, TdD, TdL
-    real, parameter :: TdQ = 1.
+    real, save :: TdR, TdA, TdD
+    real, save :: TdL, TdQ
     logical, save :: IsFirst = .true.
 
     real :: x, y, z
@@ -161,8 +160,8 @@ contains
       TdR = AnalyticTdCoeffR
       TdA = AnalyticTdCoeffA
       TdD = AnalyticTdCoeffD
-      TdL = AnalyticTdCoeffL
-      ! TdQ = AnalyticTdCoeffQ
+      TdL = TdR/sqrt(2.)/1.03
+      TdQ = 1.
       IsFirst = .false.
     endif
 
