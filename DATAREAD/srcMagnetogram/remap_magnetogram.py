@@ -121,9 +121,9 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 nlong_fac = nlong/pf
                 break
         for k in np.arange(nla):
-            w = np.kron(d[k,:],np.ones(int(nlong_fac))) #this array has length pf*nlo_fac*nlong_fac
+            w = np.kron(d[k,:],np.ones(nlong_fac)) #this array has length pf*nlo_fac*nlong_fac
             for l in np.arange(nlong):  #take the average over nlo_fac bins of w
-                hybrid[k,l] = np.sum(w[int(l*nlo_fac):(l+1)*int(nlo_fac)])/nlo_fac
+                hybrid[k,l] = np.sum(w[l*nlo_fac:(l+1)*nlo_fac])/nlo_fac
 
         newmap = np.zeros([nlat,nlong]) #output map                           
         if transformation == 'rebin':  #do rebin and add in the latitude direction, if nlo = nlat, newmap --> d
@@ -135,9 +135,9 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                     break
                 
             for k in np.arange(nlong):
-                w = np.kron(hybrid[:,k].T,np.ones(int(nlat_fac)))#length is pf*nla_fac*nlat_fac
+                w = np.kron(hybrid[:,k].T,np.ones(nlat_fac))#length is pf*nla_fac*nlat_fac
                 for l in np.arange(nlat):
-                    newmap[l,k] = np.sum(w[int(l*nla_fac):(l+1)*int(nla_fac)])/nla_fac
+                    newmap[l,k] = np.sum(w[l*nla_fac:(l+1)*nla_fac])/nla_fac
 
         elif transformation == 'reg2sin':
             oldlat =  np.linspace(-pi/2 + pi/2/nla,pi/2 - pi/2/nla,nla) #old latitude grid
