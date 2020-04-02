@@ -73,7 +73,6 @@ if __name__ == '__main__':
    """)
    #PlotRadius = Set up the layer of the magnetogram for 3D input
    #      Cannot be used 2D file, requires /UseBATS. Default is 1.0.
-       
 
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
@@ -90,7 +89,9 @@ if __name__ == '__main__':
    #################SERVER SIDE, PYTHON################
    #################PROCESS MAGNETOGRAM###
    ##READ AND SMOOTH, IF DESIRED########################
+   print('Read MAG')
    cc = rf.readf(args.NameFile,TypeOut,args.nSmooth,BMax)
+   print('CC',cc[0],cc[1],cc[2],cc[3])
    nLong        = cc[0]
    nLat         = cc[1]
    nParam       = cc[2]
@@ -112,8 +113,8 @@ if __name__ == '__main__':
       CMESpeed = float(raw_input(
             'Please Input the Observed CME Speed (km/s): '))
 
-   print 'Select the CME Source Region (POSITIVE) with the left button'
-   print 'Then select negative region with the right button'
+   print('Select the CME Source Region (POSITIVE) with the left button')
+   print('Then select negative region with the right button')
    FileId=open('runidl','w')
    FileId.write(';\n;\n')
    if(any(Type=='remap' for Type in TypeOut)):
@@ -127,10 +128,13 @@ if __name__ == '__main__':
    FileId.close()
    ########SHOW MAGNETOGRAM##########################
    ls = subprocess.Popen(["idl", "runidl"],stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
+                            stderr=subprocess.STDOUT,text=True)
    #################PROCESSING STDOUT################
    stdout,stderr=ls.communicate()
+   print(stdout)
+   print(stderr)
    b=stdout[stdout.index('===')+4:len(stdout)]
+   print('b=',b)
    a=b.split()
    ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
    xPositive = float(a[0])
@@ -155,6 +159,7 @@ if __name__ == '__main__':
    Param_I[5] = yNegative
    
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
+   #NS - GLSETUPAlg.py 
    CC=GL.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,
                  CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
                  GLRadiusRange_I, UsePIL, ARMag, UseCMEGrid )
@@ -189,5 +194,3 @@ if __name__ == '__main__':
    #(2) WINDOWS SHOULD BE CLOSED 
    #(3) FINAL EXIT COMMAND MUST BE PRESENT IN THE IDL SCRIPT######
    #print 'GLSETUP Session is closed. Bye!!!'
-  
-

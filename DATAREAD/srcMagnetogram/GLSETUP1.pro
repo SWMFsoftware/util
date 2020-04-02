@@ -18,6 +18,7 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
 ;             will read FITS format.
 
 ;Setup the color mode and a better IDL font.
+
   device,decomposed=0
   !p.font=1
   PlotRadius =1.

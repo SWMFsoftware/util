@@ -21,9 +21,9 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    xNegative = Param_I[4]
    yNegative = Param_I[5]
    
-   print "You chose  x/y for Positive and negative spots:" 
-   print "{0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f}".format(
-      xPositive, yPositive,xNegative, yNegative)
+   print ("You chose  x/y for Positive and negative spots:")
+   print ("{0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f}".format(
+      xPositive, yPositive,xNegative, yNegative))
    iBoxSize = round_my((16.*nLong)/360)
    
    #Calculate the weighted centers forpositive and negative spots.
@@ -51,9 +51,9 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
             
    xNegative=xNegativeWeight/TotalNegativeFlux
    yNegative=yNegativeWeight/TotalNegativeFlux
-   print "Weighted  x/y for Positive and negative spots:" 
-   print "{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f}".format(
-      xPositive, yPositive,xNegative, yNegative)
+   print ("Weighted  x/y for Positive and negative spots:")
+   print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f}".format(
+      xPositive, yPositive,xNegative, yNegative))
   
    #Find center of the active region as the point on the line
    #connecting the positive and negetive center in which the MF is minumal
@@ -71,9 +71,9 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       if (AbsBr < Misc):
          Misc = AbsBr
          XyARCenter_D = [xProfile,yProfile]
-   print "Center for Active region:" 
-   print "{0:4.1f} {1:4.1f}".format(XyARCenter_D[0],
-      XyARCenter_D[1])
+   print ("Center for Active region:" )
+   print ("{0:4.1f} {1:4.1f}".format(XyARCenter_D[0],
+      XyARCenter_D[1]))
    iXARCenter=round_my(XyARCenter_D[0])
    iYARCenter=round_my(XyARCenter_D[1])
    #Save the physical coordinates to use as the GL flux rope center 
@@ -83,8 +83,8 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       GL_Longitude +=Long0
       if GL_Longitude>=360:
          GL_Longitude-=360
-   print "GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
-      GL_Longitude, GL_Latitude)
+   print ("GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
+      GL_Longitude, GL_Latitude))
 
 
    #Distances from the AR center and spot centers:
@@ -253,12 +253,12 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
   
    #Print WARNING information is GL_Bstrength is negative                                               
    if GL_poloidal <= 0 :
-      print '*********************************************'
-      print 'WARNING: CALCULATION FAILED!USE WITH CAUTION!'
-      print 'Either the active region is too weak or the'    
-      print 'CME speed is too small!'
-      print 'GL Poloidal Flux is set to 0!'
-      print '*********************************************'
+      print ('*********************************************')
+      print ('WARNING: CALCULATION FAILED!USE WITH CAUTION!')
+      print ('Either the active region is too weak or the')
+      print ('CME speed is too small!')
+      print ('GL Poloidal Flux is set to 0!')
+      print ('*********************************************')
       GL_poloidal = 0.0
        #Relationship between the PIL length and the GL flux rope Radius.   
        #This factor is now based on the 2011 March 7 CME. More tests  
@@ -278,23 +278,23 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    Distance = 1.8
    Stretch  = 0.6
    
-   print '========================================'
-   print 'The Recommended GL FLux Rope Parameters'
-   print '========================================'
-   print '#CME'
-   print '%6.2f                Latitude: '%(GL_Latitude)
-   print '               Longitude: %6.2f'%(GL_Longitude)
-   print '             Orientation: %6.2f'%(GL_Orientation)
-   print '                  Radius: %6.2f'%(GLRadius)
-   print '               Bstrength: %6.2f'%(GL_Bstrength)
-   print '         Stretch (FIXED): %6.2f'%(Stretch)
-   print '        Distance (FIXED): %6.2f'%(Distance)
-   print '             Height [Rs]: %6.2f'%(
-      GLRadius + Distance - Stretch - 1.0)
-   print '      Angular size [deg]: %6.2f'%(
-      2*GLRadius/Distance*Rad2Deg)
-   print ' Poloidal flux [1E21 Mx]: %6.2f'%(GL_poloidal)
-   print '-----------------------------------------'
+   print ('========================================')
+   print ('The Recommended GL FLux Rope Parameters')
+   print ('========================================')
+   print ('#CME')
+   print ('%6.2f                Latitude: '%(GL_Latitude))
+   print ('               Longitude: %6.2f'%(GL_Longitude))
+   print ('             Orientation: %6.2f'%(GL_Orientation))
+   print ('                  Radius: %6.2f'%(GLRadius))
+   print ('               Bstrength: %6.2f'%(GL_Bstrength))
+   print ('         Stretch (FIXED): %6.2f'%(Stretch))
+   print ('        Distance (FIXED): %6.2f'%(Distance))
+   print ('             Height [Rs]: %6.2f'%(
+      GLRadius + Distance - Stretch - 1.0))
+   print ('      Angular size [deg]: %6.2f'%(
+      2*GLRadius/Distance*Rad2Deg))
+   print (' Poloidal flux [1E21 Mx]: %6.2f'%(GL_poloidal))
+   print ('-----------------------------------------')
    FileId=open('CME.in','w')
    FileId.write("#CME \n")
    FileId.write("T                   UseCme \n")
@@ -322,16 +322,16 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       CMEbox_Start=[1.15,GL_Longitude-40.*GLRadius,GL_Latitude-20.*GLRadius]
       CMEbox_End=[22.0,GL_Longitude+40.*GLRadius,GL_Latitude+20.*GLRadius]
       
-      print '=========================================='
-      print 'The Recommended Grid Refinement Parameters'
-      print '=========================================='
-      print '              R_Start: %6.2f'% (CMEbox_Start[0])
-      print '                R_End: %6.2f'% (CMEbox_End[0])
-      print '      Longitude_Start: %6.2f'% ( CMEbox_Start[1])
-      print '        Longitude_End: %6.2f'% ( CMEbox_End[1])
-      print '       Latitude_Start: %6.2f'% ( CMEbox_Start[2])
-      print '         Latitude_End: %6.2f'% ( CMEbox_End[2])
-      print '-----------------------------------------'
+      print ('==========================================')
+      print ('The Recommended Grid Refinement Parameters')
+      print ('==========================================')
+      print ('              R_Start: %6.2f'% (CMEbox_Start[0]))
+      print ('                R_End: %6.2f'% (CMEbox_End[0]))
+      print ('      Longitude_Start: %6.2f'% ( CMEbox_Start[1]))
+      print ('        Longitude_End: %6.2f'% ( CMEbox_End[1]))
+      print ('       Latitude_Start: %6.2f'% ( CMEbox_Start[2]))
+      print ('         Latitude_End: %6.2f'% ( CMEbox_End[2]))
+      print ('-----------------------------------------')
       FileId=open('CME_AMR.in','w')
       FileId.write("#AMRREGION \n")
       FileId.write("CMEbox              NameRegion \n")
@@ -357,12 +357,14 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    subprocess.call('../../../bin/FRMAGNETOGRAM.exe',stdin=FileId)
    FileId.close()
    
+#---------------------
    if(Br_C[iYARCenter,iXARCenter]>0):
       iYPIL_I,iXPIL_I=np.where(PILMap_C>0)
    else:
       iYPIL_I,iXPIL_I=np.where(PILMap_C<0)
    nPIL=len(iXPIL_I)
   
+   print('nPIL=',nPIL)
    nParam = 8 + 2*nPIL
    Param_I = np.zeros(nParam)
    Param_I[0:8] = [Long0,LongEarth,xPositive,yPositive,xNegative,yNegative,
@@ -385,7 +387,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       FileId.write(' %4.0f'%float(j))
    FileId.write('\n')
    FileId.write(
-      'Longitude Latitude Br PMap NMap Long0 LongEarth xP yP xN yN xC yC xPIL1:{0:2d} yPIL1:{0:2d}\n'.format(nPIL))
+      'Longitude Latitude Br PMap NMap Long0 LongEarth xP yP xN yN xC yC xPIL1({0:2d}) yPIL1({0:2d})\n'.format(nPIL))
     
    for k in np.arange(nLat):
       for l in np.arange(nLong):
