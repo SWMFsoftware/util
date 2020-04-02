@@ -223,6 +223,13 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   btheta_field=mag_info.btheta_field
   bphi_field=mag_info.bphi_field
 
+  IsUniform = 1
+  if abs(latitude(0,0)-2*latitude(0,1)+latitude(0,2)) GT 1.e-6 then begin
+     print,latitude(0,0)/!dtor,latitude(0,2)/!dtor,latitude(0,3)/!dtor
+     IsUniform = 0              ; not uniform                                 
+     print,'Uniform in Sin Theta'
+  endif else print, 'Uniform in Theta'
+
 ;Smooth the image, NOTE: to get equivalent result in Python, one can
 ;use the following function:
 ;
@@ -293,6 +300,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 ;selected positive/negative points in the interactive selection. It maybe increased
 ;for larger active regions.
   boxsize = round(long(16)*nlon/360)
+  print,'boxsize=',boxsize
 
 ;Calculate the weighted center for the positive polarity.
 ;Start from local Maximum as the the inital gauss
@@ -303,7 +311,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
     round(yPositive)+boxsize/4], brm_index)
   xPositive=round(xPositive)-boxsize/4+brm_2dindex[0]
   yPositive=round(yPositive)-boxsize/4+brm_2dindex[1]
-
+  
   xPositiveWeight=0.
   yPositiveWeight=0.
   TotalPositiveFlux=0.
@@ -319,6 +327,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   xPositiveNew=xPositiveWeight/TotalPositiveFlux
   yPositiveNew=yPositiveWeight/TotalPositiveFlux
 
+  print,'1)TotalPositiveFlux =',TotalPositiveFlux
 ;Iterate until the position does not change any more
   while(xPositiveNew ne xPositive or yPositiveNew ne yPositive) do begin
     xPositive=xPositiveNew
@@ -339,6 +348,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
     yPositiveNew=yPositiveWeight/TotalPositiveFlux
   endwhile
 
+  print,'2)TotalPositiveFlux =',TotalPositiveFlux
 ;Iterate one more time to due with small location difference
   brm=max(br_field[round(xPositive)-boxsize/4:round(xPositive)+boxsize/4, $
     round(yPositive)-boxsize/4:round(yPositive)+boxsize/4],brm_index)
@@ -365,6 +375,9 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   xPositive=round(xPositive)
   yPositive=round(yPositive)
   ;print,xPositive,yPositive
+  print,'3)TotalPositiveFlux =',TotalPositiveFlux
+  print,'xPositive,yPositive =',xPositive,yPositive
+  print,'xPweight,yPweight =',xPositiveWeight,yPositiveWeight
 
 ;Calculate the weighted center for the negative polarity.
 ;Start from local Maximum as the the inital gauss
@@ -440,7 +453,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 
 ;Distance between the spot centers
   Dis_Weight=sqrt((xNegative-xPositive)^2+(yNegative-yPositive)^2)
-
+  print,'Dis_Weight =',Dis_Weight
 
 ;Extract the profile along the two weighted centers in order to determine the
 ;find center of the flux rope.
@@ -458,6 +471,8 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   temp=min(abs(magProfile),iPIL)
   ar_center=[iXProfile[iPIL],iYProfile[iPIL]]
 
+  print,'ar_center =',ar_center
+
 ; Distances from the AR center and spot centers:
   DisCenter=fltarr(nlon,nlat)
   P_Center=fltarr(nlon,nlat)
@@ -470,16 +485,15 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
      endfor
   endfor
 
-
 ;and set GLLatitude and GLLongitude
   GL_Latitude=Latitude[ar_center[0],ar_center[1]]
   GL_Longitude=Longitude[ar_center[0],ar_center[1]]
   GL_Latitude=GL_Latitude*180./!DPI
   GL_Longitude=GL_Longitude*180./!DPI
 
+  print,'GLLongitude,GLLatitude=',GL_Longitude,GL_Latitude
 ;Bug: neither ndim nor param is defined
 ;   if UseBATS and ndim eq 2 then GL_Longitude = GL_Longitude + param
-
 
 ;Calculate Active Region Size for determining the GL size.
   AR_threshold=round(long(12)*nlon/360*Dis_Weight/13.6)
@@ -497,6 +511,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   sizemap_n=br_field*ARmap_n*Regionmap_n
 
 ;Calculate the gradient of the Br field
+;if(IsUniform eq 0) then begin
   ddx=(shift(br_field,-1,0)-shift(br_field,1,0))/2.
   ddy=(shift(br_field,0,-1)-shift(br_field,0,1))/2.
   ddx[0,*]=br_field[1,*]-br_field[0,*]
@@ -504,6 +519,36 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   ddy[*,0]=br_field[*,1]-br_field[*,0]
   ddy[*,nlat-1]=br_field[*,nlat-1]-br_field[*,nlat-2]
   br_field_gradient=sqrt(ddx^2+ddy^2)
+
+  openw,unit1,'grad_sinlat.txt',/get_lun
+  for i=0, nlon-1 do begin
+     for j=0,nlat-1 do begin
+        printf,unit1,ddx(i,j),ddy(i,j),br_field_gradient(i,j)
+     endfor
+  endfor
+  close,unit1
+;endif
+
+;yarea = (shift(latitude,0,-1)-shift(latitude,0,1))/2
+;print,yarea/!dtor,n_elements(yarea)
+; Uniform in Latitude
+;if(IsUniform eq 1)then begin
+ ; ddx=(shift(br_field,-1,0)-shift(br_field,1,0))/2.
+ ; ddy=(shift(br_field,0,-1)-shift(br_field,0,1))/2.
+ ; ddx[0,*]=br_field[1,*]-br_field[0,*]
+  ;;ddx[nlon-1,*]=br_field[nlon-1,*]-br_field[nlon-2,*]
+ ; ddy[*,0]=br_field[*,1]-br_field[*,0]
+ ; ddy[*,nlat-1]=br_field[*,nlat-1]-br_field[*,nlat-2]
+ ; br_field_gradient=sqrt(ddx^2+ddy^2)
+ ; openw,unit1,'grad_uniform.txt',/get_lun
+ ; for i=0, nlon-1 do begin
+ ;    for j=0,nlat-1 do begin
+ ;       printf,unit1,ddx(i,j),ddy(i,j),br_field_gradient(i,j)
+ ;    endfor
+  ;endfor
+ ; close,unit1
+;endif
+
 ;Setup Bitmap for magnetic field gradient
   bitmap_gradient=fltarr(nlon,nlat)
   bitmap_gradient[*,*]=1.0
@@ -511,14 +556,15 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
 
 ;Cell size is used to divide the magnetogram to sub regions in order to determine
 ;the PIL.
-  cell_size=1
 
+cell_size=1
 ;Setup the threshold for selecting cells near the PIL.
   flux_threshold=2.0
 
 ;Calculate the Bitmap (1/0) for determining the PIL.
   M=nlon/cell_size
   N=nlat/cell_size
+  print,'M, N =', M, N
   bitmap=fltarr(nlon,nlat)
   bitmap[*,*]=0.0
   for i=0,M-2 do begin
