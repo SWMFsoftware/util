@@ -26,7 +26,7 @@ def readf(NameFile,TypeOut,nSmooth,BMax):
     g = fits.open(NameFile)
     try:
         NameTelescope = g[0].header['TELESCOP'] #works for MDI, GONG
-    except KeyError, er:
+    except KeyError as er:
         NameTelescope = 'unknown'
         
     nLong = g[0].header['NAXIS1'] # number of longitude points
@@ -39,12 +39,12 @@ def readf(NameFile,TypeOut,nSmooth,BMax):
             Long0 = g[0].header['LONG0']
             if float(Long0) > 0.:
                 TypeMag = 'GONG Hourly'
-        except KeyError, er:
+        except KeyError as er:
             Long0 = - 1
 
     try:
         CRNumber = g[0].header['CAR_ROT'] #for newer magnetograms
-    except KeyError, er:
+    except KeyError as er:
         CRNumber = g[0].header['CARROT']  #for older magnetograms
 
     if TypeMag.find('GONG') > -1:
@@ -53,13 +53,13 @@ def readf(NameFile,TypeOut,nSmooth,BMax):
                  
     g.close()
     if  ( (TypeMag == 'unknown') ):
-        print "I don't recognize the type of this magnetogram."
+        print("I don't recognize the type of this magnetogram.")
         return(-1)
                 
-    print "This is a",TypeMag,"magnetogram on a",str(nLong),"X",str(nLat
-              ),"  Phi X sin(Theta) grid."
+    print("This is a",TypeMag,"magnetogram on a",str(nLong),"X",str(nLat
+              ),"  Phi X sin(Theta) grid.")
     if (Long0 > 0):  #The date is not informative for an integral synoptic map
-        print "Magnetogram Date="+MapDate
+        print("Magnetogram Date="+MapDate)
 
     #Uniform in sinLat and longitude grid
     LatSin_I = np.arcsin(np.linspace(-1. + 1./nLat,1. - 1./nLat,nLat))
@@ -77,8 +77,8 @@ def readf(NameFile,TypeOut,nSmooth,BMax):
         FileId=open('Date.in','r')
         CRCheck = int(FileId.readline())
         if (CRCheck!=CRNumber):
-            print "The Date.in is within CR"+str(CRCheck
-                )+"  The synoptic map is for CR"+str(CRNumber)
+            print("The Date.in is within CR"+str(CRCheck
+                )+"  The synoptic map is for CR"+str(CRNumber))
             return(-1)
         LongEarth = int(FileId.readline())
         FileId.close()
