@@ -7,23 +7,27 @@ program magnetogram
   use ModConst, ONLY: cPi, cTwoPi, cDegToRad, cRadToDeg
   use ModPlotFile, ONLY:save_plot_file
   use ModReadParam, ONLY: read_file, read_init, &
-         read_line, read_command
-  use ModUtilities, ONLYL CON_stop
+       read_line, read_command
+  use ModUtilities, ONLY: CON_stop
+  use ModMpi
 
   implicit none
 
   integer,parameter:: nLong = 360, nLat = 180
-  integer:: Long0, i,j
+  integer:: Long0, i,j, iError, iLong
   real:: Longitude_I(nLong), SinLong_I(nLong), CosLong_I(nLong), LongitudeRad
   real:: Latitude_I(nLat), SinLat_I(nLat), CosLat_I(nLat), LatitudeRad
   real:: B_DC(3,nLong,nLat) = 0
   real::Xyz_D(3),SinLong,CosLong,SinLat,CosLat, Rho, P, U_D(3), B_D(3)
-  integer:: iLong
   character(LEN=3)::TypeLatAxis !(sin or uni)
   character(LEN=100):: StringLine, NameCommand
-  !----------------
+  !--------------------------------------------------------------------------
+
+  call MPI_init(iError)
+
   Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1 
   No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
+
   read(*,*)Long0
   write(*,'(a,i3)')prefix,Long0
   read(*,*)TypeLatAxis
@@ -52,6 +56,7 @@ program magnetogram
   case default
      call CON_stop('TypeLatAxis='//TypeLatAxis//'... is not supported')
   end select
+  write(*,*)'Reading CME.in'
   call read_file('CME.in')
   call read_init
   READPARAM: do
@@ -61,6 +66,7 @@ program magnetogram
      case('#END')
         EXIT READPARAM
      case('#CME')
+        write(*,*)'Reading CME Para'
         call EEE_set_parameters(NameCommand)
      case default
         call CON_stop('Unknown command:'//NameCommand)
@@ -81,9 +87,10 @@ program magnetogram
         B_DC(1,i,j) = sum(Xyz_D*B_D)
         B_DC(2,i,j) =  B_D(y_)*CosLong - B_D(x_)*SinLong
         B_DC(3,i,j) = (B_D(x_)*CosLong + B_D(y_)*SinLong)*(-SinLat) &
-                     + B_D(z_)*CosLat
+             + B_D(z_)*CosLat
      end do
   end do
+  write(*,*)'Saving file'
   call save_plot_file(&
        NameFile = 'FRMagnetogram.out',&
        TypeFileIn = 'ascii',          &
@@ -94,6 +101,8 @@ program magnetogram
        Coord2In_I= Latitude_I,        &
        NameVarIn = 'Longitude Latitude Br  BPhi BTheta Long0',& 
        VarIn_VII = B_DC)
-  stop
+
+  call MPI_finalize(iError)
+
 end program magnetogram
 !============================================================================
