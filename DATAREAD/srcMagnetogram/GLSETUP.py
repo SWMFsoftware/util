@@ -89,9 +89,7 @@ if __name__ == '__main__':
    #################SERVER SIDE, PYTHON################
    #################PROCESS MAGNETOGRAM###
    ##READ AND SMOOTH, IF DESIRED########################
-   print('Read MAG')
    cc = rf.readf(args.NameFile,TypeOut,args.nSmooth,BMax)
-   print('CC',cc[0],cc[1],cc[2],cc[3])
    nLong        = cc[0]
    nLat         = cc[1]
    nParam       = cc[2]
@@ -131,10 +129,7 @@ if __name__ == '__main__':
                             stderr=subprocess.STDOUT,text=True)
    #################PROCESSING STDOUT################
    stdout,stderr=ls.communicate()
-   print(stdout)
-   print(stderr)
    b=stdout[stdout.index('===')+4:len(stdout)]
-   print('b=',b)
    a=b.split()
    ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
    xPositive = float(a[0])

@@ -357,7 +357,6 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    subprocess.call('../../../bin/FRMAGNETOGRAM.exe',stdin=FileId)
    FileId.close()
    
-#---------------------
    if(Br_C[iYARCenter,iXARCenter]>0):
       iYPIL_I,iXPIL_I=np.where(PILMap_C>0)
    else:
