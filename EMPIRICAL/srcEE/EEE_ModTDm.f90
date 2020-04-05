@@ -218,8 +218,9 @@ contains
     ! curly-A function and its derivatives for k_(six-edged-star)
     RhoStarF = TdA*(1+Delta*SewingF)
     kStarF = sqrt((rVert*TdR)/(rVert*TdR+RhoStarF**2/4.))
-    dKSFdX = - (x*kStarF**3) / (4*rVert*TdR) * dSewingF
-    dKSFdR = kStarF**3/(8*rVert**2*TdR) * (RhoStarF**2-2*rVert*(rVert-TdR)*dSewingF)
+    dKSFdX = - (x*kStarF**3) / (4*rVert*TdR) * dSewingF*RhoStarF/Rho
+    dKSFdR = kStarF**3/(8*rVert**2*TdR) &
+         * (RhoStarF**2 - 2*rVert*(rVert-TdR)*dSewingF*RhoStarF/Rho)
 
     call calc_elliptic_int_1kind(kStarF,EllipticKf)
     call calc_elliptic_int_2kind(kStarF,EllipticEf)
@@ -234,8 +235,9 @@ contains
     ! curly-A function for k_(five-sided-star)
     RhoStarG = TdA*(1+Delta*SewingG)
     kStarG = sqrt((rVert*TdR)/(rVert*TdR+RhoStarG**2/4.))
-    dKSGdX = - (x*kStarG**3) / (4*rVert*TdR) * dSewingG
-    dKSGdR = kStarG**3/(8*rVert**2*TdR) * (RhoStarG**2-2*rVert*(rVert-TdR)*dSewingG)
+    dKSGdX = - (x*kStarG**3) / (4*rVert*TdR) * dSewingG*RhoStarG/Rho
+    dKSGdR = kStarG**3/(8*rVert**2*TdR) &
+         * (RhoStarG**2 - 2*rVert*(rVert-TdR)*dSewingG*RhoStarG/Rho)
 
     call calc_elliptic_int_1kind(kStarG,EllipticKg)
     call calc_elliptic_int_2kind(kStarG,EllipticEg)
