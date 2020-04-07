@@ -9,8 +9,7 @@ raw magnetogram fits file (inlcuding ADAPT maps):
 These are the steps for creating a magnetogram file for SWMF from 
 any raw magnetogram fits file.
 
-The steps below require IDL or python (includling astropy)
-to be installed on your machine.
+The steps below require IDL or python to be installed on your machine.
 
 1. If the SWMF is already installed and compiled, skip to step 2. Otherwise,
    in the main SWMF path, type:
