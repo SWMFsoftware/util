@@ -4,7 +4,7 @@
 # or imported into Python. See description of use in the README file
 #         by  Richard A. Frazin July 2014 - February 2015
 
-from astropy.io import fits
+import pyfits as fits
 from scipy import interpolate
 from scipy import integrate
 import numpy as np
