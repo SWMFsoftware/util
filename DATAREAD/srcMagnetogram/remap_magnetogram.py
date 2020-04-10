@@ -4,7 +4,11 @@
 # or imported into Python. See description of use in the README file
 #         by  Richard A. Frazin July 2014 - February 2015
 
-from astropy.io import fits
+# April 2020: 
+# script updated to work for both reading & remapping fits map & use in EEGGL
+# uses pyfits instead of astropy
+
+import pyfits as fits
 from scipy import interpolate
 from scipy import integrate
 import numpy as np
@@ -13,8 +17,7 @@ import time
 import argparse
 import pdb
 
-
-def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified', i=-1):
+def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified', i=-1, nSmooth=1):
     """
     Flux-conserving magnetogram remapping tool.
     inputfile - FITS file containing original magnetogram (include path)
@@ -47,10 +50,10 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         map_data = cc[2]
         input_grid = grid_type
 
+    #what kind of transformation are we doing?        
     if out_grid == 'unspecified':
         out_grid = grid_type
-
-    #what kind of transformation are we doing?
+    
     if grid_type == out_grid:
         transformation = 'rebin' #no change in grid type, so just rebin
     elif ( (grid_type == 'uniform') and (out_grid == 'sin(lat)') ):
@@ -61,14 +64,9 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         print ("Unknown transformation type.")
         return(-1)
 
+    # read the data
     g = fits.open(inputfile)
     d = g[0].data
-    if magtype == 'ADAPT Synchronic':
-        nim = g[0].header['NAXIS3'] # number of images
-        imdex = i  #which of the 12 maps do you want?
-        print ('This file contains ', str(nim), ' images. Writing out file  ', outputfile)
-        if nim > 1:  #just keep one of them for now
-            d = d[imdex,:,:]
 
     nlo = g[0].header['NAXIS1'] # number of longitude points
     nla = g[0].header['NAXIS2'] #           latitude
@@ -84,8 +82,19 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     elif nlong < 1:
         print ("nlong has to be -1 or a positive integer.")
         return(-1)
-    
-    
+        
+    if magtype == 'ADAPT Synchronic':
+        nim = g[0].header['NAXIS3'] # number of images
+        imdex = i  #which of the 12 maps do you want?
+        print ('This file contains ', str(nim),' images. Writing out file ', i)
+        if nim > 1:  #just keep one of them for now
+            d = d[imdex,:,:]        
+
+    # Conservative smoothing. Boundary condition:
+    # Periodic in Longitude, reflect in Latitude.
+    if (nSmooth>2):
+        d=smooth(nlong,nlat,nSmooth,d)
+   
     g[0].header['NAXIS1'] = nlong # new number of longitude points
     g[0].header['NAXIS2'] = nlat  #               latitude
 
@@ -100,19 +109,18 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         g[0].header.set('CTYPE2',out_grid) #create FITS header keyword
 
     if out_grid == 'sin(lat)':
-        newlat = (180/pi)*np.arcsin(np.linspace(-1. + 1./2/nlat,1. - 1./2/nlat,nlat))
+        newlat = (180/pi)*np.arcsin(np.linspace(-1. + 1./2/nlat,1. - 1./2/nlat,nlat)) # in deg
     elif out_grid == 'uniform':
-        newlat = (180/pi)*np.linspace(-pi/2 + pi/2/nlat,pi/2 - pi/2/nlat,nlat)
+        newlat = (180/pi)*np.linspace(-pi/2 + pi/2/nlat,pi/2 - pi/2/nlat,nlat) # in deg
     else:
         print ("out_grid incorrectly set.")
         return(-1)
-
 
     if ( (nlo == nlong) and (nla == nlat) and (grid_type == out_grid) ):
         newmap = d  #no remapping
     else:
         #first make a hybrid map that is (nla X nlong) by using the rebin
-        #    and add alg. in the longitude direction.  If nlo = nlong, hybrid --> d
+        # and add alg. in the longitude direction. If nlo = nlong, hybrid --> d
         hybrid = np.zeros([nla,nlong]) 
         crap = np.arange(nlo+1)
         for pf in crap[nlo+1:0:-1]: #pf will be the greatest common factor of nlong and nlo
@@ -121,9 +129,9 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 nlong_fac = nlong/pf
                 break
         for k in np.arange(nla):
-            w = np.kron(d[k,:],np.ones(nlong_fac)) #this array has length pf*nlo_fac*nlong_fac
+            w = np.kron(d[k,:],np.ones(int(nlong_fac))) #this array has length pf*nlo_fac*nlong_fac
             for l in np.arange(nlong):  #take the average over nlo_fac bins of w
-                hybrid[k,l] = np.sum(w[l*nlo_fac:(l+1)*nlo_fac])/nlo_fac
+                hybrid[k,l] = np.sum(w[int(l*nlo_fac):(l+1)*int(nlo_fac)])/nlo_fac
 
         newmap = np.zeros([nlat,nlong]) #output map                           
         if transformation == 'rebin':  #do rebin and add in the latitude direction, if nlo = nlat, newmap --> d
@@ -135,9 +143,9 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                     break
                 
             for k in np.arange(nlong):
-                w = np.kron(hybrid[:,k].T,np.ones(nlat_fac))#length is pf*nla_fac*nlat_fac
+                w = np.kron(hybrid[:,k].T,np.ones(int(nlat_fac)))#length is pf*nla_fac*nlat_fac
                 for l in np.arange(nlat):
-                    newmap[l,k] = np.sum(w[l*nla_fac:(l+1)*nla_fac])/nla_fac
+                    newmap[l,k] = np.sum(w[int(l*nla_fac):(l+1)*int(nla_fac)])/nla_fac
 
         elif transformation == 'reg2sin':
             oldlat =  np.linspace(-pi/2 + pi/2/nla,pi/2 - pi/2/nla,nla) #old latitude grid
@@ -168,7 +176,6 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
             print ("Unknown transformation type.")
             return(-1)
 
-
     #test for flux conservation in the transformation        
     test_flux = False 
     if test_flux:
@@ -192,7 +199,6 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
             return(-1)
         print ("original flux =",str(oldflux),", new flux =",str(newflux))
     
-
     #try to get some context information from the FITS file to include in output
     try:
         CRnumber = str(g[0].header['MAPCR'])  #works for ADAPT - Center of CM 
@@ -281,9 +287,38 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
             fid.write(line0)
     g.close()
     fid.close()
-    return(newmap,d)
-    
+    nParam = 2
+    Param_I = np.zeros(nParam)
+    Param_I[0] = long0
+#    Param_I[1] = -1 # Long Earth
+    Param_I[1] = CRnumber # Long Earth
+    # Long and Lat in radians passed to GLSetup.py
+    Long_I = (pi/180.) * np.linspace(0.5*360./nlong, 359.5*360./nlong, nlong) # in radians
+    Lat_I = newlat * (pi/180.) # radians
+#    Bmax = 1900
+    return(nlong, nlat, nParam, Param_I, Long_I, Lat_I, newmap)
 
+###############CONSERVATIVE (ON SIN(THETA) UNIFORM GRID########                 
+def smooth(nLong, nLat, nSmooth, Br_C):
+    nSmooth2 = nSmooth//2
+    Coef    = 1./(nSmooth*nSmooth)
+    BrOrig_G = np.zeros([nLat,nLong+2*nSmooth2])
+    for iLat in np.arange(nLat):
+        BrOrig_G[iLat,:] = np.hstack((
+                Br_C[iLat,nLong-nSmooth2:nLong],
+                Br_C[iLat,:],Br_C[iLat,0:nSmooth2]))
+    Br_C=np.zeros([nLat,nLong])
+    for iLat in np.arange(nLat):
+        for iLong in np.arange(nLong):
+            for iSubLat in np.arange(nSmooth):
+                iLatExt  = iLat  + iSubLat  - nSmooth2
+                iLatExt  = max([-iLatExt-1,min(
+                            [iLatExt, 2*nLat-1-iLatExt])])
+                Br_C[iLat,iLong] += np.sum(
+                    BrOrig_G[iLatExt,iLong:iLong+nSmooth])
+            Br_C[iLat,iLong]  *= Coef
+    return(Br_C)
+    
 def FITS_RECOGNIZE(inputfile):
     """
     This function opens inputfile and tries to determine what type of magnetogram
@@ -305,11 +340,10 @@ def FITS_RECOGNIZE(inputfile):
     g.info()
     header0 = g[0].header
     # Print out the headers
-    print("====================================================\n")
-    print("Primary Extension Header:\n")
-    print(repr(header0))
-    print("====================================================\n")
-
+#    print("====================================================\n")
+#    print("Primary Extension Header:\n")
+#    print(repr(header0))
+#    print("====================================================\n")
 
     try:
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI
@@ -406,8 +440,6 @@ def FITS_RECOGNIZE(inputfile):
                 
     print ("I think this is a",magnetogram_type,"magnetogram on a",str(nla),"X",str(nlo),grid_type,"grid.")
     return( (magnetogram_type, grid_type, map_data) )
-
-    
 
 if __name__ == '__main__':
 
