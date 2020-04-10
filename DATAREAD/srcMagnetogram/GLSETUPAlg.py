@@ -15,7 +15,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
         CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
         GLRadiusRange_I, UsePIL, ARMag, UseCMEGrid):
    Long0     = Param_I[0]
-   LongEarth = Param_I[1] 
+   LongEarth = Param_I[1]
    xPositive = Param_I[2]
    yPositive = Param_I[3]
    xNegative = Param_I[4]
@@ -26,10 +26,11 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       xPositive, yPositive,xNegative, yNegative))
    iBoxSize = round_my((16.*nLong)/360)
    
-   #Calculate the weighted centers forpositive and negative spots.
+   #Calculate the weighted centers for positive and negative spots.
    xPositiveWeight=0.
    yPositiveWeight=0.
    TotalPositiveFlux=0.
+
    for j in np.arange(yPositive-iBoxSize//2,yPositive+iBoxSize//2+1):
       for i in np.arange(xPositive-iBoxSize//2,xPositive+iBoxSize//2+1):
          if (Br_C[round_my(j),round_my(i)] > 0.0):
@@ -61,6 +62,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    #herewith PIL=Polarity Inversion Line 
    nProfile = max([round_my(abs(xPositive-xNegative)), 
                    round_my(abs(yPositive-yNegative))]) +1
+
    Misc = BMax +1.0 
    for i in np.arange(nProfile):
       xProfile = xPositive+(
@@ -85,7 +87,6 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
          GL_Longitude-=360
    print ("GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
       GL_Longitude, GL_Latitude))
-
 
    #Distances from the AR center and spot centers:
    DisCenter_C = np.zeros([nLat,nLong])

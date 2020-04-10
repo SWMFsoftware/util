@@ -2,7 +2,7 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
 
 ;-----------------------------------------------------------------------
 ; NAME:
-;   GLSETUP1
+;   GLSETUP2
 ;
 ; OUTPUTS:
 ;   user choise for stdout file

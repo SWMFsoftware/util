@@ -23,7 +23,7 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
   !p.font=1
   PlotRadius =1.
 
-;Read the magnetogram
+;Read the magnetogram (fitsfile.out in BATSRUS format)
   mag_info=read_magnetogram(file,PlotRadius,UseBATS)
   nlat=mag_info.nlat
   nlon=mag_info.nlon
@@ -32,7 +32,6 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
   br_field=mag_info.br_field
   neqpar =mag_info.neqpar
   eqpar  =mag_info.eqpar
- 
 
 ;Display the magnetogram and let user interactively select the CME source region. The
 ;procedure to select is:

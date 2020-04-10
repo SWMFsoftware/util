@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 ####################### MASTER SCRIPT FOR EEGGL or SWMF_GLSETUP#######
 ####################### CAN BE IMPLEMENTED IN ANY SCRIPT LANGUAGE#####
+####April 2020: Updated script for different types of magnetograms
+# make FRM in SWMF/util/EMPIRICAL/srcEE/
+
 import subprocess
 import os
-import read_fits as rf
+import remap_magnetogram as rmag
 import numpy as np
 import argparse
 import GLSETUPAlg as GL
@@ -13,22 +16,21 @@ if __name__ == '__main__':
    parser = argparse.ArgumentParser(
       formatter_class=argparse.RawTextHelpFormatter)
    parser.add_argument('NameFile', help='Input FITS file name including path')
-   parser.add_argument('-Out',choices=[
-         'old','new','remap','none'],action='append',dest='TypeOut',
-                       default=['none'],help=
-                       """
-          BATSRUS standard of .out file (new),
-          or remapped  to uniform in latitude one (remap) 
-          """)
-   parser.add_argument('-nSmooth',type=int, default=5, help=
-                       """
-   If nSmooth is ODD integer larger than 1, apply boxcar smoothing on the 
-             magnetic field. This can help finding the PIL)
-                       """)
-   parser.add_argument('-CMESpeed',type=float, default=-1.0, help=
-      """
-        CME speed in km/s, recovered from observations
-      """)
+   parser.add_argument('nlat', nargs='?', type=int, default=180, help= \
+                       'Number of latitude points in output. Default is 180.')
+   parser.add_argument('nlon', nargs='?', type=int, default=360,\
+                       help='Number of longitude points in output. Default\
+ is 360.')
+   parser.add_argument('-outgrid',choices=['uniform','sinlat'], \
+                       help='type of latitude grid in the output. Default is\
+ same as input.')
+   parser.add_argument('-index', type=int,\
+                       help='Initial map index. Default is the first map.',\
+                       default=1)
+   parser.add_argument('-nSmooth',type=int, default=5, \
+                       help='If nSmooth is ODD integer larger than 1, apply boxcar smoothing on the magnetic field. This can help finding the PIL')
+   parser.add_argument('-CMESpeed',type=float, default=-1.0, help=\
+                       'CME speed in km/s, recovered from observations')
    parser.add_argument('--CMEGrid',action='store_true',
                        help='Output parameters of the refined CME grid')
    parser.add_argument('--UsePIL',action='store_true',
@@ -84,26 +86,37 @@ if __name__ == '__main__':
    UsePIL     = args.UsePIL
    ARMag      = args.ARMag
    UseCMEGrid = args.CMEGrid
-   TypeOut = args.TypeOut
+   nlat = args.nlat
+   nlon = args.nlon
+   i = args.index
+   nSmooth = args.nSmooth
+
+   # setting ouput grid if remapping is required
+   grid_type = 'unspecified'
+   if args.outgrid == 'sinlat':
+      grid_type = 'sin(lat)'
+   elif args.outgrid == 'uniform':
+      grid_type = 'uniform'
+
    ##################END OF PARSER#####################
    #################SERVER SIDE, PYTHON################
    #################PROCESS MAGNETOGRAM###
    ##READ AND SMOOTH, IF DESIRED########################
-   cc = rf.readf(args.NameFile,TypeOut,args.nSmooth,BMax)
+
+   # fits magnetogram is read, remapped (if required) using 
+   # remap_magnetogram.py  to fitsfile.out.
+   cc = rmag.remap(args.NameFile, 'fitsfile.out', nlat, nlon, grid_type, i-1, args.nSmooth)
+
    nLong        = cc[0]
    nLat         = cc[1]
    nParam       = cc[2]
    Param_I      = cc[3]
-   Long0        = Param_I[0]
-   LongEarth    = Param_I[1]
-   Long_I       = cc[4]  
-   Lat_I        = cc[5] 
-   Br_C         = cc[6]  
-   ###########REMAP, IF DESIRED#######################
-   if(any(Type=='remap' for Type in TypeOut)):
-      dd= rf.remap(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,BMax)
-      Lat_I      = dd[5]
-      Br_C       = dd[6]
+   Long0        = Param_I[0] # Longitude of left edge
+   LongEarth    = Param_I[1] # CR number of central meridian
+   Long_I       = cc[4]      # in radians
+   Lat_I        = cc[5]      # in radians
+   Br_C         = cc[6] 
+
    #Info to the idl session is passed via the uniform.out file####
    ############END OF PYTHON FIRST SESSION##########
    ###IDL SESSION IN THE SWMF_GLSETUP/BROWSER SESSION IN EEGGL##
@@ -113,24 +126,22 @@ if __name__ == '__main__':
 
    print('Select the CME Source Region (POSITIVE) with the left button')
    print('Then select negative region with the right button')
-   FileId=open('runidl','w')
+
+   FileId=open('runidl1','w')
    FileId.write(';\n;\n')
-   if(any(Type=='remap' for Type in TypeOut)):
-      FileId.write(
-         "      GLSETUP1,file='uniform.out',/UseBATS,CMESpeed=%-5.1f  "%
-         CMESpeed)
-   else:
-      FileId.write(
-         "      GLSETUP1,file='fitsfile.out',/UseBATS,CMESpeed=%-5.1f  "%
-         CMESpeed)
+   FileId.write(
+      "      GLSETUP1,file='fitsfile.out',/UseBATS,CMESpeed=%-5.1f  "%
+      CMESpeed)
    FileId.close()
    ########SHOW MAGNETOGRAM##########################
-   ls = subprocess.Popen(["idl", "runidl"],stdout=subprocess.PIPE,
+   # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
+   # reads the cursor x,y indices for neg and pos. AR.
+   ls = subprocess.Popen(["idl", "runidl1"],stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,text=True)
    #################PROCESSING STDOUT################
    stdout,stderr=ls.communicate()
    b=stdout[stdout.index('===')+4:len(stdout)]
-   a=b.split()
+   a=b.split() # x,y coordinates & CME speed
    ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
    xPositive = float(a[0])
    yPositive = float(a[1])
@@ -139,9 +150,8 @@ if __name__ == '__main__':
    ###The CME speed may be set within the idl/browser session:
    CMESpeed  = float(a[4])
    ## A THING TO DO: IN THE FIRST BLOWSER SESSION OF
-   ## THE EEGGL SMESpeed will be provided############
+   ## THE EEGGL CMESpeed will be provided############
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
-
 
    nParam  = 6
    Param_I = np.zeros(nParam)
@@ -152,9 +162,8 @@ if __name__ == '__main__':
    Param_I[3] = yPositive
    Param_I[4] = xNegative
    Param_I[5] = yNegative
-   
+
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
-   #NS - GLSETUPAlg.py 
    CC=GL.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,
                  CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
                  GLRadiusRange_I, UsePIL, ARMag, UseCMEGrid )
