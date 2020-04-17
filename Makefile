@@ -15,6 +15,7 @@ clean:
 	@(if [ -d EMPIRICAL ]; then cd EMPIRICAL;  make clean; fi)
 	@(if [ -d CRASH ];     then cd CRASH;      make clean; fi)
 	@(if [ -d HYPRE ];     then cd HYPRE;      make clean; fi)
+	@(if [ -d AMREX ];     then cd AMREX;      make clean; fi)
 	@(if [ -d FISHPAK ];   then cd FISHPAK/src;make clean; fi)
 
 distclean:
@@ -24,5 +25,6 @@ distclean:
 	@(if [ -d EMPIRICAL ]; then cd EMPIRICAL;  make distclean; fi)
 	@(if [ -d CRASH ];     then cd CRASH;      make distclean; fi)
 	@(if [ -d HYPRE ];     then cd HYPRE;      make distclean; fi)
+	@(if [ -d AMREX ];     then cd AMREX;      make distclean; fi)
 	@(if [ -d FISHPAK ];   then cd FISHPAK/src;make clean; fi)
 	rm -f *~
