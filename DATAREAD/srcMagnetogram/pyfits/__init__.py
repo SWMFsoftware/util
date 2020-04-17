@@ -18,8 +18,8 @@ __doc__ = core.__doc__
 
 __all__ = core.__all__
 
-warnings.warn('PyFITS is deprecated, please use astropy.io.fits',
-              PyFITSDeprecationWarning)  # noqa
+#warnings.warn('PyFITS is deprecated, please use astropy.io.fits',
+#              PyFITSDeprecationWarning)  # noqa
 
 
 try:
