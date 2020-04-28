@@ -179,8 +179,9 @@ contains
   subroutine EEE_get_state_BC(x_D,Rho,U_D,B_D,p,Time,n_step,iteration_number)
 
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
-         UseCms, UseSpheromak
+         UseCms, UseSpheromak, UseTD14
     use EEE_ModTD99, ONLY: get_transformed_TD99fluxrope, DoBqField
+    use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope, adjust_GL98_fluxrope
     use EEE_ModCms, ONLY: get_cms
@@ -206,11 +207,18 @@ contains
        Rho = Rho + Rho1; U_D = U_D + U1_D; B_D = B_D + B1_D
     end if
 
+    if (UseTD14) then
+       call calc_tdm14_bfield(x_D, B1_D, Bstrap_D)
+
+       B_D = B_D + B1_D
+    end if
+
     if(UseGL)then
        ! Add Gibson & Low (GL98) flux rope
        call get_GL98_fluxrope(x_D, Rho1, p1, B1_D)
        B_D = B_D + B1_D
     endif
+
    if(UseSpheromak)then
        call get_GL98_fluxrope(x_D, Rho1, p1, B1_D, U1_D)
        B_D = B_D + B1_D; U_D = U_D + U1_D
@@ -231,9 +239,10 @@ contains
   subroutine EEE_get_state_init(x_D, Rho, B_D, p, n_step, iteration_number)
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, UseTD, UseGL, &
-         UseCms, UseSpheromak
+         UseCms, UseSpheromak, UseTD14
     use EEE_ModGL98, ONLY: get_GL98_fluxrope, adjust_GL98_fluxrope
     use EEE_ModTD99, ONLY: get_transformed_TD99fluxrope
+    use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModCms,  ONLY: get_cms
 
     real, intent(in) :: x_D(3)
@@ -255,6 +264,12 @@ contains
             U1_D, n_step, iteration_number, Rho1)
        Rho = Rho + Rho1; U_D = U_D + U1_D; B_D = B_D + B1_D
     endif
+
+    if (UseTD14) then
+       call calc_tdm14_bfield(x_D, B1_D, Bstrap_D)
+
+       B_D = B_D + B1_D
+    end if
 
     if(UseGL)then
        ! Add Gibson & Low (GL98) flux rope

@@ -13,15 +13,12 @@ module EEE_ModTDm
   ! already obtained background field.
 
   use EEE_ModCommonVariables
-  use ModUtilities, ONLY: CON_stop
   implicit none
   save
   private
 
   public :: set_parameters_tdm14
   public :: calc_tdm14_bfield
-  public :: get_tdm14_apexlocation
-  public :: init_tdm14
 
   real, public :: AnalyticTdCoordScale=1., AnalyticTdFieldScale=1.
   real, public :: AnalyticTdCoeffR = 1.83 ! torus major radius
@@ -30,7 +27,8 @@ module EEE_ModTDm
   real, public :: AnalyticTdCoeffL = 1.25 ! magnetic charges distance to center
   ! real, public :: AnalyticTdCoeffQ = 20.  ! strength of magnetic dipole
 
-  logical :: IsInitiated = .false.
+  real, public :: XyzApex_D(3), Bstrap_D(3)
+
   real :: Rotate_DD(3,3)
   real :: rBody = 1.0    ! solar radius when use spherical coordinates
 
@@ -39,6 +37,7 @@ contains
 
   subroutine set_parameters_tdm14(NameCommand)
 
+    use ModUtilities, ONLY: CON_stop
     use ModReadParam, ONLY: read_var
 
     character(len=*), intent(in):: NameCommand
@@ -55,12 +54,16 @@ contains
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
 
+    call init_tdm14
+
   end subroutine set_parameters_tdm14
   !============================================================================
   subroutine init_tdm14
 
     use ModCoordTransform, ONLY: rot_matrix_x, rot_matrix_y, rot_matrix_z
     use ModConst, ONLY: cHalfPi, cDegToRad
+
+    real :: CoordRef_D(3)
 
     character(len=*), parameter:: NameSub = 'init_tdm14'
     !--------------------------------------------------------------------------
@@ -69,25 +72,11 @@ contains
     Rotate_DD = matmul(rot_matrix_x(-OrientationCme*cDegToRad),Rotate_DD)
     Rotate_DD = matmul(rot_matrix_y(-cHalfPi),Rotate_DD)
 
-    IsInitiated = .true.
-
-  end subroutine init_tdm14
-  !============================================================================
-  function get_tdm14_apexlocation() result(CoordOut_D)
-
-    real :: CoordOut_D(3)
-    real :: CoordRef_D(3)
-    character(len=*), parameter:: NameSub = 'get_tdm14_apexlocation'
-    !--------------------------------------------------------------------------
-    if (.not.IsInitiated) then
-       call CON_stop(NameSub//' not initiated. Call init_tdm14 first.')
-    endif
-
     CoordRef_D = (/ 0., 0., AnalyticTdCoeffR-AnalyticTdCoeffD /)
-    CoordOut_D =  &
+    XyzApex_D =  &
          matmul(CoordRef_D*AnalyticTdCoordScale+(/0.,0.,rBody/), Rotate_DD)
 
-  end function get_tdm14_apexlocation
+  end subroutine init_tdm14
   !============================================================================
   subroutine calc_tdm14_bfield(CoordIn_D, bTd_D, bStrap_D)
 
@@ -98,21 +87,18 @@ contains
     real :: bStrapRef_D(3), bTdRef_D(3), CoordRef_D(3)
     character(len=*), parameter:: NameSub = 'calc_tdm14_bfield'
     !--------------------------------------------------------------------------
-    if (.not.IsInitiated) then
-       call CON_stop(NameSub//' not initiated. Call init_tdm14 first.')
-    endif
 
     CoordRef_D = (matmul(Rotate_DD,CoordIn_D)-(/0.,0.,rBody/)) &
          /AnalyticTdCoordScale
 
-    if (.not.present(bStrap_D)) then
-       call calc_tdm14_cart(CoordRef_D, bTdRef_D, 0., .true.)
-    else
+    if (present(bStrap_D)) then
        ! Project overlying field to along flux rope, the axial flux term
        ! should be calculated with respect to a straping field that is
        ! perpendicular the flux rope direction 
        bStrapRef_D = matmul(Rotate_DD, bStrap_D)
        call calc_tdm14_cart(CoordRef_D, bTdRef_D, bStrapRef_D(1), .false.)
+    else
+       call calc_tdm14_cart(CoordRef_D, bTdRef_D, 0., .true.)
     endif
 
     bTd_D = matmul(bTdRef_D,Rotate_DD) * AnalyticTdFieldScale
