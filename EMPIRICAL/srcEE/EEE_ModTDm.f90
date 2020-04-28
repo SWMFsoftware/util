@@ -24,8 +24,6 @@ module EEE_ModTDm
   real, public :: AnalyticTdCoeffR = 1.83 ! torus major radius
   real, public :: AnalyticTdCoeffA = 0.75 ! torus minor radius
   real, public :: AnalyticTdCoeffD = 0.83 ! depth of torus center
-  real, public :: AnalyticTdCoeffL = 1.25 ! magnetic charges distance to center
-  ! real, public :: AnalyticTdCoeffQ = 20.  ! strength of magnetic dipole
 
   real, public :: XyzApex_D(3), Bstrap_D(3)
 
@@ -44,7 +42,7 @@ contains
     character(len=*), parameter:: NameSub = 'set_parameters_tdm14'
     !--------------------------------------------------------------------------
     select case(NameCommand)
-    case("#TDM14")
+    case("#CME")
        call read_var('AnalyticTdCoordScale', AnalyticTdCoordScale)
        call read_var('AnalyticTdFieldScale', AnalyticTdFieldScale)
        call read_var('AnalyticTdCoeffR', AnalyticTdCoeffR)
