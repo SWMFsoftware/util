@@ -99,7 +99,7 @@ contains
        call calc_tdm14_cart(CoordRef_D, bTdRef_D, 0., .true.)
     endif
 
-    bTd_D = matmul(bTdRef_D,Rotate_DD) * AnalyticTdFieldScale
+    bTd_D = matmul(bTdRef_D,Rotate_DD) * AnalyticTdFieldScale*No2Si_V(UnitB_)
 
   end subroutine calc_tdm14_bfield
   !============================================================================
