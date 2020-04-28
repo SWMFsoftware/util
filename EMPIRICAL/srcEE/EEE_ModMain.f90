@@ -103,11 +103,12 @@ contains
     use ModReadParam,     ONLY: read_var
     use EEE_ModGL98,      ONLY: set_parameters_GL98
     use EEE_ModTD99,      ONLY: set_parameters_TD99
+    use EEE_ModTDm,       ONLY: set_parameters_tdm14
     use EEE_ModArch,      ONLY: set_parameters_arch
     use EEE_ModShearFlow, ONLY: set_parameters_shearflow
     use EEE_ModCms,       ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
-         UseCme, DoAddFluxRope, UseTD, UseGL, UseShearFLow, UseArch, &
+         UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
          DoAddFluxRope, LongitudeCme, LatitudeCme, OrientationCme, &
          UseCms, UseSpheromak
 
@@ -130,6 +131,9 @@ contains
           case("TITOV-DEMOULIN", "TD")
              UseTD = .true.
              call set_parameters_TD99(NameCommand)
+          case("TD14")
+             UseTD14 = .true.
+             call set_parameters_tdm14(NameCommand)
           case("GIBSON-LOW", "GL")
              UseGL = .true.
              call set_parameters_GL98(NameCommand)
