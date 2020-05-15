@@ -112,7 +112,8 @@ if __name__ == '__main__':
 
     # HMI vector magnetograms
     if not ARGS.no_hmi:
-        print('HMI:', swmfpy.web.download_magnetogram_hmi(TIME, verbose=True))
+        print('HMI:', swmfpy.web.download_magnetogram_hmi(TIME,
+            'hmi.b_synoptic_small', verbose=True))
 
     # Download magnetogram and remap
     FILE = swmfpy.web.download_magnetogram_adapt(TIME)[0]  # default 'fixed'

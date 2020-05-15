@@ -1,134 +1,116 @@
-! The 2014 modified Titov-Demoulin flux rope analytical solution with a 
-! parabolic current profile. See Titov & Demoulin (1999), and Titov et al. 
-! (2014 ApJ 790 163) for equations and explanations of the variables (most of 
-! the variable names in this code are consistent with the paper). Here we also 
-! transform the flux rope in Cartesian coordinates into spherical. See an 
-! example of calling this code at the end. Also see Titov et al. 
-! (2018 ApJ 852 L21) for a new method of embeding flux rope into an already 
-! obtained background field.
-
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
+!  For more information, see http://csem.engin.umich.edu/tools/swmf
 module EEE_ModTDm
-  use ModUtilities, ONLY: CON_stop
 
+  ! The 2014 modified Titov-Demoulin flux rope analytical solution with a 
+  ! parabolic current profile. See Titov & Demoulin (1999), and Titov et al. 
+  ! (2014 ApJ 790 163) for equations and explanations of the variables (most of
+  ! the variable names in this code are consistent with the paper).
+  ! Here we also transform the flux rope in Cartesian coordinates into
+  ! spherical. See an example of calling this code at the end. Also see Titov
+  ! et al. (2018 ApJ 852 L21) for a new method of embeding flux rope into an
+  ! already obtained background field.
+
+  use EEE_ModCommonVariables
   implicit none
   save
   private
-  public :: set_parameters_tdm14, calc_tdm14_bfield, get_tdm14_apexlocation, init_tdm14
+
+  public :: set_parameters_tdm14
+  public :: calc_tdm14_bfield
 
   real, public :: AnalyticTdCoordScale=1., AnalyticTdFieldScale=1.
-  real, public :: AnalyticTdCoeffR = 1.83        ! torus major radius
-  real, public :: AnalyticTdCoeffA = 0.75        ! torus minor radius
-  real, public :: AnalyticTdCoeffD = 0.83        ! depth of torus center
-  real, public :: AnalyticTdCoeffL = 1.25        ! magnetic charges distance to center
-  ! In spherical: Rotation angle with respect to radial direction (degree), flux rope two foot points align with longitude direction as zero (y axis in Cartesian becomes phi axis), counter clockwise.
-  ! In Cartesian: Rotation around z axis, zero is where flux rope lies along y axis
-  real, public :: AnalyticTdLocRot = 0.
-  ! real, public :: AnalyticTdCoeffQ = 20.         ! strength of magnetic dipole
-  real, public :: AnalyticTdLocLon = 50.        ! longitude of flux rope (degree)
-  real, public :: AnalyticTdLocLat = 10.        ! Latitude
+  real, public :: AnalyticTdCoeffR = 1.83 ! torus major radius
+  real, public :: AnalyticTdCoeffA = 0.75 ! torus minor radius
+  real, public :: AnalyticTdCoeffD = 0.83 ! depth of torus center
 
-  logical :: IsInitiated = .false.
-  real :: RotateRefGen_DD(3,3)
-  logical :: IsCartesian
+  real, public :: XyzApex_D(3), Bstrap_D(3)
+
+  real :: Rotate_DD(3,3)
   real :: rBody = 1.0    ! solar radius when use spherical coordinates
 
 contains
+  !============================================================================
 
   subroutine set_parameters_tdm14(NameCommand)
+
+    use ModUtilities, ONLY: CON_stop
     use ModReadParam, ONLY: read_var
+
     character(len=*), intent(in):: NameCommand
     character(len=*), parameter:: NameSub = 'set_parameters_tdm14'
-
+    !--------------------------------------------------------------------------
     select case(NameCommand)
-    case("#TDM14")
-      call read_var('AnalyticTdCoordScale', AnalyticTdCoordScale)
-      call read_var('AnalyticTdFieldScale', AnalyticTdFieldScale)
-      call read_var('AnalyticTdCoeffR', AnalyticTdCoeffR)
-      call read_var('AnalyticTdCoeffA', AnalyticTdCoeffA)
-      call read_var('AnalyticTdCoeffD', AnalyticTdCoeffD)
-      call read_var('Rotation', AnalyticTdLocRot)
-      if (.not.IsCartesian) then
-        call read_var('Longitude', AnalyticTdLocLon)
-        call read_var('Latitude', AnalyticTdLocLat)
-      endif
+    case("#CME")
+       call read_var('AnalyticTdCoordScale', AnalyticTdCoordScale)
+       call read_var('AnalyticTdFieldScale', AnalyticTdFieldScale)
+       call read_var('AnalyticTdCoeffR', AnalyticTdCoeffR)
+       call read_var('AnalyticTdCoeffA', AnalyticTdCoeffA)
+       call read_var('AnalyticTdCoeffD', AnalyticTdCoeffD)
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
+
+    call init_tdm14
+
   end subroutine set_parameters_tdm14
+  !============================================================================
+  subroutine init_tdm14
 
-
-  subroutine init_tdm14(IsCartesianIn)
     use ModCoordTransform, ONLY: rot_matrix_x, rot_matrix_y, rot_matrix_z
     use ModConst, ONLY: cHalfPi, cDegToRad
 
-    logical, intent(in) :: IsCartesianIn
-    character(len=*), parameter:: NameSub = 'init_tdm14'
-
-    IsCartesian = IsCartesianIn
-    if (IsCartesian) then
-      ! Rotation matrix: (TD in reference frame) = RotateRefGen_DD * (TD in requested generic frame)
-      RotateRefGen_DD = rot_matrix_z(-AnalyticTdLocRot*cDegToRad)
-    else
-      ! the same as, but a reversed definition of, the rotation matrix in EEE_ModTd99, easier for me to follow
-      RotateRefGen_DD = rot_matrix_z(-AnalyticTdLocLon*cDegToRad)
-      RotateRefGen_DD = matmul(rot_matrix_y(AnalyticTdLocLat*cDegToRad),RotateRefGen_DD)
-      RotateRefGen_DD = matmul(rot_matrix_x(-AnalyticTdLocRot*cDegToRad),RotateRefGen_DD)
-      RotateRefGen_DD = matmul(rot_matrix_y(-cHalfPi),RotateRefGen_DD)
-    endif
-    IsInitiated = .true.
-  end subroutine init_tdm14
-
-
-  function get_tdm14_apexlocation() result(CoordOut_D)
-    real :: CoordOut_D(3)
     real :: CoordRef_D(3)
-    character(len=*), parameter:: NameSub = 'get_tdm14_apexlocation'
 
-    if (.not.IsInitiated) then
-      call CON_stop(NameSub//' not initiated. Call init_tdm14 first.')
-    endif
+    character(len=*), parameter:: NameSub = 'init_tdm14'
+    !--------------------------------------------------------------------------
+    Rotate_DD = rot_matrix_z(-LongitudeCme*cDegToRad)
+    Rotate_DD = matmul(rot_matrix_y(LatitudeCme*cDegToRad),Rotate_DD)
+    Rotate_DD = matmul(rot_matrix_x(-OrientationCme*cDegToRad),Rotate_DD)
+    Rotate_DD = matmul(rot_matrix_y(-cHalfPi),Rotate_DD)
 
-    CoordRef_D = (/0.,0.,AnalyticTdCoeffR-AnalyticTdCoeffD/)
-    CoordOut_D = matmul(CoordRef_D*AnalyticTdCoordScale+(/0.,0.,rBody/),RotateRefGen_DD)
-  end function get_tdm14_apexlocation
+    CoordRef_D = (/ 0., 0., AnalyticTdCoeffR-AnalyticTdCoeffD /)
+    XyzApex_D =  &
+         matmul(CoordRef_D*AnalyticTdCoordScale+(/0.,0.,rBody/), Rotate_DD)
 
-
+  end subroutine init_tdm14
+  !============================================================================
   subroutine calc_tdm14_bfield(CoordIn_D, bTd_D, bStrap_D)
+
     real, intent(in) :: CoordIn_D(3)
     real, intent(out) :: bTd_D(3)
     real, intent(in), optional :: bStrap_D(3)
 
-    logical :: IsCartesian
     real :: bStrapRef_D(3), bTdRef_D(3), CoordRef_D(3)
     character(len=*), parameter:: NameSub = 'calc_tdm14_bfield'
+    !--------------------------------------------------------------------------
 
-    if (.not.IsInitiated) then
-      call CON_stop(NameSub//' not initiated. Call init_tdm14 first.')
-    endif
+    CoordRef_D = (matmul(Rotate_DD,CoordIn_D)-(/0.,0.,rBody/)) &
+         /AnalyticTdCoordScale
 
-    if (IsCartesian) then
-      CoordRef_D = matmul(RotateRefGen_DD,CoordIn_D) / AnalyticTdCoordScale
+    if (present(bStrap_D)) then
+       ! Project overlying field to along flux rope, the axial flux term
+       ! should be calculated with respect to a straping field that is
+       ! perpendicular the flux rope direction 
+       bStrapRef_D = matmul(Rotate_DD, bStrap_D)
+       call calc_tdm14_cart(CoordRef_D, bTdRef_D, bStrapRef_D(1), .false.)
     else
-      CoordRef_D = (matmul(RotateRefGen_DD,CoordIn_D)-(/0.,0.,rBody/)) / AnalyticTdCoordScale
-    endif
-    if (.not.present(bStrap_D)) then
-      call calc_tdm14_cart(CoordRef_D, bTdRef_D, 0., .true.)
-    else
-      ! Project overlying field to along flux rope, the axial flux term should be calculated with respect to a straping field that is perpendicular the flux rope direction 
-      bStrapRef_D = matmul(RotateRefGen_DD, bStrap_D)
-      call calc_tdm14_cart(CoordRef_D, bTdRef_D, bStrapRef_D(1), .false.)
+       call calc_tdm14_cart(CoordRef_D, bTdRef_D, 0., .true.)
     endif
 
-    bTd_D = matmul(bTdRef_D,RotateRefGen_DD) * AnalyticTdFieldScale
+    bTd_D = matmul(bTdRef_D,Rotate_DD) * AnalyticTdFieldScale*No2Si_V(UnitB_)
+
   end subroutine calc_tdm14_bfield
-
-
+  !============================================================================
   ! "Modified Titov-Demoulin flux rope" (Titov+ 2014) with a parabolic profile
   ! current distribution inside the rope. The outside straping potential field,
   ! if not given, is bipolar (generated from two monopoles below the surface).
   subroutine calc_tdm14_cart(Coord_D, bTd_D, bVertIn, DoTestWithPointSource)
+
     use ModConst, ONLY: cTwoPi, cPi
-    use ModHyperGeometric, ONLY: calc_elliptic_int_1kind, calc_elliptic_int_2kind
+    use ModHyperGeometric, ONLY: calc_elliptic_int_1kind, &
+         calc_elliptic_int_2kind
 
     real, intent(in) :: Coord_D(3)
     real, intent(out) :: bTd_D(3)
@@ -153,16 +135,15 @@ contains
     real :: SewingH, dSewingH, SewingF, dSewingF, SewingG, dSewingG
     real :: Ai, dAIdX, dAIdR
     real :: TmpG, dGdX, dGdR, TmpH, dHdR, Afx, dAFRdX, dAFXdR
-
     !--------------------------------------------------------------------------
 
     if (IsFirst) then 
-      TdR = AnalyticTdCoeffR
-      TdA = AnalyticTdCoeffA
-      TdD = AnalyticTdCoeffD
-      TdL = TdR/sqrt(2.)/1.03
-      TdQ = 1.
-      IsFirst = .false.
+       TdR = AnalyticTdCoeffR
+       TdA = AnalyticTdCoeffA
+       TdD = AnalyticTdCoeffD
+       TdL = TdR/sqrt(2.)/1.03
+       TdQ = 1.
+       IsFirst = .false.
     endif
 
     x = Coord_D(1)
@@ -172,17 +153,16 @@ contains
     ! ---- point sources field B_q ----
     bQ_D = 0.
     if (DoTestWithPointSource) then
-      rPlus_D = (/ x-TdL, y, z+TdD /)
-      rMinus_D = (/ x+TdL, y, z+TdD /)
-      LenRPlus = sqrt(sum(rPlus_D**2))
-      LenRMinus = sqrt(sum(rMinus_D**2))
-      bQ_D = TdQ * (rPlus_D/LenRPlus**3 - rMinus_D/LenRMinus**3)
-      bVert = - 2*TdQ*TdL/sqrt(TdL**2+TdR**2)**3
+       rPlus_D = (/ x-TdL, y, z+TdD /)
+       rMinus_D = (/ x+TdL, y, z+TdD /)
+       LenRPlus = sqrt(sum(rPlus_D**2))
+       LenRMinus = sqrt(sum(rMinus_D**2))
+       bQ_D = TdQ * (rPlus_D/LenRPlus**3 - rMinus_D/LenRMinus**3)
+       bVert = - 2*TdQ*TdL/sqrt(TdL**2+TdR**2)**3
     else
-      bVert = bVertIn
+       bVert = bVertIn
     endif
     ! In spherical case the straping field magnitude bVert should be provided
-
 
     ! ---- variables to calculate toroidal and poloidal vector potentials ----
     rVert = sqrt(y**2+(z+TdD)**2)
@@ -226,11 +206,14 @@ contains
     call calc_elliptic_int_2kind(kStarF,EllipticEf)
 
     FuncAf = ((2-kStarF**2)*EllipticKf - 2*EllipticEf) / kStarF
-    dFuncAf = (2-kStarF**2)/(kStarF**2*(1-kStarF**2)) * EllipticEf - 2/(kStarF**2) * EllipticKf
-    d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) * EllipticEf - &
-         (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2)) * EllipticKf
-    d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12)/(kStarF**4*(1-kStarF**2)**3) * EllipticEf - &
-         (19*kStarF**4-27*kStarF**2+12)/(kStarF**4*(1-kStarF**2)**2) * EllipticKf
+    dFuncAf = (2-kStarF**2)/(kStarF**2*(1-kStarF**2)) * EllipticEf &
+         - 2/(kStarF**2) * EllipticKf
+    d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) &
+         *EllipticEf - (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2))*EllipticKf
+    d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12) &
+         /(kStarF**4*(1-kStarF**2)**3) * EllipticEf &
+         - (19*kStarF**4-27*kStarF**2+12) &
+         /(kStarF**4*(1-kStarF**2)**2) * EllipticKf
 
     ! curly-A function for k_(five-sided-star)
     RhoStarG = TdA*(1+Delta*SewingG)
@@ -245,26 +228,31 @@ contains
     FuncAg = ((2-kStarG**2)*EllipticKg - 2*EllipticEg) / kStarG
     dFuncAg = (2-kStarG**2)/(kStarG**2*(1-kStarG**2)) * EllipticEg - &
          2/(kStarG**2) * EllipticKg
-    d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) * EllipticEg - &
-         (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2)) * EllipticKg
-    d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12)/(kStarG**4*(1-kStarG**2)**3) * EllipticEg - &
-         (19*kStarG**4-27*kStarG**2+12)/(kStarG**4*(1-kStarG**2)**2) * EllipticKg
-
+    d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) &
+         *EllipticEg - (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2))*EllipticKg
+    d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12) &
+         /(kStarG**4*(1-kStarG**2)**3)*EllipticEg &
+         - (19*kStarG**4-27*kStarG**2+12) &
+         /(kStarG**4*(1-kStarG**2)**2)*EllipticKg
 
     ! ---- ring current field B_I ----
 
     Ai = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
          (FuncAf+dFuncAf*(VarK-kStarF)+0.5*d2FuncAf*(VarK-kStarF)**2)
     dAIdX = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
-         (dFuncAf*dKdX+d2FuncAf*dKdX*(VarK-kStarF)+0.5*d3FuncAf*dKSFdX*(VarK-kStarF)**2)
-    dAIdR = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
-         (dFuncAf*dKdR+d2FuncAf*dKdR*(VarK-kStarF)+0.5*d3FuncAf*dKSFdR*(VarK-kStarF)**2) - Ai/(2*rVert)
+         (dFuncAf*dKdX+d2FuncAf*dKdX*(VarK-kStarF) &
+         + 0.5*d3FuncAf*dKSFdX*(VarK-kStarF)**2)
+    dAIdR = CurrentI/cTwoPi*sqrt(TdR/rVert) &
+         *(dFuncAf*dKdR+d2FuncAf*dKdR*(VarK-kStarF) &
+         + 0.5*d3FuncAf*dKSFdR*(VarK-kStarF)**2) - Ai/(2*rVert)
 
     bI_D = - dAIdX * rVertHat_D + (dAIdR+Ai/rVert) * xHat_D
 
     ! ---- toroidal field B_theta ----
 
-    TmpG = 3+4*dFuncAf*(VarK-kStarF)    ! just a temporary variable, same for tmpH below
+    ! just a temporary variable, same for tmpH below
+    TmpG = 3+4*dFuncAf*(VarK-kStarF)   
+
     dGdX = 4*(d2FuncAf*dKSFdX*(VarK-kStarF)+dFuncAf*(dKdX-dKSFdX))
     dGdR = 4*(d2FuncAf*dKSFdR*(VarK-kStarF)+dFuncAf*(dKdR-dKSFdR))
 
@@ -273,20 +261,27 @@ contains
     dHdR = (3*VarK**2*dKdR*(x**2+TdR**2-rVert**2)-2*VarK**3*rVert-&
          3*TdA**2*kStarG**2*dKSGdR)*dFuncAg + &
          (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*d2FuncAg*dKSGdR + &
-         TdA**2*( (3*kStarG**2*dKSGdR*(VarK-kStarG)+kStarG**3*(dKdR-dKSGdR))*d2FuncAg + &
-         kStarG**3*(VarK-kStarG)*d3FuncAg*dKSGdR )
+         TdA**2*( (3*kStarG**2*dKSGdR*(VarK-kStarG) &
+         + kStarG**3*(dKdR-dKSGdR))*d2FuncAg &
+         + kStarG**3*(VarK-kStarG)*d3FuncAg*dKSGdR )
 
     Afx = AxialFlux/(4*cPi*rVert)*sqrt(TdR/rVert) * &
-         ( FuncAg + (TdA**2*kStarG**3)/(4*rVert*TdR)*dFuncAg + TmpG**(5./2.)/(30*sqrt(3.)) &
+         ( FuncAg + (TdA**2*kStarG**3)/(4*rVert*TdR)*dFuncAg &
+         + TmpG**(5./2.)/(30*sqrt(3.)) &
          - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*rVert*TdR)*TmpH )
 
     dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*rVert)/sqrt(rVert*TdR) * &
          (1.5*sqrt(TmpG)*dGdX*x*VarK**3*dFuncAf + &
-         sqrt(TmpG)**3*(x*VarK**3*d2FuncAf*dKSFdX+(VarK**3+3*x*VarK**2*dKdX)*dFuncAf))
-    dAFXdR = (AxialFlux*sqrt(TdR))/(4*cPi)*rVert**(-3./2.) * ( dFuncAg*dKSGdR + &
-         TdA**2/(4*TdR)*((3*kStarG**2*rVert*dKSGdR-kStarG**3)/(rVert**2)*dFuncAg + &
-         kStarG**3/rVert*d2FuncAg*dKSGdR) + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
-         1./(12*sqrt(3.)*TdR)*((1.5*sqrt(TmpG)*dGdR*rVert-TmpG**(3./2.))/(rVert**2)*TmpH + &
+         sqrt(TmpG)**3*(x*VarK**3*d2FuncAf*dKSFdX &
+         + (VarK**3+3*x*VarK**2*dKdX)*dFuncAf))
+    dAFXdR = (AxialFlux*sqrt(TdR))/(4*cPi)*rVert**(-3./2.) &
+         * ( dFuncAg*dKSGdR + &
+         TdA**2/(4*TdR)*((3*kStarG**2*rVert*dKSGdR-kStarG**3) &
+         /(rVert**2)*dFuncAg + &
+         kStarG**3/rVert*d2FuncAg*dKSGdR) &
+         + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
+         1./(12*sqrt(3.)*TdR)*((1.5*sqrt(TmpG)*dGdR*rVert-TmpG**(3./2.)) &
+         /(rVert**2)*TmpH + &
          TmpG**(3./2.)/rVert*dHdR) ) - 3./(2*rVert)*Afx
 
     bTheta_D = (dAFRdX-dAFXdR) * ThetaHat_D
@@ -316,7 +311,7 @@ end module EEE_ModTDm
 ! ! Call the initiation function before calling calculation of the flux rope. When setting up the flux rope, we will need the strength of the straping field at the apex of the flux rope torus. This could be calculated directly from user_get_b0, or may be retrieved from a restart file, init file, etc. Ideally the flux rope direction (approximately the direction of the polarity inversion line) should be perpendicular to the direction of the straping field, such that things are symetric. Here I'm not checking that so you can have more flexibility with the flux rope, which is not consistent with the assumptions in the paper and could lead to a crash. Refer to the new paper Titov et al. (2018) "Regularized Biot-Savart Laws" for a better method to generate a flux rope.
 ! subroutine user_set_ics(iBlock)
 !   if (IsFirst) then
-!     call init_tdm14(IsCartesian)
+!     call init_tdm14
 !     Apex_D = get_tdm14_apexlocation()
 !     call user_get_b0(Apex_D(1),Apex_D(2),Apex_D(3),bStrap_D)
 !     IsFirst = .false.
