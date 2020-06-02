@@ -205,8 +205,8 @@ contains
     if(.not.UseCme) RETURN
 
     if (UseTD) then
-       call get_transformed_TD99fluxrope(x_D,B1_D,&
-            U1_D,n_step,Iteration_Number,Rho1,Time)
+       call get_transformed_TD99fluxrope(x_D, B1_D,&
+            U1_D, n_step, Iteration_Number, Rho1, Time)
 
        if(.not.DoBqField) U1_D=0.0
 
