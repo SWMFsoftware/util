@@ -49,7 +49,7 @@ module EEE_ModGL98
   ! to be a first zero of j_2 function, and then \beta_0 is chosen to satisfy
   ! Eq (*) with this value of .     
   !/
-  real :: Alpha0R0
+  real, parameter :: Alpha0R0 = 5.763854 
   !\
   ! Vector characteristic of the configuration: radius vector of the
   ! configuration center and B0 multiplied by unit vector along
@@ -60,8 +60,80 @@ module EEE_ModGL98
   !Misc
   !/
   real :: delta
-  real :: pBackground,rho2scl 
+  real :: pBackground,rho2scl
+  logical :: DoInit = .true.
 contains
+  subroutine init
+    use ModCoordTransform, ONLY: rot_matrix_y, rot_matrix_z
+    real :: RotateGL98_DD(3,3)
+    !-------------------------
+    DoInit=.false.
+    if(iProc==0)then
+       write(*,*) prefix
+       write(*,*) prefix, &
+            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
+       write(*,*) prefix
+       write(*,*) prefix, &
+            '            Gibson and Low CME is initiated!!!'
+       write(*,*) prefix
+       write(*,*) prefix, &
+            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
+       write(*,*) prefix
+       write(*,*) prefix, 'cme_a  = ',cme_a, '[rSun]'
+       write(*,*) prefix, 'cme_r1 = ',cme_r1,'[rSun]'
+       write(*,*) prefix, 'cme_r0 = ',cme_r0,'[rSun]'
+       write(*,*) prefix, 'cme_a1 = ',cme_a1,'[Gauss/rSun^2]'
+       write(*,*) prefix, 'pBackground = ', pBackgroundDim, '[dyne/cm^2]'
+       write(*,*) prefix, 'cme_rho2 = ',cme_rho2,'[kg/m^3]'
+       write(*,*) prefix, 'ModulationRho = ',ModulationRho
+       write(*,*) prefix, 'ModulationP   = ',ModulationP
+       write(*,*) prefix, 'LongitudeCme = ',LongitudeCme,'[degrees]'
+       write(*,*) prefix, 'LatitudeCme = ',LatitudeCme,'[degrees]'
+       write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
+       write(*,*) prefix
+    end if
+    pBackground = pBackgroundDim*Io2No_V(UnitP_)
+    rho2scl = cme_rho2*Si2No_V(UnitRho_)
+    delta = 0.1
+    alpha0 = Alpha0R0/cme_r0
+    Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
+    !\
+    ! The constant coefficient, Beta0 = -2.8723629148938019E-02 
+    ! This is Beta0 parameter for the GL particular configuration
+    !/
+    !/
+    !\
+    ! 4\pi in the formula below is incorrect. The GL98 paper is in
+    ! CGS system, while in dimensionless formulae used below it may not
+    ! appear. To mantain the capability with EEGGL, the multiplier 4\pi
+    ! is included into a definition of A1Scaled
+    !/    
+    B0 = - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2) &
+         *4.0*cPi
+    !\
+    ! The costant coefficient,
+    ! -4.0*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
+    !/
+    !\
+    ! Construct the rotational matrix RotateGL98_DD,
+    !/
+    RotateGL98_DD  = matmul( &
+         rot_matrix_z(-OrientationCme*cDegToRad),&
+         rot_matrix_y((LatitudeCme-90)*cDegToRad))
+    RotateGL98_DD = matmul(RotateGL98_DD, &
+         rot_matrix_z(-LongitudeCme*cDegToRad))
+    !\
+    ! In the rotated coordinates the coordinate vector from 
+    ! the heiocenter to the center of configuration is
+    ! (/0.0, 0.0, cme_r1/). Find this vector in the original
+    ! coodinate frame.
+    !/
+    XyzCenterConf_D = matmul((/0.0, 0.0, cme_r1/), RotateGL98_DD)
+    !\
+    ! The same for the magnetic field of configuration
+    !/
+    BConf_D = matmul((/B0, 0.0, 0.0/), RotateGL98_DD)
+  end subroutine init
   !=========================================
   subroutine set_parameters_GL98(NameCommand)
     use ModReadParam, ONLY: read_var
@@ -72,12 +144,12 @@ contains
     select case(NameCommand)
     case("#GL98FLUXROPE")
        call read_var('UseFluxRope',     DoAddFluxRope)
-       call read_var('cme_a',           cme_a)
-       call read_var('cme_r1',          cme_r1)
-       call read_var('cme_r0',          cme_r0)
+       call read_var('cme_a',           cme_a)       
+       call read_var('cme_r1',          cme_r1)      
+       call read_var('cme_r0',          cme_r0)     
        call read_var('cme_a1',          cme_a1)
        call read_var('cme_alpha',       cme_alpha)
-       call read_var('pBackground',     pBackgroundDim)
+       call read_var('pBackgroundCgs',  pBackgroundDim)
        call read_var('cme_rho2',        cme_rho2)
        call read_var('ModulationRho',   ModulationRho)
        call read_var('ModulationP',     ModulationP)
@@ -85,11 +157,11 @@ contains
        call read_var('LatitudeCme',    LatitudeCme)
        call read_var('OrientationCme', OrientationCme)
     case("#CME")
-       call read_var('Stretch',     cme_a)
-       call read_var('Distance',    cme_r1)
-       call read_var('Radius',      cme_r0)
-       call read_var('Bstrength',   cme_a1)
-       call read_var('pBackground',     pBackgroundDim)
+       call read_var('Stretch',     cme_a)      ![rSun]
+       call read_var('Distance',    cme_r1)     ![rSun]
+       call read_var('Radius',      cme_r0)     ![rSun]
+       call read_var('Bstrength',   cme_a1)     ![rSun]
+       call read_var('pBackgroundCgs',     pBackgroundDim) ![dyn/cm2]
        call read_var('ModulationRho',   ModulationRho)
        call read_var('ModulationP',     ModulationP)
     case default
@@ -154,10 +226,10 @@ contains
     !dBr2dr1     = -dBr2dr1; dBtheta2dr1 = -dBtheta2dr1
     !------------------------------------------------------------------------
     use ModNumConst,       ONLY: cPi, cDegToRad
-    use ModCoordTransform, ONLY: rot_matrix_y, rot_matrix_z, cross_product
+    use ModCoordTransform, ONLY: cross_product
     implicit none
     !\
-    ! Coordinates of the input point
+    ! Coordinates of the input point, in rSun
     !/
     real, intent(in) :: XyzIn_D(3)
     !\
@@ -213,80 +285,10 @@ contains
     !\ 
     ! Misc
     !/
+    real :: R2CrossB0_D(3)
     real :: Alpha0R2
-    real, dimension(3) :: R2CrossB0_D
-    real, dimension(3,3):: RotateGL98_DD
-    logical, save :: DoFirst_GL=.true.
     !------------------------------------------------------------------------
-    if (DoFirst_GL) then
-       DoFirst_GL=.false.
-       if(iProc==0)then
-          write(*,*) prefix
-          write(*,*) prefix, &
-               '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
-          write(*,*) prefix
-          write(*,*) prefix, &
-               '            Gibson and Low CME is initiated!!!'
-          write(*,*) prefix
-          write(*,*) prefix, &
-               '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
-          write(*,*) prefix
-          write(*,*) prefix, 'cme_a  = ',cme_a, '[rSun]'
-          write(*,*) prefix, 'cme_r1 = ',cme_r1,'[rSun]'
-          write(*,*) prefix, 'cme_r0 = ',cme_r0,'[rSun]'
-          write(*,*) prefix, 'cme_a1 = ',cme_a1,'[Gauss/rSun^2]'
-          write(*,*) prefix, 'pBackground = ', pBackgroundDim, '[dyne/cm^2]'
-          write(*,*) prefix, 'cme_rho2 = ',cme_rho2,'[kg/m^3]'
-          write(*,*) prefix, 'ModulationRho = ',ModulationRho
-          write(*,*) prefix, 'ModulationP   = ',ModulationP
-          write(*,*) prefix, 'LongitudeCme = ',LongitudeCme,'[degrees]'
-          write(*,*) prefix, 'LatitudeCme = ',LatitudeCme,'[degrees]'
-          write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
-          write(*,*) prefix
-       end if
-       pBackground = pBackgroundDim*Si2No_V(UnitP_)
-       rho2scl = cme_rho2*Si2No_V(UnitRho_)
-       delta = 0.1
-       Alpha0R0 = 5.763854
-       alpha0 = Alpha0R0/cme_r0
-       Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
-       !\
-       ! The constant coefficient, Beta0 = -2.8723629148938019E-02 
-       ! This is Beta0 parameter for the GL particular configuration
-       !/
-       !/
-       !\
-       ! 4\pi in the formula below is incorrect. The GL98 paper is in
-       ! CGS system, while in dimensionless formulae used below it may not
-       ! appear. To mantain the capability with EEGGL, the multiplier 4\pi
-       ! is included into a definition of A1Scaled
-       !/    
-       B0 = - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2) &
-            *4.0*cPi
-       !\
-       ! The costant coefficient,
-       ! -4.0*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
-       !/
-       !\
-       ! Construct the rotational matrix RotateGL98_DD,
-       !/
-       RotateGL98_DD  = matmul( &
-            rot_matrix_z(-OrientationCme*cDegToRad),&
-            rot_matrix_y((LatitudeCme-90)*cDegToRad))
-       RotateGL98_DD = matmul(RotateGL98_DD, &
-            rot_matrix_z(-LongitudeCme*cDegToRad))
-       !\
-       ! In the rotated coordinates the coordinate vector from 
-       ! the heiocenter to the center of configuration is
-       ! (/0.0, 0.0, cme_r1/). Find this vector in the original
-       ! coodinate frame.
-       !/
-       XyzCenterConf_D = matmul((/0.0, 0.0, cme_r1/), RotateGL98_DD)
-       !\
-       ! The same for the magnetic field of configuration
-       !/
-       BConf_D = matmul((/B0, 0.0, 0.0/), RotateGL98_DD)
-    end if
+    if (DoInit) call init
 
     R = sqrt(sum(XyzIn_D**2))
     ! Unit vector of radial direction
