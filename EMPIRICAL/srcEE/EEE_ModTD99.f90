@@ -149,18 +149,24 @@ contains
     else
        DoMaintainEpot = .false.
     endif
-
-    ! Compute the flux rope, and transform coordinates and vectors to
-    ! position the flux rope in the desired way::
-
+    !\
+    ! Compute the flux rope. 
+    !/
+    !\
+    ! Transform input coordinate vector to
+    ! the coordinate system of the flux rope  of the flux rope.
+    !/
     R1Face_D = matmul(Rotate_DD,RFace_D)
+    !\
+    ! Calculate the field of thin toroidal current filament
+    !/ 
     if (DoAddFluxRope) then
-       call compute_TD99_FluxRope(R1Face_D,B1FRope_D,RhoFRope)
+       call compute_TD99_FluxRope(R1Face_D, B1FRope_D, RhoFRope)
        if (DoRevCurrent) then
           Itemp = Itube; Itube = -Itemp
           atemp = aTube; aTube = aratio*atemp
-          call compute_TD99_FluxRope(R1Face_D,B1FRopeTemp_D)
-          B1FRope_D = B1FRope_D+B1FRopeTemp_D
+          call compute_TD99_FluxRope(R1Face_D, B1FRopeTemp_D)
+          B1FRope_D = B1FRope_D + B1FRopeTemp_D
           Itube = Itemp
           aTube = atemp
        endif
@@ -169,6 +175,9 @@ contains
        RhoFRope  = 0.0
     endif
     U1VorC_D = 0.0
+    !\
+    ! Add the field of two magnetic charges
+    !/
     if (DoBqField) then
        if (present(Time)) then
           call compute_TD99_BqField(R1Face_D,B1qField_D,&
@@ -177,19 +186,23 @@ contains
           call compute_TD99_BqField(R1Face_D,B1qField_D,&
                U1VorC_D,DoMaintainEpot,n_step,Iteration_Number)
        endif
-       B1FRope_D = B1FRope_D+B1qField_D
+       B1FRope_D = B1FRope_D + B1qField_D
     endif
-    BFRope_D = matmul(B1FRope_D,Rotate_DD)
-    UVorC_D  = matmul(U1VorC_D,Rotate_DD)
+    !\
+    ! Convert the field and velocity vectors back to the solar 
+    ! corona model
+    !/
+    BFRope_D = matmul(B1FRope_D, Rotate_DD)
+    UVorC_D  = matmul(U1VorC_D,  Rotate_DD)
 
     ! Compute the tangential component of the velocity field, UVorT_D,
     ! associated with the potential electric field, Epot::
 
-    UVorR   = dot_product(RFace_D,UVorC_D)
-    UVorT_D = UVorC_D-RFace_D*UVorR
+    UVorR   = dot_product(RFace_D, UVorC_D)
+    UVorT_D = UVorC_D - RFace_D*UVorR
 
     BFRope_D = BFRope_D*No2Si_V(UnitB_)
-    UVorT_D = UVorT_D*No2Si_V(UnitU_)
+    UVorT_D  = UVorT_D *No2Si_V(UnitU_)
     RhoFRope = RhoFRope*No2Si_V(UnitRho_)
 
   end subroutine get_transformed_TD99fluxrope
@@ -210,7 +223,7 @@ contains
     AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
     FootSepar  = Rtube*sin(0.5*AlphaRope)/1.0e6         ! in [Mm]
     LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*(log(8.0 &
-         *(Rtube-Depth)/aTube) - 1.75)            ! in [H]
+         *(Rtube - Depth)/aTube) - 1.75)            ! in [H]
     WFRope     = 0.5*LInduct*Itube**2*1.0e7             ! in [ergs]
 
     ! Compute the average density inside the flux rope assuming that the
@@ -432,7 +445,7 @@ contains
 
   !=====================================================================!
 
-  subroutine compute_TD99_FluxRope(RFace_D,BFRope_D,RhoFRope)
+  subroutine compute_TD99_FluxRope(RFace_D, BFRope_D, RhoFRope)
     use ModCoordTransform, ONLY: cross_product
     !\__                                                             __/!
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
@@ -502,7 +515,7 @@ contains
     ! Define the model input, Kappa
 
     Kappa = 2.0*sqrt(Rperp*Rtube/RPlus2)
-    if (RMinus.ge.aTube) then
+    if (RMinus >= aTube) then
        ! Compute the field and density outside the current torus   
        !\
        !Initialize redundant output
@@ -527,7 +540,7 @@ contains
        
        BFRope_D =B0*(Rtube/sqrt(RPlus2))**3*&
             (dAkDk*(2*xxx*XyzRel_D + (RTube**2 - R2)*UnitX_D)/RPlus2 &
-            +Ak*UnitX_D)
+            + Ak*UnitX_D)
        !No toroidal field outside the filament
        BIPhi_D = 0.0
     else
@@ -546,10 +559,10 @@ contains
        !2.    
        ! Define the model input, KappaA. A given point is charakterized by
        ! two coordinates, say, RPepr and RMinus. In this case,
-       ! if we denote Kappa=known_function(RPerp,RMinus), then 
-       ! KappaA=known_function(RPepr,ATube)
+       ! if we denote Kappa = known_function(RPerp,RMinus), then 
+       ! KappaA = known_function(RPepr,ATube)
        KappaA = 2.0*sqrt(Rperp*Rtube &
-            /(4.0*Rperp*Rtube+aTube**2))
+            /(4.0*Rperp*Rtube + aTube**2))
        call calc_elliptic_int_1kind(KappaA,KElliptic)
        call calc_elliptic_int_2kind(KappaA,EElliptic)
        !\
@@ -560,19 +573,19 @@ contains
        dAkdk   = (2.0-KappaA**2)*EElliptic &
             /(KappaA**2*(1.0-KappaA**2)) &
             - 2.0*KElliptic/KappaA**2
-       ! Compute the vector potential, AI by smpoothly continuing the 
+       ! Compute the vector potential, AI by smoothly continuing the 
        ! value from the boundary
        AI = Ak + dAkdk*(Kappa - KappaA)
-       d2Akdk2A = ((7.0*KappaA**2-4.0 &
-            - KappaA**4)*EElliptic/(1.0-KappaA**2) &
-            + (4.0-5.0*KappaA**2)*KElliptic) &
+       d2Akdk2A = ((7.0*KappaA**2 - 4.0 &
+            - KappaA**4)*EElliptic/(1.0 - KappaA**2) &
+            + (4.0 - 5.0*KappaA**2)*KElliptic) &
             /(KappaA**3*(1.0-KappaA**2))
        ! Derive the BI field from the corresponding vector potential,
        ! AI (this involves the comp. of some nasty derivatives)::
 
 
        dKappaAdr = KappaA*aTube**2/&
-            (4.0*Rperp*Rtube+aTube**2)
+            (4.0*Rperp*Rtube + aTube**2)
        dKappadx  = 2.0*xxx*Kappa/RPlus2
        dKappadr  = Kappa*(Rtube**2 - R2)/RPlus2
 
@@ -586,12 +599,12 @@ contains
 
        BFRope_D =  B0*(4.0/(Kappa**3*cPi))*(Rtube/sqrt(RPlus2))**3*&
             (dAIdx*XyzRel_D + (dAIdr+d2Akdk2A*dKappaAdr &
-            *(Kappa-KappaA)+AI)*UnitX_D)
+            *(Kappa - KappaA)+AI)*UnitX_D)
        ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
        ! produced by the azimuthal current Iphi. This is needed to ensure
        ! that the flux rope configuration is force free. 
        BIPhi_D = abs(Itube)/(2.0*cPi*RPerp*aTube**2) &
-            *sqrt(2.0*(aTube**2-RMinus**2))*&
+            *sqrt(2.0*(aTube**2 - RMinus**2))*&
             cross_product(UnitX_D,XyzRel_D)
     end if
     ! Add the field of the azimuthal current, Iphi::
