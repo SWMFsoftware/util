@@ -12,8 +12,7 @@ module EEE_ModGL98
   public :: get_GL98_fluxrope
   public :: adjust_GL98_fluxrope
 
-  real :: cme_a=0.0, cme_r1=0.0, cme_r0=0.0, cme_a1=0.0, cme_alpha=0.0
-  real :: pBackgroundDim =0.0, cme_rho2=0.0
+  real :: cme_a=0.0, cme_r1=0.0, cme_r0=0.0, cme_a1=0.0
 
   real :: ModulationRho=0.0, ModulationP=0.0
   !\
@@ -60,7 +59,6 @@ module EEE_ModGL98
   !Misc
   !/
   real :: delta
-  real :: pBackground,rho2scl
   logical :: DoInit = .true.
 contains
   subroutine init
@@ -83,8 +81,6 @@ contains
        write(*,*) prefix, 'cme_r1 = ',cme_r1,'[rSun]'
        write(*,*) prefix, 'cme_r0 = ',cme_r0,'[rSun]'
        write(*,*) prefix, 'cme_a1 = ',cme_a1,'[Gauss/rSun^2]'
-       write(*,*) prefix, 'pBackground = ', pBackgroundDim, '[dyne/cm^2]'
-       write(*,*) prefix, 'cme_rho2 = ',cme_rho2,'[kg/m^3]'
        write(*,*) prefix, 'ModulationRho = ',ModulationRho
        write(*,*) prefix, 'ModulationP   = ',ModulationP
        write(*,*) prefix, 'LongitudeCme = ',LongitudeCme,'[degrees]'
@@ -92,8 +88,6 @@ contains
        write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
        write(*,*) prefix
     end if
-    pBackground = pBackgroundDim*Io2No_V(UnitP_)
-    rho2scl = cme_rho2*Si2No_V(UnitRho_)
     delta = 0.1
     alpha0 = Alpha0R0/cme_r0
     Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
@@ -148,9 +142,6 @@ contains
        call read_var('cme_r1',          cme_r1)      
        call read_var('cme_r0',          cme_r0)     
        call read_var('cme_a1',          cme_a1)
-       call read_var('cme_alpha',       cme_alpha)
-       call read_var('pBackgroundCgs',  pBackgroundDim)
-       call read_var('cme_rho2',        cme_rho2)
        call read_var('ModulationRho',   ModulationRho)
        call read_var('ModulationP',     ModulationP)
        call read_var('LongitudeCme',   LongitudeCme)
@@ -161,7 +152,6 @@ contains
        call read_var('Distance',    cme_r1)     ![rSun]
        call read_var('Radius',      cme_r0)     ![rSun]
        call read_var('Bstrength',   cme_a1)     ![rSun]
-       call read_var('pBackgroundCgs',     pBackgroundDim) ![dyn/cm2]
        call read_var('ModulationRho',   ModulationRho)
        call read_var('ModulationP',     ModulationP)
     case default
@@ -326,7 +316,7 @@ contains
        !\
        ! Compute kinetic gas pressure
        !/
-       PConf     = pBackground + Beta0*(Alpha0**2)*&
+       PConf     =  Beta0*(Alpha0**2)*&
             sum(R2CrossB0_D**2)*(spher_bessel_1_over_x(Alpha0R2) - Beta0)
        !If we use stretch:
        Br1 = sum(eBoldR_D*B_D) 
@@ -334,11 +324,11 @@ contains
        GradPTotal_D =&
             Alpha0**2*(B0**2*XyzConf_D - BConf_D*sum(BConf_D*XyzConf_D))*&
             (spher_bessel_1_over_x(Alpha0R2)**2 - Beta0**2)&
-            -Alpha0*(XyzConf_D/Distance2ConfCenter**3)*sum(R2CrossB0_D**2)*&
+            - Alpha0*(XyzConf_D/Distance2ConfCenter**3)*sum(R2CrossB0_D**2)*&
             spher_bessel_2(Alpha0R2)*spher_bessel_1(Alpha0R2) &
-            -4.0*B0**2*(XyzConf_D/Distance2ConfCenter**2)*&
+            - 4.0*B0**2*(XyzConf_D/Distance2ConfCenter**2)*&
             spher_bessel_2(Alpha0R2)*(spher_bessel_1_over_x(Alpha0R2) - Beta0)&
-            +(XyzConf_D*sum(BConf_D*XyzConf_D)**2/Distance2ConfCenter**4 - &
+            + (XyzConf_D*sum(BConf_D*XyzConf_D)**2/Distance2ConfCenter**4 - &
             BConf_D*sum(BConf_D*XyzConf_D)/Distance2ConfCenter**2&
             )*(spher_bessel_2(Alpha0R2)**2 - 4.0*spher_bessel_2(Alpha0R2)*&
             (spher_bessel_1_over_x(Alpha0R2) - Beta0)) +&
@@ -355,25 +345,17 @@ contains
        !\
        ! PLASMA DENSITY with stretching transformation
        !/
-       gGravity   = (abs(Gbody)/(r**2) + cme_alpha*r)
+       gGravity   = abs(Gbody)/(r**2)
        RadialTension = (cme_a/r)*(RTransformed/r)**2*(&
             (2.0 + cme_a/r)*(BSquared/RTransformed + DPTotalDR1) &
            + 2.0*PConf/RTransformed - (3.0 + 2.0*cme_a/r)*Br1**2/r)
        rho_GL98 = RadialTension/gGravity
-       !\
-       ! Add background density
-       !/
-       rho_GL98 = rho_GL98 + rho2scl/r**3
+
        !\
        ! PLASMA PRESSURE with contraction transformation
        !/
        p_GL98 = PConf*(RTransformed/r)**2 &
             - (1.0/2.0)*((RTransformed/r)**2)*((RTransformed/r)**2 - 1.0)*Br1**2 
-       !\
-       ! Add background pressure
-       !/
-       p_GL98 = p_GL98 + abs(Gbody)*rho2scl/(4.0*r**4)
-
        rho_GL98 = rho_GL98*No2Si_V(UnitRho_)
        p_GL98 = p_GL98*No2Si_V(UnitP_)
        B_D = B_D*No2Si_V(UnitB_)
