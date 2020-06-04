@@ -19,16 +19,20 @@ Module EEE_ModMain
 
 contains
   !============================================================================
-  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma)
+  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn)
     use EEE_ModCommonVariables
     implicit none
 
-    real, intent(in) :: BodyNDim,BodyTDim,gamma
+    real, intent(in)             :: BodyNDim,BodyTDim,gamma
+    integer, optional, intent(in):: iCommIn
 
     integer :: iComm, iError
     !--------------------------------------------------------------------------
-
-    iComm = MPI_COMM_WORLD
+    if(present(iCommIn))then
+       iComm = iCommIn
+    else
+       iComm = MPI_COMM_WORLD
+    end if
     call MPI_COMM_RANK(iComm,iProc,iError)
 
     g = gamma
@@ -130,19 +134,19 @@ contains
           select case(TypeCme)
           case("TITOV-DEMOULIN", "TD")
              UseTD = .true.
-             DoAddTD = .true.
+             DoAddTD = DoAddFluxRope
              call set_parameters_TD99(NameCommand)
           case("TD14")
              UseTD14 = .true.
-             DoAddTD14 = .true.
+             DoAddTD14 = DoAddFluxRope
              call set_parameters_tdm14(NameCommand)
           case("GIBSON-LOW", "GL")
              UseGL = .true.
-             DoAddGL = .true.
+             DoAddGL = DoAddFluxRope
              call set_parameters_GL98(NameCommand)
           case("SPHEROMAK")
              UseSpheromak = .true.
-             DoAddSpheromak = .true.
+             DoAddSpheromak = DoAddFluxRope
              call set_parameters_GL98("#SPHEROMAK")
           case("BREAKOUT")
              UseShearFlow = .true.
@@ -269,13 +273,11 @@ contains
        call get_transformed_TD99fluxrope(x_D, B1_D, &
             U1_D, n_step, iteration_number, Rho1)
        Rho = Rho + Rho1; U_D = U_D + U1_D; B_D = B_D + B1_D
-       DoAddTD = .false.
     endif
 
     if(DoAddTD14)then
        call calc_tdm14_bfield(x_D, B1_D, Bstrap_D)
        B_D = B_D + B1_D
-       DoAddTD14 = .false.
     end if
 
     if(DoAddGL)then
@@ -283,14 +285,12 @@ contains
        call get_GL98_fluxrope(x_D, Rho1, p1, B1_D)
        call adjust_GL98_fluxrope(Rho1, p1)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
-       DoAddGL = .false.
     end if
 
     if(DoAddSpheromak)then
        call get_GL98_fluxrope(x_D, Rho1, p1, B1_D, U1_D)
        Rho = Rho + Rho1; B_D = B_D + B1_D
        p = p + p1; U_D = U_D + U1_D
-       DoAddSpheromak = .false.
     end if
     if(UseCms) call get_cms(x_D, B_D)
 
