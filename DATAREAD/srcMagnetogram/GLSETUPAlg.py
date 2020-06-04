@@ -308,7 +308,6 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    FileId.write("%-10.2f          Distance \n"% Distance)
    FileId.write("%-10.2f          Radius \n"% GLRadius)
    FileId.write("%-10.2f          BStrength \n"% GL_Bstrength)
-   FileId.write("0.0                 Density \n")
    FileId.write("1.0                 ModulationRho \n")
    FileId.write("1.0                 ModulationP \n")
    FileId.write(" \n")
