@@ -270,7 +270,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       #Flux rope helicity is determined by the hemisphere, northern
       #hemisphere - negative helicity.
    
-   GL_Bstrength=GL_poloidal/(21.457435*GLRadius**4)
+   GL_Bstrength=13.1687517342067082*GL_poloidal/(21.457435*GLRadius**2)
    if GL_Latitude > 0: 
       GL_Bstrength = -GL_Bstrength
       
@@ -278,7 +278,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
      #Recommended GL flux rope parameters
    Distance = 1.8
    Stretch  = 0.6
-   
+   ApexHeight = GLRadius + Distance - Stretch - 1.0
    print ('========================================')
    print ('The Recommended GL FLux Rope Parameters')
    print ('========================================')
@@ -290,8 +290,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    print ('               Bstrength: %6.2f'%(GL_Bstrength))
    print ('         Stretch (FIXED): %6.2f'%(Stretch))
    print ('        Distance (FIXED): %6.2f'%(Distance))
-   print ('             Height [Rs]: %6.2f'%(
-      GLRadius + Distance - Stretch - 1.0))
+   print ('             Height [Rs]: %6.2f'%(ApexHeight))
    print ('      Angular size [deg]: %6.2f'%(
       2*GLRadius/Distance*Rad2Deg))
    print (' Poloidal flux [1E21 Mx]: %6.2f'%(GL_poloidal))
@@ -304,12 +303,10 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    FileId.write("%-10.2f          LatitudeCme \n"% GL_Latitude)
    FileId.write("%-10.2f          OrientationCme \n"% GL_Orientation)
    FileId.write("GL                  TypeCme \n")
-   FileId.write("%-10.2f          Stretch \n"% Stretch)
-   FileId.write("%-10.2f          Distance \n"% Distance)
-   FileId.write("%-10.2f          Radius \n"% GLRadius)
    FileId.write("%-10.2f          BStrength \n"% GL_Bstrength)
-   FileId.write("1.0                 ModulationRho \n")
-   FileId.write("1.0                 ModulationP \n")
+   FileId.write("%-10.2f          Radius \n"% GLRadius)
+   FileId.write("%-10.2f          aStretch \n"% Stretch)
+   FileId.write("%-10.2f          ApexHeight \n"% Height)
    FileId.write(" \n")
    FileId.write("#END \n")
    FileId.close()

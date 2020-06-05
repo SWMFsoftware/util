@@ -12,27 +12,46 @@ module EEE_ModGL98
   public :: get_GL98_fluxrope
   public :: adjust_GL98_fluxrope
 
-  real :: cme_a=0.0, cme_r1=0.0, cme_r0=0.0, cme_a1=0.0
+  ! Geometric characteristics of the superimposed configuration:
 
-  real :: ModulationRho=0.0, ModulationP=0.0
-  !\
+  ! contraction distance as in   r --> r -a
+  real :: aStretch = 0.0 
+
+  ! distance from the magnetic configuration center to heliocenter
+  real :: rDistance1 = 0.0 
+
+  ! Radius of the magnetic configuration (spheromac) 
+  real :: Radius = 0.0 
+
+  ! This is the combination of the above parameters:
+  !
+  ! 1[rSun] + ApexHeight + aStretch = rDistance1 + Radius
+  !
+  ! Not used in calculations, however, is more easy input parameter
+  ! than rDistance1.   
+  real :: ApexHeight = 0.0
+  
+
+  real :: ModulationRho = 0.0, ModulationP = 0.0
+  
   !The derivative of current over flux function
   !(\mu_0)dI/d\psi) has the dimentions of inverse length
-  !/
+  
   real :: Alpha0
-  !\
+  
   ! Characteristic value of magnetic field of the spheromak
   ! configuration: the field in the center of configuration
   ! equals 2(1/3 -\beta_0)B_0 \approx 0.7 B_0:
-  !/ 
-  real :: B0
-  !\
+   
+  real :: B0      ! dimensionless
+  real :: B0Dim   ! in Gauss
+  
   ! Characteristic ratio of plasma pressure to B_0^2/\mu_0
   ! Exact definition in terms of the pressure derivative over
   ! the flux function: \beta_0=\mu_0/(B_0 Alpha_0^2) dp/d\psi 
-  !/
+  
   real :: Beta0
-  !\
+  
   ! Dimensionless product of R0 by Alpha0. For any given \beta_0,
   ! this product is found from the equation, 
   !
@@ -49,16 +68,16 @@ module EEE_ModGL98
   ! Eq (*) with this value of .     
   !/
   real, parameter :: Alpha0R0 = 5.763854 
-  !\
+  !
   ! Vector characteristic of the configuration: radius vector of the
   ! configuration center and B0 multiplied by unit vector along
   ! the axis of symmetry
-  !/
+  !
   real,dimension(3) :: XyzCenterConf_D, BConf_D
   !\
   !Misc
   !/
-  real :: delta
+  real, parameter ::    delta = 0.1
   logical :: DoInit = .true.
 contains
   subroutine init
@@ -77,83 +96,92 @@ contains
        write(*,*) prefix, &
             '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
-       write(*,*) prefix, 'cme_a  = ',cme_a, '[rSun]'
-       write(*,*) prefix, 'cme_r1 = ',cme_r1,'[rSun]'
-       write(*,*) prefix, 'cme_r0 = ',cme_r0,'[rSun]'
-       write(*,*) prefix, 'cme_a1 = ',cme_a1,'[Gauss/rSun^2]'
-       write(*,*) prefix, 'ModulationRho = ',ModulationRho
-       write(*,*) prefix, 'ModulationP   = ',ModulationP
-       write(*,*) prefix, 'LongitudeCme = ',LongitudeCme,'[degrees]'
-       write(*,*) prefix, 'LatitudeCme = ',LatitudeCme,'[degrees]'
+       write(*,*) prefix, 'B0Dim          = '    ,B0    ,'[Gauss]'
+       write(*,*) prefix, 'Radius         = ',Radius,'[rSun]'
+       write(*,*) prefix, 'AStretch       = ',AStretch, '[rSun]'
+       write(*,*) prefix, 'rDistance1     = ',rDistance1,'[rSun]'
+       write(*,*) prefix, 'ApexHeight     = ', ApexHeight,'[rSun]'
+       write(*,*) prefix, 'ModulationRho  = ',ModulationRho
+       write(*,*) prefix, 'ModulationP    = ',ModulationP
+       write(*,*) prefix, 'LongitudeCme   = ',LongitudeCme,'[degrees]'
+       write(*,*) prefix, 'LatitudeCme    = ',LatitudeCme,'[degrees]'
        write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
        write(*,*) prefix
     end if
-    delta = 0.1
-    alpha0 = Alpha0R0/cme_r0
+    alpha0 = Alpha0R0/Radius
     Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
-    !\
+    
     ! The constant coefficient, Beta0 = -2.8723629148938019E-02 
     ! This is Beta0 parameter for the GL particular configuration
-    !/
-    !/
-    !\
+    
+    
     ! 4\pi in the formula below is incorrect. The GL98 paper is in
     ! CGS system, while in dimensionless formulae used below it may not
     ! appear. To mantain the capability with EEGGL, the multiplier 4\pi
     ! is included into a definition of A1Scaled
-    !/    
-    B0 = - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2) &
-         *4.0*cPi
-    !\
+       
+    B0 = B0Dim*Io2No_V(UnitB_)
+
+    !Relation between the cme_a1 parameter by Gibson-Low and B0
+    !B0= - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2)*4.0*cPi
+    
     ! The costant coefficient,
     ! -4.0*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
-    !/
-    !\
+    
+    
     ! Construct the rotational matrix RotateGL98_DD,
-    !/
+    
     RotateGL98_DD  = matmul( &
          rot_matrix_z(-OrientationCme*cDegToRad),&
          rot_matrix_y((LatitudeCme-90)*cDegToRad))
     RotateGL98_DD = matmul(RotateGL98_DD, &
          rot_matrix_z(-LongitudeCme*cDegToRad))
-    !\
+    
     ! In the rotated coordinates the coordinate vector from 
     ! the heiocenter to the center of configuration is
-    ! (/0.0, 0.0, cme_r1/). Find this vector in the original
+    ! (/0.0, 0.0, rDistance1/). Find this vector in the original
     ! coodinate frame.
-    !/
-    XyzCenterConf_D = matmul((/0.0, 0.0, cme_r1/), RotateGL98_DD)
-    !\
+    
+    XyzCenterConf_D = matmul((/0.0, 0.0, rDistance1/), RotateGL98_DD)
+    
     ! The same for the magnetic field of configuration
-    !/
+    
     BConf_D = matmul((/B0, 0.0, 0.0/), RotateGL98_DD)
   end subroutine init
   !=========================================
   subroutine set_parameters_GL98(NameCommand)
     use ModReadParam, ONLY: read_var
     character(len=*), intent(in):: NameCommand
-
+    integer :: iError
+    
     character(len=*), parameter:: NameSub = 'set_parameters_GL98'
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#GL98FLUXROPE")
        call read_var('UseFluxRope',     DoAddFluxRope)
-       call read_var('cme_a',           cme_a)       
-       call read_var('cme_r1',          cme_r1)      
-       call read_var('cme_r0',          cme_r0)     
-       call read_var('cme_a1',          cme_a1)
+       call read_var('aStretch',           aStretch)       
+       call read_var('rDistance1',          rDistance1)      
+       call read_var('Radius',          Radius)     
+       call read_var('Bstrength',       B0Dim) 
        call read_var('ModulationRho',   ModulationRho)
        call read_var('ModulationP',     ModulationP)
        call read_var('LongitudeCme',   LongitudeCme)
        call read_var('LatitudeCme',    LatitudeCme)
        call read_var('OrientationCme', OrientationCme)
     case("#CME")
-       call read_var('Stretch',     cme_a)      ![rSun]
-       call read_var('Distance',    cme_r1)     ![rSun]
-       call read_var('Radius',      cme_r0)     ![rSun]
-       call read_var('Bstrength',   cme_a1)     ![rSun]
-       call read_var('ModulationRho',   ModulationRho)
-       call read_var('ModulationP',     ModulationP)
+       call read_var('BStrength',   B0Dim)         ![Gauss]
+       call read_var('Radius',      Radius)        ![rSun]
+       call read_var('aStretch',     aStretch)      ![rSun]
+       call read_var('ApexHeight',  ApexHeight)    ![rSun]
+       rDistance1 = 1.0 + ApexHeight + aStretch - Radius
+       call read_var('ModulationRho',   ModulationRho, iError)
+       if(iError /= 0)then
+          !It is allowed not to have the last two lines
+          ModulationRho = 0.0; ModulationP = 0.0
+          RETURN
+       else
+          call read_var('ModulationP',     ModulationP)
+       end if
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -165,20 +193,16 @@ contains
   subroutine get_GL98_fluxrope(XyzIn_D,rho_GL98,p_GL98,B_D,U_D)
     !--------------------------------------------------------------------------
     ! Definition of Parameters used for the initial state
-    !   cme_a    = contraction distance as in   r --> r -a
-    !   cme_r1   = distance of flux rope from sun center = 1.2
-    !   cme_r0   = radius of flux rope
-    !   cme_a1   = constant for setting pressure in flux rope
+    !   AStretch    = contraction distance as in   r --> r -a
+    !   rDistance1  = distance from the flux rope center to heliocenter
+    !   Radius0     = radius of flux rope
     !
     ! OrientationCME : The counter-clockwise angle between the fluxrope
     !                  axis and the solar equator.
-    ! cme_a1 : The sign of cme_a1 (magnitude of the fluxrope field strength)
-    !          sets the helicity Positive (negative) value results in
-    !          postive or left handed or sinistral (negative or right handed
-    !          or dextral) helicity.
+    
     !\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\//////////////////////////////////
     !=====================================================================
-    !\
+    !
     ! Calculates magnetic field, pressure and density for a coronal flux
     ! rope capable of self-similar expansion and erupting in a CME.
     ! The analytical solution is taken from Gibson and Low 
@@ -186,7 +210,7 @@ contains
     !
     ! Written by Chip Manchester Jan 18 2001
     ! Rewritten by Chip Nov 29 2001 for flux rope injection
-    !/
+    !
     !   Bug fixes
     !   March 18       dpres_1dr1 = cme_a1*(dA2dr*dr2dr1 + dA2dth*dth2dr1)
     !   change to..... dpres_1dr1 = a1scl*(dA2dr*dr2dr1 + dA2dth*dth2dr1)
@@ -214,6 +238,12 @@ contains
     !Therefore, the sign in the magnetic field derivatives should
     !be changed too. Add two more operators prior to end if:
     !dBr2dr1     = -dBr2dr1; dBtheta2dr1 = -dBtheta2dr1
+    !
+    !Igor 2020-06-04 finalized implementation to get it match to the paper
+    !   Borovikov, D., I. V. Sokolov, W. B. Manchester, M. Jin, and
+    !   T. I. Gombosi (2017), Eruptive event generator based on the Gibson-Low
+    !   magnetic configuration, J. Geophys. Res. Space Physics, 122, 7979–7984,
+    !   doi:10.1002/2017JA024304.
     !------------------------------------------------------------------------
     use ModNumConst,       ONLY: cPi, cDegToRad
     use ModCoordTransform, ONLY: cross_product
@@ -286,7 +316,7 @@ contains
     !\
     ! Stretched CARTESIAN COORDINATES 
     !/
-    RTransformed = R + cme_a
+    RTransformed = R + AStretch
     XyzTransformed_D = eBoldR_D*RTransformed
     !COORDINATES RELATIVE TO CME FLUX ROPE CENTER
     !----------------------------------------------------------------
@@ -296,7 +326,7 @@ contains
        XyzConf_D = XyzConf_D*(delta/Distance2ConfCenter)
        Distance2ConfCenter = delta
     end if
-    if (Distance2ConfCenter <= cme_r0) then
+    if (Distance2ConfCenter <= Radius) then
        !\
        ! INSIDE THE MAGNETIC FLUX ROPE REGION
        !/
@@ -309,10 +339,10 @@ contains
        !/ 
        R2CrossB0_D = cross_product(XyzConf_D,BConf_D) 
        B_D = (2.0*BConf_D &
-            + sign(Alpha0,cme_a1)* &  !Helicity
+            + sign(Alpha0, B0)* &  !Helicity
             R2CrossB0_D)*(spher_bessel_1_over_x(Alpha0R2) - Beta0) &
             + spher_bessel_2(Alpha0R2)/Distance2ConfCenter**2*&
-            cross_product(XyzConf_D,R2CrossB0_D) 
+            cross_product(XyzConf_D, R2CrossB0_D) 
        !\
        ! Compute kinetic gas pressure
        !/
@@ -341,14 +371,14 @@ contains
        !\
        ! MAGNETIC FIELD transformed with stretching transformation
        !/
-       B_D = (RTransformed/r)*B_D + cme_a*XyzTransformed_D*Br1/r**2
+       B_D = (RTransformed/r)*B_D + AStretch*XyzTransformed_D*Br1/r**2
        !\
        ! PLASMA DENSITY with stretching transformation
        !/
        gGravity   = abs(Gbody)/(r**2)
-       RadialTension = (cme_a/r)*(RTransformed/r)**2*(&
-            (2.0 + cme_a/r)*(BSquared/RTransformed + DPTotalDR1) &
-           + 2.0*PConf/RTransformed - (3.0 + 2.0*cme_a/r)*Br1**2/r)
+       RadialTension = (AStretch/r)*(RTransformed/r)**2*(&
+            (2.0 + AStretch/r)*(BSquared/RTransformed + DPTotalDR1) &
+           + 2.0*PConf/RTransformed - (3.0 + 2.0*AStretch/r)*Br1**2/r)
        rho_GL98 = RadialTension/gGravity
 
        !\
@@ -382,7 +412,7 @@ contains
          spher_bessel_1_over_x = (sin(x) - x*cos(x))/x**3
       end if
     end function spher_bessel_1_over_x
-    !===================
+    !================== =
     real function spher_bessel_2(x)
       real, intent(in) :: x
       spher_bessel_2 = &
@@ -402,21 +432,12 @@ contains
     ! Add just `ModulationRho' times of the CME mass
     ! to the mass density::
     !/
-    if(ModulationRho*Rho <= 0.0)then
-       Rho = Rho
-    else
-       Rho = ModulationRho*Rho
-    end if
-
+    if(ModulationRho*Rho > 0.0) Rho = ModulationRho*Rho
     !\
     ! Add just `ModulationP' times of the CME pressure
     ! to the kinetic pressure::
     !/
-    if(ModulationP*p <= 0.0) then
-       p = p
-    else
-       p = ModulationP*p
-    end if
+    if(ModulationP*p > 0.0) p = ModulationP*p
 
   end subroutine adjust_GL98_fluxrope
 
