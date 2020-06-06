@@ -82,7 +82,7 @@ module EEE_ModGL98
 contains
   subroutine init
     use ModCoordTransform, ONLY: rot_matrix_y, rot_matrix_z
-    real :: RotateGL98_DD(3,3)
+    real :: Rotate_DD(3,3)
     !-------------------------
     DoInit=.false.
     if(iProc==0)then
@@ -129,12 +129,12 @@ contains
     ! -4.0*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
     
     
-    ! Construct the rotational matrix RotateGL98_DD,
+    ! Construct the rotational matrix Rotate_DD,
     
-    RotateGL98_DD  = matmul( &
+    Rotate_DD  = matmul( &
          rot_matrix_z(-OrientationCme*cDegToRad),&
          rot_matrix_y((LatitudeCme-90)*cDegToRad))
-    RotateGL98_DD = matmul(RotateGL98_DD, &
+    Rotate_DD = matmul(Rotate_DD, &
          rot_matrix_z(-LongitudeCme*cDegToRad))
     
     ! In the rotated coordinates the coordinate vector from 
@@ -142,11 +142,11 @@ contains
     ! (/0.0, 0.0, rDistance1/). Find this vector in the original
     ! coodinate frame.
     
-    XyzCenterConf_D = matmul((/0.0, 0.0, rDistance1/), RotateGL98_DD)
+    XyzCenterConf_D = matmul((/0.0, 0.0, rDistance1/), Rotate_DD)
     
     ! The same for the magnetic field of configuration
     
-    BConf_D = matmul((/B0, 0.0, 0.0/), RotateGL98_DD)
+    BConf_D = matmul((/B0, 0.0, 0.0/), Rotate_DD)
   end subroutine init
   !=========================================
   subroutine set_parameters_GL98(NameCommand)
