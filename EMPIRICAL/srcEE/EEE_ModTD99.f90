@@ -19,17 +19,24 @@ module EEE_ModTD99
   real    :: StartTime
 
   !
-  ! Variables related to the position of the flux rope::
+  ! Variables related to the position of the flux rope:
+  !
+  ! internal inductance releted to \mu_0 R_\infty
   real, parameter :: Li=0.5
 
   !
   ! Variables related to the flux rope properties::
-  real :: ITube = 0.0, RTube  = 0.0, aTube = 0.0
-  real :: Depth = 0.0, aRatio = 0.0
+  real :: ITubeSi = 0.0, ITube = 0.0
+  !Major radius (in fact - R_\infty, the radius of the circumference
+  !at which the toroidal coordinate, u, tends to infinity
+  real :: RTube  = 0.0
+  !Minor radius:
+  real :: aTube = 0.0
+  !Negative height (depth) of the current tube center with respect to
+  !the photosphere level.
+  real :: Depth = 0.0
   real :: Mass = 0.0
   real :: InvH0=0.0, Rho0=0.0
-  real :: ItubeSaved=0.0
-
   !
   ! Variables related to the properties of the strapping field, Bq::
   real :: VTransX=1.500E+03             !in [m/s]
@@ -38,8 +45,8 @@ module EEE_ModTD99
 
   ! direction of the magnetic moment of the configuration
   real :: UnitX_D(3)
-  ! To be renamed: magnetic field at the center of configuration
-  real :: B0
+  ! magnetic field of the current tube at the center of configuration
+  real :: BcTube, BcTubeDim
   ! Magnetic configuration center
   real :: XyzCenter_D(3)
 contains
@@ -57,7 +64,7 @@ contains
        call read_var('UseCme',              UseCme)
        call read_var('DoAddFluxRope'      , DoAddFluxRope)
        call read_var('DoEquilItube'       , DoEquilItube)
-       call read_var('Itube'              , Itube)
+       call read_var('Itube'              , ItubeSi)
        call read_var('Rtube'              , Rtube)
        call read_var('aTube'              , aTube)
        call read_var('Depth'              , Depth)
@@ -69,7 +76,7 @@ contains
        call read_var('q'             , q)
        call read_var('L'             , L)
     case("#CME")
-       call read_var('Current',     Itube)
+       call read_var('BcTubeDim', BcTubeDim)
        call read_var('RadiusMajor', Rtube)
        call read_var('RadiusMinor', aTube)
        call read_var('Depth',       Depth)
@@ -181,7 +188,7 @@ contains
        dAkDk  = (F12121 - 0.1250*(2.0 - Kappa**2)*F32323)/&
                (1.0 - Kappa**2)
        
-       BFRope_D =B0*(Rtube/sqrt(RPlus2))**3*&
+       BFRope_D =BcTube*(Rtube/sqrt(RPlus2))**3*&
             (dAkDk*(2*xRel*XyzRel_D + (RTube**2 - R2)*UnitX_D)/RPlus2 &
             + Ak*UnitX_D)
        !No toroidal field outside the filament
@@ -240,7 +247,7 @@ contains
        ! vector potential, AI -->
        ! BI = curl(AI*ThetaUV) = BFRope_D(x_:z_)::
 
-       BFRope_D =  B0*(4.0/(Kappa**3*cPi))*(Rtube/sqrt(RPlus2))**3*&
+       BFRope_D =  BcTube*(4.0/(Kappa**3*cPi))*(Rtube/sqrt(RPlus2))**3*&
             (dAIdx*XyzRel_D + (dAIdr+d2Akdk2A*dKappaAdr &
             *(Kappa - KappaA)+AI)*UnitX_D)
        ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
@@ -285,34 +292,31 @@ contains
 
     InvH0 = cGravitation*Msun/Rsun*Si2No_V(UnitU_)**2   ! in [-]
     AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
-    FootSepar  = Rtube*sin(0.5*AlphaRope)/1.0e6         ! in [Mm]
-    LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*(log(8.0 &
+    FootSepar  = Rtube*No2Si_V(UnitX_)*sin(0.5*AlphaRope)/1.0e6  ! in [Mm]
+    LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*(log(8.0 &
          *(Rtube - Depth)/aTube) - 1.75)            ! in [H]
-    WFRope     = 0.5*LInduct*Itube**2*1.0e7             ! in [ergs]
-
     ! Compute the average density inside the flux rope assuming that the
     ! total amount of prominence mass is Mass (=10^16g=10^13kg)::
 
-    Rho0  = Mass/(AlphaRope*Rtube*cPi*aTube**2)
+    Rho0  = Mass/(AlphaRope*Rtube*cPi*aTube**2*No2Si_V(UnitX_)**3)
     ! in [kg/m^3]
 
     ! Define the normalized model parameters here::
 
     ! Flux rope::
-    Rtube = Rtube*Si2No_V(UnitX_)
-    aTube = aTube*Si2No_V(UnitX_)
-    ItubeDim   = Itube
-    Itube = ItubeDim*Si2No_V(UnitJ_)*Si2No_V(UnitX_)**2 ! in [A]
+    Rtube = Rtube*Io2No_V(UnitX_)
+    aTube = aTube*Io2No_V(UnitX_)
+    BcTube= BcTubeDim*Io2No_V(UnitB_)
+    
+    !Invert the equation, BcTubeSi = 0.5 \Mu_0 * ITubeSi/ RTubeSi
+    ITubeSi = 2*(BcTube*No2Si_V(UnitB_)) * (RTube*No2Si_V(UnitX_))/cMu ![A]
+    ITube   = ITubeSi*Si2No_V(UnitJ_)*Si2No_V(UnitX_)**2
+    WFRope     = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
     Rho0  = Rho0*Si2No_V(UnitRho_)
-
-    ! Save the maximum value of the current for possible use in
-    ! varied_current case::
-
-    ItubeSaved = Itube 
 
     ! Strapping field::
 
-    Depth     = Depth*Si2No_V(UnitX_)
+    Depth     = Depth*Io2No_V(UnitX_)
     L     = L*Si2No_V(UnitX_)
     q     = q*Si2No_V(UnitB_)*Si2No_V(UnitX_)**2
 
@@ -326,34 +330,33 @@ contains
     Rotate_DD = matmul(Rotate_DD,          &
          rot_matrix_z(-LongitudeCme*cDegToRad))
     UnitX_D = matmul([1.0, 0.0, 0.0], Rotate_DD)
-    B0 = 0.5*Itube/Rtube
     XyzCenter_D = matmul([0.0, 0.0, 1 - Depth], Rotate_DD)
     if (iProc==0) then
-       write(*,*) prefix
-       write(*,*) prefix,'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
-       write(*,*) prefix
-       write(*,*) prefix,'    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
-       write(*,*) prefix
-       write(*,*) prefix,'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
-       write(*,*) prefix
-       write(*,*) prefix,'Depth      = ',Depth*No2Si_V(UnitX_)/1.0E6,'[Mm]'
-       write(*,*) prefix,'Rtube  = ', &
+       write(*,'(a)') prefix
+       write(*,'(a)') prefix//'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
+       write(*,'(a)') prefix
+       write(*,'(a)') prefix//'    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
+       write(*,'(a)') prefix
+       write(*,'(a)') prefix//'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
+       write(*,'(a)') prefix
+       write(*,'(a,es13.5,a)') prefix//'Depth  = ',Depth*No2Si_V(UnitX_)/1.0E6,'[Mm]'
+       write(*,'(a,es13.5,a)') prefix//'Rtube  = ', &
             Rtube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
-       write(*,*) prefix,'aTube  = ', &
+       write(*,'(a,es13.5,a)') prefix//'aTube  = ', &
             aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
-       write(*,*) prefix,'atube/Rtube = ',aTube/Rtube,'[-]'
-       write(*,*) prefix,'Itube  = ',ItubeDim,'[A]'
-       write(*,*) prefix,'Mass   = ',Mass*1.0e3,'[g] '
-       write(*,*) prefix,'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
-       write(*,*) prefix
-       write(*,*) prefix,'q      = ', &
+       write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
+       write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
+       write(*,'(a,es13.5,a)') prefix//'Mass   = ',Mass*1.0e3,'[g] '
+       write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
+       write(*,'(a)') prefix
+       write(*,'(a,es13.5,a)') prefix//'q      = ', &
             q*No2Si_V(UnitB_)*No2Si_V(UnitX_)**2,'[T m^2]'
-       write(*,*) prefix,'L      = ',L*No2Si_V(UnitX_)/1.0e6,'[Mm]'
-       write(*,*) prefix
-       write(*,*) prefix,'Free energy of flux rope is ',WFRope,'Ergs.'
-       write(*,*) prefix,'Separation of flux rope ends is ',FootSepar,'Mm,'
-       write(*,*) prefix,'   or ',cPi*FootSepar*1.0e6/(2.0*Rsun)*cRadToDeg,'deg.'
-       write(*,*) prefix
+       write(*,'(a,es13.5,a)') prefix//'L      = ',L*No2Si_V(UnitX_)/1.0e6,'[Mm]'
+       write(*,'(a)') prefix
+       write(*,'(a,es13.5,a)') prefix//'Free energy of flux rope is ',WFRope,'[erg].'
+       write(*,'(a,es13.5,a)') prefix//'Separation of flux rope ends is ',FootSepar,'[Mm],'
+       write(*,'(a,es13.5,a)') prefix//'   or ',cPi*FootSepar*1.0e6/(2.0*Rsun)*cRadToDeg,'[deg].'
+       write(*,'(a)') prefix
        if (present(Time)) then
           write(*,*) prefix,'>>>>> Time-dependent strapping field is used <<<<<'
           write(*,*) prefix,'StartTime = ',StartTime,'[s]'
@@ -366,19 +369,19 @@ contains
        ! on the force balance in direction normal to the surface of
        ! the flux tube.
 
-       Itube = 8.0*cPi*q*L*Rtube &
+       ItubeSi = 8.0*cPi*q*L*Rtube &
             *(L**2+Rtube**2)**(-1.5) &
             /(alog(8.0*Rtube/aTube) &
             -1.5 + Li/2.0)                           ! in [-]
        WFRope    = 0.5*LInduct*(ItubeDim)**2*1.0e7      ! in [ergs]
     endif
     if (DoEquilItube.and.iProc==0) then
-       write(*,*) prefix,'The strapping field, Bq, is added and the EQUILIBRIUM value'
-       write(*,*) prefix,'of Itube is computed!!!'
-       write(*,*) prefix
-       write(*,*) prefix,'The value of Itube is reset to :: ',Itube
-       write(*,*) prefix,'The free energy of the flux rope is :: ',WFRope,'Ergs.'
-       write(*,*) prefix
+       write(*,'(a)') prefix//'The strapping field, Bq, is added and the EQUILIBRIUM value'
+       write(*,'(a)') prefix//'of Itube is computed!!!'
+       write(*,'(a)') prefix
+       write(*,'(a,es13.5)') prefix//'The value of Itube is reset to :: ',ItubeSi
+       write(*,'(a,es13.5,a)') prefix,'The free energy of the flux rope is :: ',WFRope,'Ergs.'
+       write(*,'(a)') prefix
     endif
 
   end subroutine init_TD99_parameters
