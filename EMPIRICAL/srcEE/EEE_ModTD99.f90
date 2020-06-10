@@ -38,6 +38,18 @@ module EEE_ModTD99
   real :: Mass = 0.0
   real :: InvH0=0.0, Rho0=0.0
   !
+  ! Magnetic field at the center of configuration is alway positive,
+  ! Starpping field is negative. Phi-conponent of the toroidal current
+  ! is positive. However, the sign of the field toroidal component may be
+  ! both positive and negative. To account for this, we introduce the
+  ! variable to store the helicity sign.
+  !
+  real :: HelicitySign = 1.0
+  !
+  ! To set the negative helicity, the input parameter, BcTube, should negative
+  ! This choice affects only the sign of helicity, but not the direction
+  ! of the nagnetic field at the center of configuration.
+  !
   ! Variables related to the properties of the strapping field, Bq::
   real :: VTransX=1.500E+03             !in [m/s]
   real :: VTransY=-2.900E+04            !in [m/s]
@@ -77,6 +89,11 @@ contains
        call read_var('L'             , L)
     case("#CME")
        call read_var('BcTubeDim', BcTubeDim)
+       !
+       ! Set negative helicity, if the input is negative:
+       !
+       HelicitySign = sign(1.0, BcTubeDim)
+       BcTubeDim = abs(BcTubeDim)
        call read_var('RadiusMajor', Rtube)
        call read_var('RadiusMinor', aTube)
        call read_var('Depth',       Depth)
@@ -243,7 +260,7 @@ contains
        ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
        ! produced by the azimuthal current Iphi. This is needed to ensure
        ! that the flux rope configuration is force free. 
-       BIPhi_D = abs(Itube)/(2.0*cPi*RPerp*aTube**2) &
+       BIPhi_D = HelicitySign*abs(Itube)/(2.0*cPi*RPerp*aTube**2) &
             *sqrt(2.0*(aTube**2 - RMinus**2))*&
             cross_product(UnitX_D,XyzRel_D)
     end if
