@@ -13,7 +13,7 @@ module EEE_ModTD99
 
   !
   ! Logical variables related to the magnetic field computation:
-  logical, public :: DoBqField=.false.
+  logical, public :: UseBqField=.false.
 
   logical :: DoEquilItube=.false.
   real    :: StartTime
@@ -49,11 +49,23 @@ module EEE_ModTD99
   ! To set the negative helicity, the input parameter, BcTube, should negative
   ! This choice affects only the sign of helicity, but not the direction
   ! of the nagnetic field at the center of configuration.
+
+  !!!!!!!!!!!!!!!!!!!!MAGNETIC CHARGES!!!!!!!!!!!
   !
-  ! Variables related to the properties of the strapping field, Bq::
-  real :: VTransX=1.500E+03             !in [m/s]
-  real :: VTransY=-2.900E+04            !in [m/s]
-  real :: q=0.0, L=0.0
+  character(LEN=10) :: TypeCharge = 'none'
+  ! magnetic charge and its distance from the current ring
+  real :: q = 0.0, BqFieldDim, qDistance = 0.0
+  !
+  ! coordinate vectors of the charge location
+  !
+  real :: qPlusLoc_D(3), qMinusLoc_D(3)
+  real :: VTransXSi = 0.0   
+  real :: VTransYSi = 0.0
+  !
+  ! The velocity vector, for a negative charge
+  !
+  real :: qVelMinusSi_D(3)
+ 
 
   ! direction of the magnetic moment of the configuration
   real :: UnitX_D(3)
@@ -66,7 +78,7 @@ contains
 
   subroutine set_parameters_TD99(NameCommand)
     use ModReadParam, ONLY: read_var
-
+    integer :: iError
     character(len=*), intent(in):: NameCommand
 
     character(len=*), parameter:: NameSub = 'set_parameters_TD99'
@@ -84,9 +96,9 @@ contains
        call read_var('LongitudeCme'       , LongitudeCme)
        call read_var('LatitudeCme'        , LatitudeCme)
        call read_var('OrientationCme'     , OrientationCme)
-       call read_var('DoBqField'          , DoBqField)
+       call read_var('DoBqField'          , UseBqField)
        call read_var('q'             , q)
-       call read_var('L'             , L)
+       call read_var('L'             , qDistance)
     case("#CME")
        call read_var('BcTubeDim', BcTubeDim)
        !
@@ -98,6 +110,25 @@ contains
        call read_var('RadiusMinor', aTube)
        call read_var('Depth',       Depth)
        call read_var('Mass',        Mass)
+       call read_var('TypeCharge', TypeCharge, iError)
+       if(iError/=0)then
+          TypeCharge = 'none'; UseBqField = .false.
+          RETURN
+       elseif(len_trim(TypeCharge)==0)then
+          TypeCharge = 'none'; UseBqField = .false.
+          RETURN
+       elseif(trim(TypeCharge)=='none')then
+          UseBqField = .false.
+          RETURN
+       end if
+       call read_var('BqFieldDim', BqFieldDim)
+       call read_var('qDistance',  qDistance)
+       if(trim(TypeCharge)=='steady')then
+          UseBqField = .true.
+          RETURN
+       end if
+       call CON_stop(NameSub//&
+            ':moving charges and flux cancelation is work in progress') 
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -272,7 +303,7 @@ contains
     !
     ! Add the field of two magnetic charges
     !
-    if (DoBqField) then
+    if (UseBqField) then
        call compute_TD99_BqField(Xyz_D, B1qField_D)
        BFRope_D = BFRope_D + B1qField_D
     endif
@@ -324,7 +355,7 @@ contains
     ! Strapping field::
 
     Depth     = Depth*Io2No_V(UnitX_)
-    L     = L*Si2No_V(UnitX_)
+    qDistance = qDistance*Io2No_V(UnitX_)
     q     = q*Si2No_V(UnitB_)*Si2No_V(UnitX_)**2
 
     ! Construct the rotational matrix, Rotate_DD, to position the
@@ -358,7 +389,7 @@ contains
        write(*,'(a)') prefix
        write(*,'(a,es13.5,a)') prefix//'q      = ', &
             q*No2Si_V(UnitB_)*No2Si_V(UnitX_)**2,'[T m^2]'
-       write(*,'(a,es13.5,a)') prefix//'L      = ',L*No2Si_V(UnitX_)/1.0e6,'[Mm]'
+       write(*,'(a,es13.5,a)') prefix//'L      = ',qDistance*No2Si_V(UnitX_)/1.0e6,'[Mm]'
        write(*,'(a)') prefix
        write(*,'(a,es13.5,a)') prefix//'Free energy of flux rope is ',WFRope,'[erg].'
        write(*,'(a,es13.5,a)') prefix//'Separation of flux rope ends is ',FootSepar,'[Mm],'
@@ -376,8 +407,8 @@ contains
        ! on the force balance in direction normal to the surface of
        ! the flux tube.
 
-       ItubeSi = 8.0*cPi*q*L*Rtube &
-            *(L**2+Rtube**2)**(-1.5) &
+       ItubeSi = 8.0*cPi*q*qDistance*Rtube &
+            *(qDistance**2+Rtube**2)**(-1.5) &
             /(alog(8.0*Rtube/aTube) &
             -1.5 + Li/2.0)                           ! in [-]
        WFRope    = 0.5*LInduct*(ItubeDim)**2*1.0e7      ! in [ergs]
@@ -410,17 +441,17 @@ contains
     ! charges, -/+q::
 
     if (present(TimeNow)) then
-       RPlus_D(x_) = Xyz_D(x_)-L &
-            - VTransX*(TimeNow - StartTime)*Si2No_V(UnitX_)
-       RMins_D(x_) = Xyz_D(x_)+L &
-            + VTransX*(TimeNow - StartTime)*Si2No_V(UnitX_)
+       RPlus_D(x_) = Xyz_D(x_) - qDistance &
+            - VTransXSi*(TimeNow - StartTime)*Si2No_V(UnitX_)
+       RMins_D(x_) = Xyz_D(x_) + qDistance &
+            + VTransXSi*(TimeNow - StartTime)*Si2No_V(UnitX_)
        RPlus_D(y_) = Xyz_D(y_) &
-            - VTransY*(TimeNow - StartTime)*Si2No_V(UnitX_)
+            - VTransYSi*(TimeNow - StartTime)*Si2No_V(UnitX_)
        RMins_D(y_) = Xyz_D(y_) &
-            + VTransY*(TimeNow - StartTime)*Si2No_V(UnitX_)
+            + VTransYSi*(TimeNow - StartTime)*Si2No_V(UnitX_)
     else
-       RPlus_D(x_) = Xyz_D(x_)-L
-       RMins_D(x_) = Xyz_D(x_)+L
+       RPlus_D(x_) = Xyz_D(x_) - qDistance
+       RMins_D(x_) = Xyz_D(x_) + qDistance
        RPlus_D(y_) = Xyz_D(y_)
        RMins_D(y_) = RPlus_D(y_)
     endif
