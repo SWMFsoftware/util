@@ -306,7 +306,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    FileId.write("%-10.2f          BStrength \n"% GL_Bstrength)
    FileId.write("%-10.2f          Radius \n"% GLRadius)
    FileId.write("%-10.2f          aStretch \n"% Stretch)
-   FileId.write("%-10.2f          ApexHeight \n"% Height)
+   FileId.write("%-10.2f          ApexHeight \n"% ApexHeight)
    FileId.write(" \n")
    FileId.write("#END \n")
    FileId.close()
