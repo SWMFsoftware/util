@@ -10,9 +10,12 @@
 # to be used from EEGGL as well
 # uses pyfits instead of astropy
 # separate functions for 1)remapping the grid, 2) reading fits file
+# June 2020: generalized for any types of maps that have multiple realizations
+# Read & recognizes & rempas HMI vector magnetogram (.fits)
 
 import pyfits as fits
 #from astropy.io import fits
+import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
 import numpy as np
@@ -21,7 +24,7 @@ import time
 import argparse
 import pdb
 
-def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified', i=-1, nSmooth=1):
+def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified', i=-1, nSmooth=1, DoHMI=0):
     """
     Flux-conserving magnetogram remapping tool.
     inputfile - FITS file containing original magnetogram (include path)
@@ -45,24 +48,38 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         print ("Unknown output grid type.  Choices are blank, 'unspecified',\
  'uniform' and 'sin(lat)' ")
         return(-1)    
-
-    cc =  FITS_RECOGNIZE(inputfile)
-
-    if cc == -1:
-        print ("Input file not recognized.")
-        return(-1)
-    else:
-        magtype = cc[0]
-        grid_type = cc[1]
-        map_data = cc[2]
+    
+    print('DoHmi',DoHMI)
+    if(DoHMI !=0):
+        magtype = 'HMI Synotic Vector Magnetogram'
+        g=fits.open(inputfile)
+        nlo = g[0].header['NAXIS1'] 
+        nla = g[0].header['NAXIS2'] 
+        CRnumber = 0
+        long0 = 0
+        CR  = 0
+        grid_type='sin(lat)'
         input_grid = grid_type
-        nlo = cc[3]
-        nla = cc[4]
-        CRnumber = cc[5]
-        CR = cc[6]
-        long0 = cc[7]
-        bunit = cc[8]
-        mapdate = cc[9]
+
+    if(DoHMI == 0):
+        cc =  FITS_RECOGNIZE(inputfile)
+
+        if cc == -1:
+            print ("Input file not recognized.")
+            return(-1)
+        else:
+            magtype = cc[0]
+            grid_type = cc[1]
+            map_data = cc[2]
+            input_grid = grid_type
+            nlo = cc[3]
+            nla = cc[4]
+            CRnumber = cc[5]
+            CR = cc[6]
+            long0 = cc[7]
+            bunit = cc[8]
+            mapdate = cc[9]
+        print('FITS FILE =',cc)
 
     if nlat == -1:
         nlat = nla
@@ -94,14 +111,21 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     header0 = g[0].header
     d = g[0].data
 
-    if magtype == 'ADAPT Synchronic':
-        nim = g[0].header['NAXIS3'] # number of images
+    # works for magnetograms with multiple realizations:
+    # eg: ADAPT maps, newer polar filled HMI maps
+    try:
+        nim = g[0].header['NAXIS3']
+    except KeyError as er:
+        nim = -1
+    if nim > -1:
+        #    if magtype == 'ADAPT Synchronic':
+        # nim = g[0].header['NAXIS3'] # number of images
         imdex = i  #which of the 12 maps do you want?
         print ('This file contains ', str(nim), ' images.Writing out file ',\
                    i+1)
         if nim > 1:  #just keep one of them for now
             d = d[imdex,:,:]
-      
+            
     g[0].header['NAXIS1'] = nlong # new number of longitude points
     g[0].header['NAXIS2'] = nlat  #               latitude
 
@@ -118,6 +142,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     # Conservative smoothing. Boundary condition:
     # Periodic in Longitude, reflect in Latitude.
     if (nSmooth>2):
+        print('Smoothing')
         d=smooth(nlong,nlat,nSmooth,d)
 
     if out_grid == 'sin(lat)':
@@ -243,7 +268,14 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     #ascii output file, Gabor format, the first line is arbitary
 
     fid = open(outputfile,'w')
-    if magtype == 'ADAPT Synchronic':
+
+    if (DoHMI !=0):
+        line0='MagnetogramType = HMI_Synoptic_Vector_Mag; InstrumentName ='\
+            'SDO/HMI; InputLatGrid = '\
+            +input_grid+'; OutputLatGrid = '+out_grid+\
+            '; InputMapResolution = '+str(nlo)+','+str(nla)+'\n'
+
+    elif magtype == 'ADAPT Synchronic':
         line0 = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
             +str(imdex+1)+ '; InstrumentName = '+map_data+'; InputLatGrid = '\
             +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
@@ -276,7 +308,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 + str(newmap[k,l]) + ' \n'
             fid.write(line0)
     g.close()
-    fid.close()
+    fid.close() 
     nParam = 2
     Param_I = np.zeros(nParam)
     Param_I[0] = long0
@@ -309,6 +341,14 @@ def smooth(nLong, nLat, nSmooth, Br_C):
                     BrOrig_G[iLatExt,iLong:iLong+nSmooth])
             Br_C[iLat,iLong]  *= Coef
     return(Br_C)
+##############################################################################
+# function to read hmi fits file from awsom_script.py
+def read_hmi(inputfile):
+    g = fits.open(inputfile)
+    print(g[0].header)
+    print(np.shape(g[0]))
+    remap(inputfile,'hmi_data.out',nla,nlo,'sin(lat)',1)
+    return(g)
 ##############################################################################
     
 def FITS_RECOGNIZE(inputfile):
@@ -416,15 +456,30 @@ def FITS_RECOGNIZE(inputfile):
             return(-1)
 
     if telescope.find('SDO/HMI') > -1:
-        if ( (ctyp.find('CRLT-CEA') > -1) & \
-                 (cunit.find('Sine Latitude') > -1)):
-            magnetogram_type = 'HMI Synoptic'
-            grid_type = 'sin(lat)'
-            map_data = 'HMI'
+        # CR at center of map
+        try :
+            CRnumber = str(g[0].header['L0_DMC']) #works on GONG and MDI
+        except KeyError as er:
+            CRnumber = '0'
+        # CR number
+        try :
+            CR = str(g[0].header['CAR_ROT']) #works on GONG and MDI
+        except KeyError as er:
+            CR = CRnumber
+        # long at left edge
+        try:
+            long0 = g[0].header['LONG0']
+        except KeyError as er:
+            long0 = - 1
         try :
             mapdate = g[0].header['T_OBS']  #works for MDI, HMI
         except KeyError as er:
             mapdate = '0000-00-00T00:00:00'
+        if ( (ctyp.find('CRLT-CEA') > -1) ):
+            if ((cunit.find('Sine Latitude') > -1) or cunit.find('sin(latitude)') > -1):
+                magnetogram_type = 'HMI Synoptic'
+                grid_type = 'sin(lat)'
+                map_data = 'HMI'
         else:
             print ("unknown SDO magnetogram type")
             return(-1)
@@ -547,8 +602,6 @@ if __name__ == '__main__':
             args.istart = 0
     if args.iend < args.istart:
         args.iend = args.istart
-
-#    print('inout',args.nlat,args.nlon)
 
     for i in range(args.istart,args.iend+1):
         out=args.outputfile+'_'+str(i)+'.out' 
