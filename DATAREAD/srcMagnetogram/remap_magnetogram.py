@@ -11,7 +11,7 @@
 # uses pyfits instead of astropy
 # separate functions for 1)remapping the grid, 2) reading fits file
 # June 2020: generalized for any types of maps that have multiple realizations
-# Read & recognizes & rempas HMI vector magnetogram (.fits)
+# Read & remap HMI vector magnetogram (.fits)
 
 import pyfits as fits
 #from astropy.io import fits
