@@ -198,3 +198,7 @@ if __name__ == '__main__':
    #(2) WINDOWS SHOULD BE CLOSED 
    #(3) FINAL EXIT COMMAND MUST BE PRESENT IN THE IDL SCRIPT######
    #print 'GLSETUP Session is closed. Bye!!!'
+##############################################
+   print("Save magnetic field componets from HMI vector magnetogram")
+   hmi_data = rmag.read_hmi(nLat,nLong,grid_type,1)
+##############################################
