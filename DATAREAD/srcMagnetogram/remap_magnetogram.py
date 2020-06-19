@@ -20,6 +20,8 @@ from scipy import interpolate
 from scipy import integrate
 import numpy as np
 import sys
+import os
+import fnmatch
 import time
 import argparse
 import pdb
@@ -49,7 +51,6 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
  'uniform' and 'sin(lat)' ")
         return(-1)    
     
-    print('DoHmi',DoHMI)
     if(DoHMI !=0):
         magtype = 'HMI Synotic Vector Magnetogram'
         g=fits.open(inputfile)
@@ -268,51 +269,45 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     #ascii output file, Gabor format, the first line is arbitary
 
     fid = open(outputfile,'w')
-
-    if (DoHMI !=0):
-        line0='MagnetogramType = HMI_Synoptic_Vector_Mag; InstrumentName ='\
-            'SDO/HMI; InputLatGrid = '\
-            +input_grid+'; OutputLatGrid = '+out_grid+\
-            '; InputMapResolution = '+str(nlo)+','+str(nla)+'\n'
-
-    elif magtype == 'ADAPT Synchronic':
-        line0 = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
-            +str(imdex+1)+ '; InstrumentName = '+map_data+'; InputLatGrid = '\
-            +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
-            +bunit+'; InputMapResolution = '+str(nlo)+','+str(nla)+\
-            '; MagnetogramDate = '+mapdate+'; CentralMeridianLong = '\
-            +CRnumber+'; InputFile = '+str(inputfile)+\
-            ';ASCIIFileCreationDate = '+time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
-    else:
-        line0 = 'MagnetogramType = '+magtype+'; InstrumentName = '+map_data+\
-            '; InputLatGrid = '+input_grid+'; OutputLatGrid = '+out_grid+\
-            '; MagUnit = '+bunit+'; InputMapResolution = '+str(nlo)+','\
-            +str(nla)+'; MagnetogramDate = '+mapdate+\
-            '; CentralMeridianLong = '+CRnumber+\
-            '; InputFile = "'+str(inputfile)+\
-            ';ASCIIFileCreationDate = '+time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
-    fid.write(line0)
-    line0 = '       0      0.00000       2       2       1 \n'
-    fid.write(line0)
-    fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
-    # Only adding the original longitude shift as read from the FITS file 
-    # and the CM of the CR
-    fid.write(str(long0) +'  '+str(CRnumber)+' \n') 
+    if (DoHMI == 0):
+        if magtype == 'ADAPT Synchronic':
+            line0 = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
+                +str(imdex+1)+ '; InstrumentName = '+map_data+\
+                '; InputLatGrid = '\
+                +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
+                +bunit+'; InputMapResolution = '+str(nlo)+','+str(nla)+\
+                '; MagnetogramDate = '+mapdate+'; CentralMeridianLong = '\
+                +CRnumber+'; InputFile = '+str(inputfile)+\
+                ';ASCIIFileCreationDate = '+time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
+        else:
+            line0 = 'MagnetogramType = '+magtype+'; InstrumentName = '+map_data+\
+                '; InputLatGrid = '+input_grid+'; OutputLatGrid = '+out_grid+\
+                '; MagUnit = '+bunit+'; InputMapResolution = '+str(nlo)+','\
+                +str(nla)+'; MagnetogramDate = '+mapdate+\
+                '; CentralMeridianLong = '+CRnumber+\
+                '; InputFile = "'+str(inputfile)+\
+                ';ASCIIFileCreationDate = '+time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
+        fid.write(line0)
+        line0 = '       0      0.00000       2       2       1 \n'
+        fid.write(line0)
+        fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
+        # Only adding the original longitude shift as read from the FITS file 
+        # and the CM of the CR
+        fid.write(str(long0) +'  '+str(CRnumber)+' \n') 
     #longitude shift (important for GONG Hourly)
-    fid.write('Longitude Latitude Br LongitudeShift CarringtonRotation \n')
-    
-    for k in np.arange(nlat):
-        for l in np.arange(nlong):
+        fid.write('Longitude Latitude Br LongitudeShift CarringtonRotation \n')
+        
+        for k in np.arange(nlat):
+            for l in np.arange(nlong):
 # Phi grid is also written out as cell centered similar to the latitude grid
-            line0 = str((l+0.5)*360./nlong) + ' ' + str(newlat[k]) + ' ' \
-                + str(newmap[k,l]) + ' \n'
-            fid.write(line0)
-    g.close()
+                line0 = str((l+0.5)*360./nlong) + ' ' + str(newlat[k]) + ' ' \
+                    + str(newmap[k,l]) + ' \n'
+                fid.write(line0)
     fid.close() 
+    g.close()
     nParam = 2
     Param_I = np.zeros(nParam)
     Param_I[0] = long0
-#    Param_I[1] = -1 # Long Earth
     Param_I[1] = CRnumber # Long Earth
     # Long and Lat in radians passed to GLSetup.py
     Long_I = (pi/180.) * np.linspace(0.5*360./nlong, 359.5*360./nlong, nlong) 
@@ -343,12 +338,53 @@ def smooth(nLong, nLat, nSmooth, Br_C):
     return(Br_C)
 ##############################################################################
 # function to read hmi fits file from awsom_script.py
-def read_hmi(inputfile):
-    g = fits.open(inputfile)
-    print(g[0].header)
-    print(np.shape(g[0]))
-    remap(inputfile,'hmi_data.out',nla,nlo,'sin(lat)',1)
-    return(g)
+def read_hmi(nlat,nlon,mapgrid,DoHMI):
+    filenames=[]
+    #pass the required mag size   
+    for file_name in os.listdir('.'):
+        if fnmatch.fnmatch(file_name, 'hmi_*B*.fits'):
+            print('Found this HMI Synoptic Vector Magnetograms : ',file_name)
+            filenames.append(file_name)
+    if (len(filenames) != 3):
+        print('Too many HMI magnetograms: Check input')
+        return(-1)
+    else:
+        for filename in filenames:
+            if(fnmatch.fnmatch(filename,'*Br.fits')):
+                hmi_Br=remap(filename,'hmi.out',nlat,nlon,mapgrid,0,1,1)
+            elif(fnmatch.fnmatch(filename,'*Bt.fits')):
+                hmi_Bt=remap(filename,'hmi.out',nlat,nlon,mapgrid,0,1,1)
+            elif(fnmatch.fnmatch(filename,'*Bp.fits')):
+                hmi_Bp=remap(filename,'hmi.out',nlat,nlon,mapgrid,0,1,1)
+
+    pi = 3.141592653589793
+    hmi_nParam=hmi_Br[2]
+    hmi_ParamI = hmi_Br[3]
+    hmi_LongI=hmi_Br[4] * 180./pi
+    hmi_LatI=hmi_Br[5] * 180./pi
+    hmi_BrMap=hmi_Br[6]
+    hmi_BtMap=hmi_Bt[6]
+    hmi_BpMap=hmi_Bp[6]
+   #SAVE HMI Br, Bt , Bp in Batsrus format
+    fid = open('hmi_map.out','w')
+    line0='MagnetogramType = HMI_Synoptic_Vector_Mag; InstrumentName ='\
+        'SDO/HMI; InputLatGrid = '+mapgrid+'; MapResolution = '\
+        +str(nlon)+','+str(nlat)+'\n'
+    fid.write(line0)
+    line0 = '       0      0.00000       2       2       3 \n'
+    fid.write(line0)
+    fid.write('      '+str(nlon)+'     '+str(nlat)+'\n')
+    fid.write(str(hmi_ParamI[0]) + ' ' + str(hmi_ParamI[1]) + '\n')
+    fid.write('Longitude Latitude Br Bt Bp LongShift CarringtonRotation \n')
+    for k in np.arange(nlat):
+        for l in np.arange(nlon):
+            line0 = str(hmi_LongI[l]) + '  ' + str(hmi_LatI[k]) + '  ' \
+                + str(hmi_BrMap[k,l]) + '  ' + str(hmi_BtMap[k,l]) + '  '\
+                + str(hmi_BpMap[k,l]) + '\n'
+            fid.write(line0)
+    fid.close()
+
+    return(hmi_LongI,hmi_LatI,hmi_BrMap,hmi_BtMap,hmi_BpMap)
 ##############################################################################
     
 def FITS_RECOGNIZE(inputfile):
