@@ -16,7 +16,7 @@ Module EEE_ModMain
   public :: EEE_get_state_init
   public :: EEE_get_state_BC
   public :: EEE_get_B0
-
+  public :: EEE_do_not_add_cme_again
 contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn)
@@ -113,7 +113,7 @@ contains
     use EEE_ModCms,       ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
-         DoAddFluxRope, LongitudeCme, LatitudeCme, OrientationCme, &
+         LongitudeCme, LatitudeCme, OrientationCme, &
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, DoAddTD14
 
     character(len=*), intent(in) :: NameCommand
@@ -190,10 +190,10 @@ contains
 
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, UseTD14
-    use EEE_ModTD99, ONLY: get_TD99_fluxrope, DoBqField
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope!, BqField
     use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModShearFlow, ONLY: get_shearflow
-    use EEE_ModGL98, ONLY: get_GL98_fluxrope!, adjust_GL98_fluxrope
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModCms, ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3), Time
@@ -247,7 +247,7 @@ contains
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
          DoAddGL, UseCms, DoAddSpheromak, DoAddTD14
-    use EEE_ModGL98, ONLY: get_GL98_fluxrope, adjust_GL98_fluxrope
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModCms,  ONLY: get_cms
@@ -278,7 +278,6 @@ contains
     if(DoAddGL)then
        ! Add Gibson & Low (GL98) flux rope
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D)
-       call adjust_GL98_fluxrope(Rho1, p1)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     end if
 
@@ -290,5 +289,15 @@ contains
     if(UseCms) call get_cms(Xyz_D, B_D)
 
   end subroutine EEE_get_state_init
-
+  !================================
+  subroutine EEE_do_not_add_cme_again
+    !
+    ! Designed to avoid repeatedly adding CME in subsequent sessions
+    !
+    use EEE_ModCommonVariables, ONLY: DoAddFluxRope, &
+         DoAddTD, DoAddGL, DoAddSpheromak, DoAddTD14
+    !---------------------
+    DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false. 
+    DoAddSpheromak = .false.; DoAddTD14 = .false.
+  end subroutine EEE_do_not_add_cme_again
 end Module EEE_ModMain

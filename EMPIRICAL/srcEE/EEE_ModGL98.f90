@@ -10,7 +10,6 @@ module EEE_ModGL98
 
   public :: set_parameters_GL98
   public :: get_GL98_fluxrope
-  public :: adjust_GL98_fluxrope
 
   ! Geometric characteristics of the superimposed configuration:
 
@@ -31,8 +30,6 @@ module EEE_ModGL98
   ! than rDistance1.   
   real :: ApexHeight = 0.0
   
-
-  real :: ModulationRho = 0.0, ModulationP = 0.0
   
   !The derivative of current over flux function
   !(\mu_0)dI/d\psi) has the dimentions of inverse length
@@ -101,8 +98,6 @@ contains
        write(*,*) prefix, 'AStretch       = ',AStretch, '[rSun]'
        write(*,*) prefix, 'rDistance1     = ',rDistance1,'[rSun]'
        write(*,*) prefix, 'ApexHeight     = ', ApexHeight,'[rSun]'
-       write(*,*) prefix, 'ModulationRho  = ',ModulationRho
-       write(*,*) prefix, 'ModulationP    = ',ModulationP
        write(*,*) prefix, 'LongitudeCme   = ',LongitudeCme,'[degrees]'
        write(*,*) prefix, 'LatitudeCme    = ',LatitudeCme,'[degrees]'
        write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
@@ -163,8 +158,6 @@ contains
        call read_var('rDistance1',          rDistance1)      
        call read_var('Radius',          Radius)     
        call read_var('Bstrength',       B0Dim) 
-       call read_var('ModulationRho',   ModulationRho)
-       call read_var('ModulationP',     ModulationP)
        call read_var('LongitudeCme',   LongitudeCme)
        call read_var('LatitudeCme',    LatitudeCme)
        call read_var('OrientationCme', OrientationCme)
@@ -174,14 +167,6 @@ contains
        call read_var('aStretch',     aStretch)      ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
        rDistance1 = 1.0 + ApexHeight + aStretch - Radius
-       call read_var('ModulationRho',   ModulationRho, iError)
-       if(iError /= 0)then
-          !It is allowed not to have the last two lines
-          ModulationRho = 0.0; ModulationP = 0.0
-          RETURN
-       else
-          call read_var('ModulationP',     ModulationP)
-       end if
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -420,25 +405,4 @@ contains
     end function spher_bessel_2
     !===================
   end subroutine get_GL98_fluxrope
-
-  !===================================================
-
-  subroutine adjust_GL98_fluxrope(Rho,p)
-
-    real, intent(inout) :: Rho,p
-    !--------------------------------------------------------------------------
-
-    !\
-    ! Add just `ModulationRho' times of the CME mass
-    ! to the mass density::
-    !/
-    if(ModulationRho*Rho > 0.0) Rho = ModulationRho*Rho
-    !\
-    ! Add just `ModulationP' times of the CME pressure
-    ! to the kinetic pressure::
-    !/
-    if(ModulationP*p > 0.0) p = ModulationP*p
-
-  end subroutine adjust_GL98_fluxrope
-
 end module EEE_ModGL98
