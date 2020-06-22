@@ -163,6 +163,11 @@ if __name__ == '__main__':
    Param_I[4] = xNegative
    Param_I[5] = yNegative
 
+   ##HMI
+   print("Save magnetic field componets from HMI vector magnetogram")
+   hmi_data = rmag.read_hmi(nLat,nLong,grid_type,1)
+   ####
+
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
    CC=GL.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,
                  CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
@@ -198,7 +203,6 @@ if __name__ == '__main__':
    #(2) WINDOWS SHOULD BE CLOSED 
    #(3) FINAL EXIT COMMAND MUST BE PRESENT IN THE IDL SCRIPT######
    #print 'GLSETUP Session is closed. Bye!!!'
+
 ##############################################
-   print("Save magnetic field componets from HMI vector magnetogram")
-   hmi_data = rmag.read_hmi(nLat,nLong,grid_type,1)
 ##############################################
