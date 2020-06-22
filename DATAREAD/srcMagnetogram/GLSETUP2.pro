@@ -48,12 +48,20 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
   mag1_info=read_magnetogram('FRMagnetogram.out',PlotRadius,UseBATS)
   gl_field=mag1_info.br_field
 
-  br_field_show=br_field
+  br_field_show=br_field ; from AfterGlSETUP.out
   index=where(br_field lt -20)
   br_field_show[index]=-20
   index=where(br_field gt 20)
   br_field_show[index]=20
 
+  ;Read the HMI vector field components (Blat & Blon) to overplot
+  ;on the original magnetogram firls Br
+  
+  hmi_info = read_magnetogram('hmi_map.out',PlotRadius,UseBATS)
+  hmi_Br = hmi_info.br_field
+  hmi_Blon = hmi_info.bphi_field
+  hmi_Blat = hmi_info.btheta_field
+  
   window,2,xs=1200,ys=1200.*float(nlat)/float(nlon)*4./3.
   loadct,0
   contour,br_field_show,min=-20,max=20,charsize=3,$
@@ -90,7 +98,8 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
   contour,sizemap_p,/overplot,c_color=100
   contour,abs(sizemap_n),/overplot,c_color=100
   contour,gl_field,/overplot,min=-10,max=10,nlevels=20,c_colors=indgen(20)*long(10)+long(25)
-  wait, 5
+
+  wait, 10
 ;The region size is used to cover the whole area of active region in
 ;order to show a zoom-in image. Shorter RegionSize for near-Limb
 ;regions when needed.
@@ -109,12 +118,13 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
   sub_y1=max([round(XyARCenter_D[1])-RegionSize/2,0])
   sub_y2=min([round(XyARCenter_D[1])+RegionSize/2,nlat-1])
 
-  contour,br_field_show[sub_x1:sub_x2,sub_y1:sub_y2],$                        
+  contour,br_field_show[sub_x1:sub_x2,sub_y1:sub_y2],$
           min=-20,max=20,charsize=3,title='CME Source Region (R ='$
           +strtrim(PlotRadius,2)+' Rs)',xtitle='Solar Longitude (Degree)',$
           ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
 
   loadct,39
+
 ;Showing positive and negative spots
   contour,sizemap_p[sub_x1:sub_x2,sub_y1:sub_y2],/overplot,c_color=100
   contour,abs(sizemap_n[sub_x1:sub_x2,sub_y1:sub_y2]),/overplot,c_color=100
@@ -127,9 +137,12 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
   for i=0, nPIL-1 do begin
      plots,xPIL_I(i)-sub_x1,yPIL_I(i)-sub_y1,psym=-1,color=200,symsize=3,thick=3
   endfor
-  wait,5
-  wdelete,2
+  velovect,smooth(hmi_Blon[sub_x1:sub_x2,sub_y1:sub_y2],3),$
+           smooth(hmi_Blat[sub_x1:sub_x2,sub_y1:sub_y2],3),COLOR=50, $
+           LENGTH=1.5,max=20,min=-20,thick=1.2,/NOERASE,/overplot
   wait,10
+  wdelete,2
+  wait,15
   wdelete,3
   exit
 end
