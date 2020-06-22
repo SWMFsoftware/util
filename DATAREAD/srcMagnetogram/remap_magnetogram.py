@@ -339,8 +339,9 @@ def smooth(nLong, nLat, nSmooth, Br_C):
 ##############################################################################
 # function to read hmi fits file from awsom_script.py
 def read_hmi(nlat,nlon,mapgrid,DoHMI):
+    print(mapgrid)
     filenames=[]
-    #pass the required mag size   
+    #pass the required mag size
     for file_name in os.listdir('.'):
         if fnmatch.fnmatch(file_name, 'hmi_*B*.fits'):
             print('Found this HMI Synoptic Vector Magnetograms : ',file_name)
@@ -358,13 +359,13 @@ def read_hmi(nlat,nlon,mapgrid,DoHMI):
                 hmi_Bp=remap(filename,'hmi.out',nlat,nlon,mapgrid,0,1,1)
 
     pi = 3.141592653589793
-    hmi_nParam=hmi_Br[2]
+    hmi_nParam = hmi_Br[2]
     hmi_ParamI = hmi_Br[3]
-    hmi_LongI=hmi_Br[4] * 180./pi
-    hmi_LatI=hmi_Br[5] * 180./pi
-    hmi_BrMap=hmi_Br[6]
-    hmi_BtMap=hmi_Bt[6]
-    hmi_BpMap=hmi_Bp[6]
+    hmi_LongI = hmi_Br[4] * 180./pi
+    hmi_LatI = hmi_Br[5] * 180./pi
+    hmi_BrMap = hmi_Br[6]
+    hmi_BlatMap = -hmi_Bt[6] #Blat = - Bt
+    hmi_BlonMap = hmi_Bp[6]
    #SAVE HMI Br, Bt , Bp in Batsrus format
     fid = open('hmi_map.out','w')
     line0='MagnetogramType = HMI_Synoptic_Vector_Mag; InstrumentName ='\
@@ -375,16 +376,16 @@ def read_hmi(nlat,nlon,mapgrid,DoHMI):
     fid.write(line0)
     fid.write('      '+str(nlon)+'     '+str(nlat)+'\n')
     fid.write(str(hmi_ParamI[0]) + ' ' + str(hmi_ParamI[1]) + '\n')
-    fid.write('Longitude Latitude Br Bt Bp LongShift CarringtonRotation \n')
+    fid.write('Longitude Latitude Br Blon Blat LongShift CarringtonRot \n')
     for k in np.arange(nlat):
         for l in np.arange(nlon):
             line0 = str(hmi_LongI[l]) + '  ' + str(hmi_LatI[k]) + '  ' \
-                + str(hmi_BrMap[k,l]) + '  ' + str(hmi_BtMap[k,l]) + '  '\
-                + str(hmi_BpMap[k,l]) + '\n'
+                + str(hmi_BrMap[k,l]) + '  ' + str(hmi_BlonMap[k,l]) + '  '\
+                + str(hmi_BlatMap[k,l]) + '\n'
             fid.write(line0)
     fid.close()
 
-    return(hmi_LongI,hmi_LatI,hmi_BrMap,hmi_BtMap,hmi_BpMap)
+    return(hmi_LongI,hmi_LatI,hmi_BrMap,hmi_BlonMap,hmi_BlatMap)
 ##############################################################################
     
 def FITS_RECOGNIZE(inputfile):
