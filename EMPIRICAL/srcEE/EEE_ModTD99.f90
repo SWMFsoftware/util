@@ -17,7 +17,16 @@ module EEE_ModTD99
 
   logical :: DoEquilItube=.false.
   real    :: StartTime
-
+  
+  logical :: UsePlasmaBeta
+  ! If ON, the parameter Beta is set having a meaning of gaskinetic-to-magnetic pressure
+  ! ratio is set for the ejecta as well as the ejecta temperature. In this case both density 
+  ! and pressure are set inside the flux rope. Otherwise the density only is calculated agreeing 
+  ! with the input parameter of mass
+  real    :: PlasmaBeta = 0.0
+  real    :: EjectaTemperature, EjectaTemperatureDim = 1.0e4 ! 10,000 K
+  ! 
+  !   
   !
   ! Variables related to the position of the flux rope:
   !
@@ -35,8 +44,9 @@ module EEE_ModTD99
   !Negative height (depth) of the current tube center with respect to
   !the photosphere level.
   real :: Depth = 0.0
+
   real :: Mass = 0.0
-  real :: InvH0=0.0, Rho0=0.0
+  real :: Rho0=0.0
   !
   ! Magnetic field at the center of configuration is alway positive,
   ! Starpping field is negative. Phi-conponent of the toroidal current
@@ -230,13 +240,10 @@ contains
        !
        ! 1.
        ! Add the prominence material inside the flux rope, assuming that the
-       ! total amount mass is 10^13kg, and that the desnity scale-height is
-       ! the same as the pressure scale-height, 1/InvH0 (i.e., iso-thermal
-       ! atmoshpere)::
+       ! given total amount of mass
        
        if (present(RhoFRope))&
-            RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6) &
-            *exp(-InvH0*abs(norm2(Xyz_D)-1.0))
+            RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
        ! 2.    
        ! Define the model input, KappaA. A given point is characterized by
        ! two coordinates, say, RPepr and RMinus. In this case,
@@ -328,7 +335,6 @@ contains
     ! Compute the magnetic energy, WFRope, associated with the portion
     ! of the flux rope current that is above the solar surface::
 
-    InvH0 = cGravitation*Msun/Rsun*Si2No_V(UnitU_)**2   ! in [-]
     AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
     FootSepar  = Rtube*No2Si_V(UnitX_)*sin(0.5*AlphaRope)/1.0e6  ! in [Mm]
     LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*(log(8.0 &
