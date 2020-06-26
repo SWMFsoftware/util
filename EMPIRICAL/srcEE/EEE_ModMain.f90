@@ -209,9 +209,9 @@ contains
     if(.not.UseCme) RETURN
 
     if (UseTD) then
-       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1)
+       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
 
-       Rho = Rho + Rho1; B_D = B_D + B1_D
+       Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     end if
 
     if (UseTD14) then
@@ -266,8 +266,8 @@ contains
 
     if(DoAddTD)then
        ! Add Titov & Demoulin (TD99) flux rope
-       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1)
-       Rho = Rho + Rho1; B_D = B_D + B1_D
+       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
+       Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     endif
 
     if(DoAddTD14)then

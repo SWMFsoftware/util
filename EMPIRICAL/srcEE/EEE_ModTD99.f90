@@ -18,13 +18,14 @@ module EEE_ModTD99
   logical :: DoEquilItube=.false.
   real    :: StartTime
   
-  logical :: UsePlasmaBeta
-  ! If ON, the parameter Beta is set having a meaning of gaskinetic-to-magnetic pressure
-  ! ratio is set for the ejecta as well as the ejecta temperature. In this case both density 
-  ! and pressure are set inside the flux rope. Otherwise the density only is calculated agreeing 
-  ! with the input parameter of mass
+  logical :: UsePlasmaBeta = .false. 
+  ! If ON, the parameter Beta, having a meaning of a constant 
+  ! gaskinetic-to-magnetic pressure
+  ! ratio, is set for the ejecta, as well as the ejecta temperature. In this 
+  ! case both density and pressure are set inside the flux rope. Otherwise, the
+  ! density only is calculated in agreeement with the input parameter of mass.
   real    :: PlasmaBeta = 0.0
-  real    :: EjectaTemperature, EjectaTemperatureDim = 1.0e4 ! 10,000 K
+  real    :: EjectaTemperature, EjectaTemperatureDim = 5.0e4 ! 50,000 K
   ! 
   !   
   !
@@ -45,7 +46,7 @@ module EEE_ModTD99
   !the photosphere level.
   real :: Depth = 0.0
 
-  real :: Mass = 0.0
+  real :: MassSi, MassDim
   real :: Rho0=0.0
   !
   ! Magnetic field at the center of configuration is alway positive,
@@ -102,7 +103,8 @@ contains
        call read_var('Rtube'              , Rtube)
        call read_var('aTube'              , aTube)
        call read_var('Depth'              , Depth)
-       call read_var('Mass'               , Mass)
+       call read_var('MassDim'            , MassDim)
+       MassSi = MassDim*1.0e-3
        call read_var('LongitudeCme'       , LongitudeCme)
        call read_var('LatitudeCme'        , LatitudeCme)
        call read_var('OrientationCme'     , OrientationCme)
@@ -119,7 +121,8 @@ contains
        call read_var('RadiusMajor', Rtube)
        call read_var('RadiusMinor', aTube)
        call read_var('Depth',       Depth)
-       call read_var('Mass',        Mass)
+       call read_var('MassDim',     MassDim)
+       MassSi = MassDim*1.0e-3  !g to kg
        call read_var('TypeCharge', TypeCharge, iError)
        if(iError/=0)then
           TypeCharge = 'none'; UseBqField = .false.
@@ -145,7 +148,7 @@ contains
 
   end subroutine set_parameters_TD99
   !=================================
-  subroutine get_TD99_fluxrope(Xyz_D,BFRope_D,RhoFRope)
+  subroutine get_TD99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
     use ModCoordTransform, ONLY: cross_product
     !\__                                                             __/!
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
@@ -156,9 +159,10 @@ contains
     !                                                                   !
     ! ___  This module was written by Ilia Roussev on June 10, 2002 ___ !
     !/                                                                 \!
-    real, dimension(3), intent(in) :: Xyz_D(3)
+    real, dimension(3), intent(in)  :: Xyz_D(3)
     real, dimension(3), intent(out) :: BFRope_D
-    real, intent(out), optional :: RhoFRope
+    real,               intent(out) :: RhoFRope
+    real,               intent(out) :: pFluxRope
     !\
     ! Coordinates relative to the configuration center:
     !/
@@ -215,11 +219,12 @@ contains
 
     Kappa2 = 4.0*Rperp*Rtube/RPlus2; Kappa = sqrt(Kappa2)
     if (RMinus >= aTube) then
-       ! Compute the field and density outside the current torus   
-       !\
-       !Initialize redundant output
-       !/
-       if (present(RhoFRope))RhoFRope=0.0   
+       !
+       ! No pressure and density outside flux rope
+       RhoFRope = 0.0; pFluxRope = 0.0
+       ! Compute the field outside the current torus   
+       !
+
 
        ! Compute the vector potential, Ak, of the magnetic field 
        ! produced by the ring current Itube and its derivatives
@@ -238,13 +243,7 @@ contains
        !
        ! Compute the field and density inside the current torus
        !
-       ! 1.
-       ! Add the prominence material inside the flux rope, assuming that the
-       ! given total amount of mass
-       
-       if (present(RhoFRope))&
-            RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
-       ! 2.    
+       ! 1.   
        ! Define the model input, KappaA. A given point is characterized by
        ! two coordinates, say, RPepr and RMinus. In this case,
        ! if we denote 
@@ -254,7 +253,7 @@ contains
        KappaA2 = 4.0*Rperp*Rtube/(4.0*Rperp*Rtube + aTube**2)
        KappaA  = sqrt(KappaA2)
        ! 
-       ! 3.
+       ! 2.
        ! The vector potential of the externap field, Ak and its derivative,
        ! dAk/dk, are both prolonged to the tube interior using the following 
        ! sewing function (below we use A_k by a factor of Kappa**3 different
@@ -265,7 +264,7 @@ contains
        dAkdk   = toroid_dpdu(0, Kappa2In=KappaA2)*KappaA2/(1 - KappaA2) 
        AI = Ak + dAkdk*(Kappa - KappaA)
        !
-       ! 4. 
+       ! 3. 
        ! Now, we derive the field components in terms of x and rPerp 
        ! derivatives. Function A_i depends on x only via Kappa, so that:
        ! dA_i/dx = dA_k/dKappaA*dKappa/dx:
@@ -273,7 +272,7 @@ contains
        dKappadx  = 2.0*xRel*Kappa/RPlus2
        dAIdx   = dAkdk*dKappadx      
        !
-       ! 5.
+       ! 4.
        ! Analogously we account for the dependence of Kappa on the radial
        ! coordinate:
        ! dA_i/dr = dA_k/dKappaA*dKappaA/dr:
@@ -281,7 +280,7 @@ contains
        dKappadr  = Kappa*(Rtube**2 - R2Rel)/RPlus2
        dAIdr   = dAkdk*dKappadr
        !
-       ! 6.
+       ! 5.
        ! Now, we account for the dependence of KappaA on rPerp. From (*), the 
        ! contributions from the first derivative dA_k(KappaA)/dKappaA cancel 
        ! each other, so that only the second derivative matters, which is 
@@ -301,12 +300,28 @@ contains
        BIPhi_D = HelicitySign*abs(Itube)/(2.0*cPi*RPerp*aTube**2) &
             *sqrt(2.0*(aTube**2 - RMinus**2))*&
             cross_product(UnitX_D,XyzRel_D)
+       ! Add the prominence material inside the flux rope, assuming that the
+       ! given total amount of mass
+       
+       if (.not.UsePlasmaBeta)then
+          !Cold plasma density is applied with density estimated from
+          !the total mass of eject
+          RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
+          pFluxRope = 0
+       else
+          !
+          !Rescale BIPhi, which is not only a part of total pressure:
+          !
+          BIPhi_D = BIPhi_D/sqrt(1 + PlasmaBeta)
+          pFluxRope = 0.50*sum(BIPhi_D**2)*PlasmaBeta
+          RhoFRope = pFluxRope/EjectaTemperature
+       end if
     end if
     ! Add the field of the azimuthal current, Iphi::
     ! Compute the field produced by the ring current, Itube, both
     ! inside and outside the torus, BI = BFRope_D(x_:z_)::
     BFRope_D = BFRope_D + BIPhi_D
-
+    
     !
     ! Add the field of two magnetic charges
     !
@@ -314,10 +329,11 @@ contains
        call compute_TD99_BqField(Xyz_D, B1qField_D)
        BFRope_D = BFRope_D + B1qField_D
     endif
-   
-    BFRope_D = BFRope_D*No2Si_V(UnitB_)
-    RhoFRope = RhoFRope*No2Si_V(UnitRho_)
 
+   
+    BFRope_D  = BFRope_D *No2Si_V(UnitB_)
+    RhoFRope  = RhoFRope *No2Si_V(UnitRho_)
+    pFluxRope = pFluxRope*No2Si_V(UnitP_)
   end subroutine get_TD99_fluxrope
 
   !============================================================================
@@ -342,8 +358,10 @@ contains
     ! Compute the average density inside the flux rope assuming that the
     ! total amount of prominence mass is Mass (=10^16g=10^13kg)::
 
-    Rho0  = Mass/(AlphaRope*Rtube*cPi*aTube**2*No2Si_V(UnitX_)**3)
+    Rho0  = MassSi/(AlphaRope*Rtube*cPi*aTube**2*No2Si_V(UnitX_)**3)
     ! in [kg/m^3]
+    Rho0  = Rho0*Si2No_V(UnitRho_)
+
 
     ! Define the normalized model parameters here::
 
@@ -356,7 +374,6 @@ contains
     ITubeSi = 2*(BcTube*No2Si_V(UnitB_)) * (RTube*No2Si_V(UnitX_))/cMu ![A]
     ITube   = ITubeSi*Si2No_V(UnitJ_)*Si2No_V(UnitX_)**2
     WFRope     = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
-    Rho0  = Rho0*Si2No_V(UnitRho_)
 
     ! Strapping field::
 
@@ -390,7 +407,7 @@ contains
             aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
        write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
        write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
-       write(*,'(a,es13.5,a)') prefix//'Mass   = ',Mass*1.0e3,'[g] '
+       write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassDim,'[g] '
        write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
        write(*,'(a)') prefix
        write(*,'(a,es13.5,a)') prefix//'q      = ', &
