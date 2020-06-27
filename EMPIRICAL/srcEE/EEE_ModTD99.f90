@@ -121,8 +121,15 @@ contains
        call read_var('RadiusMajor', Rtube)
        call read_var('RadiusMinor', aTube)
        call read_var('Depth',       Depth)
-       call read_var('MassDim',     MassDim)
-       MassSi = MassDim*1.0e-3  !g to kg
+       call read_var('UsePlasmaBeta', UsePlasmaBeta)
+       if(UsePlasmaBeta)then
+          call read_var('PlasmaBeta', PlasmaBeta)
+          call read_var('EjectaTemperature', EjectaTemperatureDim)
+       else
+          PlasmaBeta = 0.0
+          call read_var('MassDim',     MassDim)
+          MassSi = MassDim*1.0e-3  !g to kg
+       end if
        call read_var('TypeCharge', TypeCharge, iError)
        if(iError/=0)then
           TypeCharge = 'none'; UseBqField = .false.
@@ -361,6 +368,11 @@ contains
     Rho0  = MassSi/(AlphaRope*Rtube*cPi*aTube**2*No2Si_V(UnitX_)**3)
     ! in [kg/m^3]
     Rho0  = Rho0*Si2No_V(UnitRho_)
+    
+    !Alternatively, if non-zero PlasmaBeta is used, the pressure
+    !is profiled proportionally to the total pressure, and the density 
+    !is found from the plasma pressure and constant ejecta temperature:
+    EjectaTemperature =  EjectaTemperatureDim*Io2No_V(UnitTemperature_)
 
 
     ! Define the normalized model parameters here::
@@ -407,8 +419,13 @@ contains
             aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
        write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
        write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
-       write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassDim,'[g] '
-       write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
+       if(UsePlasmaBeta)then
+          write(*,'(a,es13.5,a)') prefix//'Beta   =',PlasmaBeta
+          write(*,'(a,es13.5,a)') prefix//'Tejecta=',EjectaTemperatureDim,'[K]'
+       else
+          write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassDim,'[g] '
+          write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
+       end if
        write(*,'(a)') prefix
        write(*,'(a,es13.5,a)') prefix//'q      = ', &
             q*No2Si_V(UnitB_)*No2Si_V(UnitX_)**2,'[T m^2]'
