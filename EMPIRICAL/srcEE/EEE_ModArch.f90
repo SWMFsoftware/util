@@ -60,20 +60,20 @@ contains
   !============================================================================
 
   subroutine get_arch(x0_D,B0_D)
+
     use EEE_ModCommonVariables
     use ModCoordTransform, ONLY: rot_matrix_x,rot_matrix_y,rot_matrix_z
-    implicit none
 
     real, intent(in) :: x0_D(3)
     real, intent(out) :: B0_D(3)
 
     logical, save :: DoFirst=.true.
-    real, allocatable, dimension(:,:), save :: xDip_DI
+    real, allocatable, save :: xDip_DI(:,:)
     real, save :: Bdp
-    real, dimension(3,3), save :: Rotate_DD
+    real, save :: Rotate_DD(3,3)
     real :: Phi,PhiFirstDipole
-    real :: r,r_inv,r2_inv,r3_inv,x_D(3),xShift_D(3)
-    real :: Dp,Bdp_D(3),B_D(3)
+    real :: r, r_inv, r2_inv, r3_inv, x_D(3), xShift_D(3)
+    real :: Dp, Bdp_D(3), B_D(3)
     integer :: iDipole
     !--------------------------------------------------------------------------
     if(DoFirst)then

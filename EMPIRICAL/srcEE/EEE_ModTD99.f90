@@ -1,4 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 !==============================================================================
 module EEE_ModTD99
@@ -26,15 +27,12 @@ module EEE_ModTD99
   ! density only is calculated in agreeement with the input parameter of mass.
   real    :: PlasmaBeta = 0.0
   real    :: EjectaTemperature, EjectaTemperatureDim = 5.0e4 ! 50,000 K
-  ! 
-  !   
-  !
+
   ! Variables related to the position of the flux rope:
   !
   ! internal inductance releted to \mu_0 R_\infty
   real, parameter :: Li=0.5
 
-  !
   ! Variables related to the flux rope properties::
   real :: ITubeSi = 0.0, ITube = 0.0
   !Major radius (in fact - R_\infty, the radius of the circumference
@@ -48,7 +46,7 @@ module EEE_ModTD99
 
   real :: MassSi, MassDim
   real :: Rho0=0.0
-  !
+
   ! Magnetic field at the center of configuration is alway positive,
   ! Starpping field is negative. Phi-conponent of the toroidal current
   ! is positive. However, the sign of the field toroidal component may be
@@ -61,9 +59,10 @@ module EEE_ModTD99
   ! This choice affects only the sign of helicity, but not the direction
   ! of the nagnetic field at the center of configuration.
 
-  !!!!!!!!!!!!!!!!!!!!MAGNETIC CHARGES!!!!!!!!!!!
+  ! MAGNETIC CHARGES
   !
   character(LEN=10) :: TypeCharge = 'none'
+
   ! magnetic charge and its distance from the current ring
   real :: q = 0.0, BqFieldDim, qDistance = 0.0
   !
@@ -84,11 +83,13 @@ module EEE_ModTD99
   real :: BcTube, BcTubeDim
   ! Magnetic configuration center
   real :: XyzCenter_D(3)
+
 contains
   !============================================================================
-
   subroutine set_parameters_TD99(NameCommand)
+
     use ModReadParam, ONLY: read_var
+
     integer :: iError
     character(len=*), intent(in):: NameCommand
 
@@ -147,10 +148,11 @@ contains
     end select
 
   end subroutine set_parameters_TD99
-  !=================================
+  !===========================================================================
   subroutine get_TD99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
+
     use ModCoordTransform, ONLY: cross_product
-    !\__                                                             __/!
+
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
     !                                                                   !
     ! An instability that causes a CME eruption is expected to occur at !
@@ -158,18 +160,16 @@ contains
     ! refer to A&A, 1999, v.351, pp.707-720                             !
     !                                                                   !
     ! ___  This module was written by Ilia Roussev on June 10, 2002 ___ !
-    !/                                                                 \!
-    real, dimension(3), intent(in)  :: Xyz_D(3)
-    real, dimension(3), intent(out) :: BFRope_D
-    real,               intent(out) :: RhoFRope
-    real,               intent(out) :: pFluxRope
-    !\
+
+    real, intent(in)  :: Xyz_D(3)
+    real, intent(out) :: BFRope_D(3)
+    real, intent(out) :: RhoFRope
+    real, intent(out) :: pFluxRope
+
     ! Coordinates relative to the configuration center:
-    !/
     real :: XyzRel_D(3)
-    !\
+
     ! Distance to the configuration center squared:
-    !/
     real :: R2Rel !=sum(XyzRel_D**2)
 
     real:: xRel
@@ -446,9 +446,7 @@ contains
     endif
 
   end subroutine init_TD99_parameters
-
-  !=====================================================================!
-
+  !===========================================================================
   subroutine compute_TD99_BqField(Xyz_D, BqField_D, TimeNow)
 
     real, intent(in)  :: Xyz_D(3)
@@ -456,9 +454,9 @@ contains
     real, intent(in), optional :: TimeNow
 
     ! Variables related to coordinates::
-    real:: R2Plus,R2Mins
-    real, dimension(3):: RPlus_D,RMins_D
-    !--------------------------------------------------------------------
+    real:: R2Plus, R2Mins
+    real:: RPlus_D(3), RMins_D(3)
+    !-------------------------------------------------------------------------
 
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
     ! charges, -/+q::
@@ -488,5 +486,5 @@ contains
     BqField_D = q*(RPlus_D/R2Plus**3 - RMins_D/R2Mins**3)
   end subroutine compute_TD99_BqField
 
-  !=====================================================================!
+  !===========================================================================
 end module EEE_ModTD99

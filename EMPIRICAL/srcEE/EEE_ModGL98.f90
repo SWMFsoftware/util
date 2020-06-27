@@ -2,9 +2,12 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 !==============================================================================
 module EEE_ModGL98
+
   use EEE_ModCommonVariables
+
   implicit none
-  save
+
+  SAVE
 
   private
 
@@ -63,17 +66,14 @@ module EEE_ModGL98
   ! (negative) \beta_0. Specifically, the product \alpha_0r_0 is chosen
   ! to be a first zero of j_2 function, and then \beta_0 is chosen to satisfy
   ! Eq (*) with this value of .     
-  !/
   real, parameter :: Alpha0R0 = 5.763854 
-  !
+
   ! Vector characteristic of the configuration: radius vector of the
   ! configuration center and B0 multiplied by unit vector along
   ! the axis of symmetry
   !
-  real,dimension(3) :: XyzCenterConf_D, BConf_D
-  !\
-  !Misc
-  !/
+  real :: XyzCenterConf_D(3), BConf_D(3)
+
   real, parameter ::    delta = 0.1
   logical :: DoInit = .true.
 contains
@@ -117,11 +117,11 @@ contains
        
     B0 = B0Dim*Io2No_V(UnitB_)
 
-    !Relation between the cme_a1 parameter by Gibson-Low and B0
-    !B0= - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2)*4.0*cPi
+    ! Relation between the cme_a1 parameter by Gibson-Low and B0
+    ! B0 = - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2)*4*cPi
     
     ! The costant coefficient,
-    ! -4.0*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
+    ! -4*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
     
     
     ! Construct the rotational matrix Rotate_DD,
@@ -134,7 +134,7 @@ contains
     
     ! In the rotated coordinates the coordinate vector from 
     ! the heiocenter to the center of configuration is
-    ! (/0.0, 0.0, rDistance1/). Find this vector in the original
+    ! (/0, 0, rDistance1/). Find this vector in the original
     ! coodinate frame.
     
     XyzCenterConf_D = matmul((/0.0, 0.0, rDistance1/), Rotate_DD)
@@ -166,7 +166,7 @@ contains
        call read_var('Radius',      Radius)        ![rSun]
        call read_var('aStretch',     aStretch)      ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
-       rDistance1 = 1.0 + ApexHeight + aStretch - Radius
+       rDistance1 = 1 + ApexHeight + aStretch - Radius
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -176,7 +176,7 @@ contains
   !============================================================================
 
   subroutine get_GL98_fluxrope(XyzIn_D,rho_GL98,p_GL98,B_D,U_D)
-    !--------------------------------------------------------------------------
+
     ! Definition of Parameters used for the initial state
     !   AStretch    = contraction distance as in   r --> r -a
     !   rDistance1  = distance from the flux rope center to heliocenter
@@ -184,9 +184,6 @@ contains
     !
     ! OrientationCME : The counter-clockwise angle between the fluxrope
     !                  axis and the solar equator.
-    
-    !\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\//////////////////////////////////
-    !=====================================================================
     !
     ! Calculates magnetic field, pressure and density for a coronal flux
     ! rope capable of self-similar expansion and erupting in a CME.
@@ -217,7 +214,7 @@ contains
     !
     !Igor 2017-03-04 Fix a bug  Before the 'helicity switch' was
     !implemented as follows:
-    !if(cme_a1 > 0.0) then;Br2 = -Br2; Btheta2 = -Btheta2; end if
+    !if(cme_a1 > 0) then;Br2 = -Br2; Btheta2 = -Btheta2; end if
     !However, below, the magnetic pressure gradient
     !is calculated including Br2*dBr2dr1 + Btheta2*dBtheta2dr1.
     !Therefore, the sign in the magnetic field derivatives should
@@ -232,64 +229,51 @@ contains
     !------------------------------------------------------------------------
     use ModNumConst,       ONLY: cPi, cDegToRad
     use ModCoordTransform, ONLY: cross_product
-    implicit none
-    !\
+
     ! Coordinates of the input point, in rSun
-    !/
     real, intent(in) :: XyzIn_D(3)
-    !\
+
     ! OUTPUTS
-    !/
-    !\
     ! Magnetic field
-    !/
     real, intent(out) :: B_D(3)
-    !\
+
     ! Optional: velocity of self-similar expansion
-    !/
     real, intent(out),optional :: U_D(3)
-    !\
+
     ! Density, pressure
-    !/
     real, intent(out) :: rho_GL98,p_GL98
-    !\
+
     ! User declared local variables go here::
-    !/
-    !\
     ! Radial coordinate of the input point
-    !/
     real :: R
-    !\
+
     ! Coordinates of the input point after
     ! stretching transformation
-    !/
     real :: RTransformed, XyzTransformed_D(3)
-    !\
+
     ! Ccordinate vector originating at the center of
     ! the magnetic configuration and its module
-    !/
     real :: Distance2ConfCenter,XyzConf_D(3)
-    !\
+
     ! Local pressure in the magnetic configuration
-    !/ 
     real :: PConf
-    !\
+
     ! Variables needed to calculate parameters of the
     ! stretched magnetic configuration:
-    !/
     ! 1. Unit vector of radial direction and the magnetic 
     ! field projection onto it:
     real :: eBoldR_D(3), Br1
+
     ! 2. Magnetic field squared, total pressure gradient
     ! and its projection on the radial direction 
     real ::  BSquared, DPTotalDR1, GradPTotal_D(3)
+
     ! 3. Radial tension of stretched field
     real :: RadialTension
+
     ! 4. Local acceleration of the gravitational force
     real :: gGravity
-    !\ 
-    ! Misc
-    !/
+
     real :: R2CrossB0_D(3)
     real :: Alpha0R2
     !------------------------------------------------------------------------
@@ -298,41 +282,37 @@ contains
     R = sqrt(sum(XyzIn_D**2))
     ! Unit vector of radial direction
     eBoldR_D = XyzIn_D/R
-    !\
+
     ! Stretched CARTESIAN COORDINATES 
-    !/
     RTransformed = R + AStretch
     XyzTransformed_D = eBoldR_D*RTransformed
-    !COORDINATES RELATIVE TO CME FLUX ROPE CENTER
-    !----------------------------------------------------------------
+
+    ! Coordinates relative to CME flux rope center
     XyzConf_D = XyzTransformed_D - XyzCenterConf_D 
     Distance2ConfCenter = sqrt(sum(XyzConf_D**2))
+
     if (Distance2ConfCenter <= delta) then
        XyzConf_D = XyzConf_D*(delta/Distance2ConfCenter)
        Distance2ConfCenter = delta
     end if
     if (Distance2ConfCenter <= Radius) then
-       !\
+
        ! INSIDE THE MAGNETIC FLUX ROPE REGION
-       !/
-       !\
        !An argument of spherical Bessel functions
-       !/
        Alpha0R2 = Alpha0*Distance2ConfCenter 
-       !\
+
        ! Magnetic field components
-       !/ 
        R2CrossB0_D = cross_product(XyzConf_D,BConf_D) 
-       B_D = (2.0*BConf_D &
+       B_D = (2*BConf_D &
             + sign(Alpha0, B0)* &  !Helicity
             R2CrossB0_D)*(spher_bessel_1_over_x(Alpha0R2) - Beta0) &
             + spher_bessel_2(Alpha0R2)/Distance2ConfCenter**2*&
             cross_product(XyzConf_D, R2CrossB0_D) 
-       !\
+
        ! Compute kinetic gas pressure
-       !/
        PConf     =  Beta0*(Alpha0**2)*&
             sum(R2CrossB0_D**2)*(spher_bessel_1_over_x(Alpha0R2) - Beta0)
+
        !If we use stretch:
        Br1 = sum(eBoldR_D*B_D) 
        BSquared = sum(B_D**2)
@@ -341,68 +321,66 @@ contains
             (spher_bessel_1_over_x(Alpha0R2)**2 - Beta0**2)&
             - Alpha0*(XyzConf_D/Distance2ConfCenter**3)*sum(R2CrossB0_D**2)*&
             spher_bessel_2(Alpha0R2)*spher_bessel_1(Alpha0R2) &
-            - 4.0*B0**2*(XyzConf_D/Distance2ConfCenter**2)*&
+            - 4*B0**2*(XyzConf_D/Distance2ConfCenter**2)*&
             spher_bessel_2(Alpha0R2)*(spher_bessel_1_over_x(Alpha0R2) - Beta0)&
             + (XyzConf_D*sum(BConf_D*XyzConf_D)**2/Distance2ConfCenter**4 - &
             BConf_D*sum(BConf_D*XyzConf_D)/Distance2ConfCenter**2&
-            )*(spher_bessel_2(Alpha0R2)**2 - 4.0*spher_bessel_2(Alpha0R2)*&
+            )*(spher_bessel_2(Alpha0R2)**2 - 4*spher_bessel_2(Alpha0R2)*&
             (spher_bessel_1_over_x(Alpha0R2) - Beta0)) +&
             Alpha0*(XyzConf_D/Distance2ConfCenter**3)*sum(R2CrossB0_D**2)*(&
-            (spher_bessel_1(Alpha0R2) - 3.0*spher_bessel_2(Alpha0R2)/Alpha0R2)*&
-            (spher_bessel_2(Alpha0R2) - 2.0*&
+            (spher_bessel_1(Alpha0R2) - 3*spher_bessel_2(Alpha0R2)/Alpha0R2)*&
+            (spher_bessel_2(Alpha0R2) - 2*&
             (spher_bessel_1_over_x(Alpha0R2) - Beta0)) + &
-            2.0*spher_bessel_2(Alpha0R2)**2/Alpha0R2 )        
+            2*spher_bessel_2(Alpha0R2)**2/Alpha0R2 )        
        DPTotalDR1 = sum(GradPTotal_D*eBoldR_D)
-       !\
+
        ! MAGNETIC FIELD transformed with stretching transformation
-       !/
        B_D = (RTransformed/r)*B_D + AStretch*XyzTransformed_D*Br1/r**2
-       !\
+
        ! PLASMA DENSITY with stretching transformation
-       !/
        gGravity   = abs(Gbody)/(r**2)
-       RadialTension = (AStretch/r)*(RTransformed/r)**2*(&
-            (2.0 + AStretch/r)*(BSquared/RTransformed + DPTotalDR1) &
-           + 2.0*PConf/RTransformed - (3.0 + 2.0*AStretch/r)*Br1**2/r)
+       RadialTension = (AStretch/r)*(RTransformed/r)**2 &
+            *( (2 + AStretch/r)*(BSquared/RTransformed + DPTotalDR1) &
+            + 2*PConf/RTransformed - (3 + 2*AStretch/r)*Br1**2/r )
        rho_GL98 = RadialTension/gGravity
 
-       !\
        ! PLASMA PRESSURE with contraction transformation
-       !/
        p_GL98 = PConf*(RTransformed/r)**2 &
-            - (1.0/2.0)*((RTransformed/r)**2)*((RTransformed/r)**2 - 1.0)*Br1**2 
+            - 0.5*((RTransformed/r)**2)*((RTransformed/r)**2 - 1)*Br1**2 
        rho_GL98 = rho_GL98*No2Si_V(UnitRho_)
        p_GL98 = p_GL98*No2Si_V(UnitP_)
        B_D = B_D*No2Si_V(UnitB_)
 
     else
-       B_D = 0.0; rho_GL98 = 0.0; p_GL98 = 0.0
+       B_D = 0; rho_GL98 = 0; p_GL98 = 0
     endif
+
   contains
+    !=========================================================================
     real function spher_bessel_0(x)
       real, intent(in) :: x
       spher_bessel_0 = sin(x)/x
     end function spher_bessel_0
-    !===================
+    !=========================================================================
     real function spher_bessel_1(x)
       real, intent(in) :: x
       spher_bessel_1 = (sin(x) - x*cos(x))/x**2
     end function spher_bessel_1
-    !===================
+    !=========================================================================
     real function spher_bessel_1_over_x(x)
       real, intent(in) :: x
-      if(x==0.0)then
+      if(x == 0)then
          spher_bessel_1_over_x = 1.0/3.0
       else
          spher_bessel_1_over_x = (sin(x) - x*cos(x))/x**3
       end if
     end function spher_bessel_1_over_x
-    !================== =
+    !=========================================================================
     real function spher_bessel_2(x)
       real, intent(in) :: x
-      spher_bessel_2 = &
-           3.0*spher_bessel_1_over_x(x) - spher_bessel_0(x)
+      spher_bessel_2 = 3*spher_bessel_1_over_x(x) - spher_bessel_0(x)
     end function spher_bessel_2
-    !===================
+    !=========================================================================
   end subroutine get_GL98_fluxrope
+
 end module EEE_ModGL98
