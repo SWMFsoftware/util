@@ -65,14 +65,14 @@ if __name__ == '__main__':
        GLRadiusRange = 2-elements array to specify the range for GL
            Radius. Default is [0.2,2.0].
                        """)
-   parser.add_argument('-ARMag',type=int, default=1., help=
-                       """
-   if 1, the AR magnetic parameter is calculated
-   based on the average Br around the weighted center; if 2, the
-   AR magnetic parameter is calculated based on the average total field
-   along the PIL. The corresponding empirical relationships will be
-   used accordingly.
-   """)
+   #parser.add_argument('-ARMag',type=int, default=1., help=
+   #                    """
+   #if 1, the AR magnetic parameter is calculated
+   #based on the average Br around the weighted center; if 2, the
+   #AR magnetic parameter is calculated based on the average total field
+   #along the PIL. The corresponding empirical relationships will be
+   #used accordingly.
+   #""")
    #PlotRadius = Set up the layer of the magnetogram for 3D input
    #      Cannot be used 2D file, requires /UseBATS. Default is 1.0.
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
    SizeFactor = args.SizeFactor
    GLRadiusRange_I = args.GLRadiusRange
    UsePIL     = args.UsePIL
-   ARMag      = args.ARMag
+   #ARMag      = args.ARMag
    UseCMEGrid = args.CMEGrid
    nlat = args.nlat
    nlon = args.nlon
@@ -171,7 +171,7 @@ if __name__ == '__main__':
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
    CC=GL.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,
                  CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
-                 GLRadiusRange_I, UsePIL, ARMag, UseCMEGrid )
+                 GLRadiusRange_I, UsePIL, UseCMEGrid ) #ARMag - remove
    ##SHAPE INPUT PARAMETERS FOR THE CONCLUDING SESSION#########
    nLong =    CC[0] 
    nLat    =  CC[1] 

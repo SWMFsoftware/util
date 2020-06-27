@@ -13,7 +13,7 @@ def round_my(x):
 
 def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
         CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
-        GLRadiusRange_I, UsePIL, ARMag, UseCMEGrid):
+        GLRadiusRange_I, UsePIL, UseCMEGrid):  # ARMag,
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -111,7 +111,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    NSizeMap_C = np.where(NCenter_C <= ARThreshold, NSizeMap_C, 0.)
   
  
-   #Calculate the gradient of the Br field
+   #Calculate gradient of the Br field
    DDx_C = np.zeros([nLat,nLong])
    DDy_C = np.zeros([nLat,nLong]) 
    DDx_C[:,1:nLong-1] = (Br_C[:,2:nLong] - Br_C[:,0:nLong-2])/2.
@@ -231,28 +231,28 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
                        PILBitMap_C, 0.)
    #Calculate the poloidal flux needed for the observed CME velocity.
    #These relationships are based on the GONG magnetogram with nsmooth = 5
-   if ARMag == 1:
-      RegionSize_ARMag=round_my((4.0*nLong)/360)
-      br_ar=np.mean(
-         abs(Br_C[round_my(XyARCenter_D[1]-RegionSize_ARMag//2):
-                  round_my(XyARCenter_D[1]+RegionSize_ARMag//2)+1,
-                  round_my(XyARCenter_D[0]-RegionSize_ARMag//2):
-                  round_my(XyARCenter_D[0]+RegionSize_ARMag//2)+1]))
-      GL_poloidal=(CMESpeed*br_ar**0.43989278-3043.9307)/565.05018
-   else:
-      #Calculate the AR magnetic field strength in order to determine the
-      #right poloidal flux needed.
-      iYPILPoints_I, iXPILPoints_I =np.where(PILMap_C != 0.)
-      NN = len(iYPILPoints_I)
-      bt_pil=0.
-      for i in np.arange(NN):
-         bt_pil+=bt_field[iYPILPoints_I[i],iXPILPoints_I[i]]
-
-      bt_pil=bt_pil/NN
-      GL_poloidal=(CMESpeed*bt_pil**0.58148678-2814.1030)/507.60065
+   # if ARMag == 1:
+   RegionSize_ARMag=round_my((4.0*nLong)/360)
+   br_ar=np.mean(
+      abs(Br_C[round_my(XyARCenter_D[1]-RegionSize_ARMag//2):
+               round_my(XyARCenter_D[1]+RegionSize_ARMag//2)+1,
+               round_my(XyARCenter_D[0]-RegionSize_ARMag//2):
+               round_my(XyARCenter_D[0]+RegionSize_ARMag//2)+1]))
+   GL_poloidal=(CMESpeed*br_ar**0.43989278-3043.9307)/565.05018
+   # else: We do not have a horizontal field array
+   # Calculate the AR magnetic field strength in order to determine the
+   # right poloidal flux needed.
+   #   iYPILPoints_I, iXPILPoints_I =np.where(PILMap_C != 0.)
+   #   NN = len(iYPILPoints_I)
+   #   bt_pil=0.
+   #   for i in np.arange(NN):
+   #      bt_pil+=bt_field[iYPILPoints_I[i],iXPILPoints_I[i]]
+   #
+   #   bt_pil=bt_pil/NN
+   #   GL_poloidal=(CMESpeed*bt_pil**0.58148678-2814.1030)/507.60065
 
   
-   #Print WARNING information is GL_Bstrength is negative                                               
+   # Print WARNING information is GL_Bstrength is negative                                               
    if GL_poloidal <= 0 :
       print ('*********************************************')
       print ('WARNING: CALCULATION FAILED!USE WITH CAUTION!')
