@@ -13,14 +13,14 @@ contains
 
   !============================================================================
 
-  subroutine EEE_get_B0(x_D,B0_D)
+  subroutine EEE_get_B0(x_D,B0_D, TimeSimulation)
 
-    use EEE_ModCommonVariables, ONLY: UseArch
+    use EEE_ModCommonVariables, ONLY: UseArch, UseTD
     use EEE_ModArch,            ONLY: get_arch
-
+    use EEE_ModTD99,            ONLY: compute_TD99_BqField
     real, intent(in)  :: x_D(3)
     real, intent(out) :: B0_D(3)
-
+    real, optional, intent(in) :: TimeSimulation
     real :: B_D(3)
     !--------------------------------------------------------------------------
 
@@ -31,6 +31,8 @@ contains
        call get_arch(x_D,B_D)
 
        B0_D = B0_D + B_D
+    elseif(UseTD)then
+       call compute_TD99_BqField(x_D, B_D, TimeSimulation)
     end if
 
   end subroutine EEE_get_B0

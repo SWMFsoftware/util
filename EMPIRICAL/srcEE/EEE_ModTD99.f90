@@ -10,7 +10,7 @@ module EEE_ModTD99
   save
   private
 
-  public :: set_parameters_TD99, get_TD99_fluxrope
+  public :: set_parameters_TD99, get_TD99_fluxrope, compute_TD99_BqField
 
   !
   ! Logical variables related to the magnetic field computation:
@@ -473,7 +473,12 @@ contains
     ! Variables related to coordinates::
     real:: R2Plus, R2Mins
     real:: RPlus_D(3), RMins_D(3)
+    logical :: DoSaveStartTime = .true.
     !-------------------------------------------------------------------------
+    if(DoSaveStartTime.and.present(TimeNow))then
+       StartTime = TimeNow
+       DoSaveStartTime = .false.
+    end if
 
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
     ! charges, -/+q::
