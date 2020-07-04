@@ -33,8 +33,6 @@ if __name__ == '__main__':
                        'CME speed in km/s, recovered from observations')
    parser.add_argument('--CMEGrid',action='store_true',
                        help='Output parameters of the refined CME grid')
-   parser.add_argument('--UsePIL',action='store_true',
-                       help='Use PIL orientation to find GL_Orientation')
    parser.add_argument('--ARSize_OFF',action='store_true',help=
                        """
    ==============This group of paramaters serves to find GLRadius
@@ -83,8 +81,6 @@ if __name__ == '__main__':
    GLRadius   = args.GLRadius
    SizeFactor = args.SizeFactor
    GLRadiusRange_I = args.GLRadiusRange
-   UsePIL     = args.UsePIL
-   #ARMag      = args.ARMag
    UseCMEGrid = args.CMEGrid
    nlat = args.nlat
    nlon = args.nlon
@@ -171,7 +167,7 @@ if __name__ == '__main__':
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
    CC=GL.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,
                  CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
-                 GLRadiusRange_I, UsePIL, UseCMEGrid ) #ARMag - remove
+                 GLRadiusRange_I, UseCMEGrid) 
    ##SHAPE INPUT PARAMETERS FOR THE CONCLUDING SESSION#########
    nLong =    CC[0] 
    nLat    =  CC[1] 

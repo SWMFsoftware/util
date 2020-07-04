@@ -13,7 +13,7 @@ def round_my(x):
 
 def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
         CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
-        GLRadiusRange_I, UsePIL, UseCMEGrid):  # ARMag,
+        GLRadiusRange_I, UseCMEGrid): 
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -158,54 +158,9 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    DisMax      =(6.0*nLong)/360
    DisThresholdS=3
       
-   if (UsePIL):
-      #Calculate the orientation of the flux rope according to PIL 
-      #(make it perpendicular to PIL).
-       PILMap_C = np.where(DisCenter_C<=DisThresholdS, PILBitMap_C, 0.)
-       
-       iYPIL_I,iXPIL_I =np.where(PILMap_C > 0)
-       MM = len(iYPIL_I)
-   
-       #    PIL_xx=PIL_x[sort(PIL_x)]
-       #    PIL_yy=PIL_y[sort(PIL_x)]
-       #    PIL_fit=ladfit(PIL_xx,PIL_yy,/double)  
-              
-       if PIL_fit[1] ==0: 
-          if Br_C[XyARCenter_D[1]-2,XyARCenter_D[1]] < 0:
 
-             r1=[0,-1] 
-          else:
-             r1=[0,1]
-       else:
-          aa_PIL=-1./PIL_fit[1]
-          if abs(aa_PIL)<= 1.: 
-             bb_PIL=ar_center[1]-aa_PIL*ar_center[0]
-             xx=[ar_center[0]-2,ar_center[0]-3,ar_center[0]-4]
-             yy=aa_PIL*xx+bb_PIL
-             ave_field=(br_field(xx[0],yy[0])+br_field(xx[1],yy[1])+br_field(xx[2],yy[2]))/3.
-             if ave_field < 0:
-                r1=[-1.,-aa_PIL] 
-             else:
-                r1=[1.,aa_PIL]
-          else:
-             bb_PIL=ar_center[1]-aa_PIL*ar_center[0]
-             yy=[ar_center[1]-2,AR_center[1]-3,AR_Center[1]-4]
-             xx=floor((yy-bb_PIL)/aa_PIL)
-             ave_field=(br_field(xx[0],yy[0])+br_field(xx[1],yy[1])+br_field(xx[2],yy[2]))/3.
-             if ave_field < 0:
-                r1=[-signum(aa_PIL),-signum(aa_PIL)*aa_PIL] 
-             else:
-                r1=[signum(aa_PIL),signum(aa_PIL)*aa_PIL]    
-       if array_equal(PIL_xx,PIL_xx[0]):
-          if br_field(ar_center[0]-2,ar_center[1]) < 0: 
-             r1=[-1,0] 
-          else:
-             r1=[1,0]
-          
-       
-   else:
       #Calculate the GL flux rope orientation from the two weighted points.
-      r1=[xNegative-xPositive,yNegative-yPositive]
+   r1=[xNegative-xPositive,yNegative-yPositive]
    r1=r1/np.sqrt(r1[0]**2+r1[1]**2) 
    r2=[1.0,0.0]
    GL_Orientation=np.arccos(r1[0]*r2[0]+r1[1]*r2[1])*Rad2Deg
@@ -231,7 +186,6 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
                        PILBitMap_C, 0.)
    #Calculate the poloidal flux needed for the observed CME velocity.
    #These relationships are based on the GONG magnetogram with nsmooth = 5
-   # if ARMag == 1:
    RegionSize_ARMag=round_my((4.0*nLong)/360)
    br_ar=np.mean(
       abs(Br_C[round_my(XyARCenter_D[1]-RegionSize_ARMag//2):
@@ -239,19 +193,6 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
                round_my(XyARCenter_D[0]-RegionSize_ARMag//2):
                round_my(XyARCenter_D[0]+RegionSize_ARMag//2)+1]))
    GL_poloidal=(CMESpeed*br_ar**0.43989278-3043.9307)/565.05018
-   # else: We do not have a horizontal field array
-   # Calculate the AR magnetic field strength in order to determine the
-   # right poloidal flux needed.
-   #   iYPILPoints_I, iXPILPoints_I =np.where(PILMap_C != 0.)
-   #   NN = len(iYPILPoints_I)
-   #   bt_pil=0.
-   #   for i in np.arange(NN):
-   #      bt_pil+=bt_field[iYPILPoints_I[i],iXPILPoints_I[i]]
-   #
-   #   bt_pil=bt_pil/NN
-   #   GL_poloidal=(CMESpeed*bt_pil**0.58148678-2814.1030)/507.60065
-
-  
    # Print WARNING information is GL_Bstrength is negative                                               
    if GL_poloidal <= 0 :
       print ('*********************************************')
