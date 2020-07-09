@@ -78,5 +78,9 @@ module EEE_ModCommonVariables
 
   ! CME location and orientation
   real :: LongitudeCme = 0.0, LatitudeCme = 0.0, OrientationCme = 0.0
+  !
+  ! Starting time when the dynamic strapping field starts to be applied 
+  ! is stored, to calculate the effect of displacement of moving charges
+  real    :: StartTime = -1.0
 
 end module EEE_ModCommonVariables

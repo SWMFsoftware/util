@@ -25,12 +25,7 @@ module EEE_ModTD99
   ! 
   ! If .true., the magnetic field from two magnetic charges is varied
   ! dynamically, via varied B0Field
-  logical :: UseDynamicStrapping = .false.
-  !
-  ! Starting time when the dynamic strapping field starts to be applied 
-  ! is stored, to calculate the effect of displacement of moving charges
-  real    :: StartTime = -1.0
-  
+  logical :: UseDynamicStrapping = .false.  
   !-------------------Parameters of plasma inside the rope------------
   logical :: UsePlasmaBeta = .false. 
   ! If ON, the parameter Beta, having a meaning of a constant 
@@ -276,9 +271,11 @@ contains
           UseStaticCharge = .true.
        elseif(trim(TypeCharge)=='moving')then
           UseStaticCharge = .true.
+          UseDynamicStrapping = .true.
           call read_var('UChargeX', UChargeX)
        elseif(trim(TypeCharge)=='cancelflux')then
           UseStaticCharge = .false.
+          UseDynamicStrapping = .true.
           call read_var('UChargeX', UChargeX)
        end if
     case default
@@ -487,18 +484,9 @@ contains
     !
     real    :: RPlusSteady_D(3), RMinusSteady_D(3)
     real    :: RPlusMoving_D(3), RMinusMoving_D(3)
-    logical :: DoSaveStartTime = .true.
     !-------------------------------------------------------------------------
     !if UseDynamicStrapping is .false. the cal may be only accidental
     if(present(TimeNow).and.(.not.UseDynamicStrapping))RETURN
-    if(DoSaveStartTime.and.present(TimeNow))then
-       !
-       ! Once called for the first time,
-       ! save time
-       StartTime = TimeNow
-       DoSaveStartTime = .false.
-    end if
-
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
     ! charges, -/+q::
     RPlusSteady_D  = Xyz_D - RPlus_D 
@@ -521,8 +509,8 @@ contains
     RMinusMoving_D = Xyz_D - RMinus_D - (TimeNow - StartTime)*UChargeX*UnitX_D 
     RPlus  = norm2( RPlusMoving_D)
     RMinus = norm2(RMinusMoving_D)
-    BqField_D = BqField_D + &
-         q*(RPlusMoving_D/RPlus**3 - RMinusMoving_D/RMinus**3)
+    BqField_D = (BqField_D + &
+         q*(RPlusMoving_D/RPlus**3 - RMinusMoving_D/RMinus**3))*No2Si_V(UnitB_)
   end subroutine compute_TD99_BqField
   !===========================================================================
 end module EEE_ModTD99

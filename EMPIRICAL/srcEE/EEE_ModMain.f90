@@ -19,12 +19,13 @@ Module EEE_ModMain
   public :: EEE_do_not_add_cme_again
 contains
   !============================================================================
-  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn)
+  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
     implicit none
 
     real, intent(in)             :: BodyNDim,BodyTDim,gamma
     integer, optional, intent(in):: iCommIn
+    real, optional, intent(in)   :: TimeNow
 
     integer :: iComm, iError
     !--------------------------------------------------------------------------
@@ -34,6 +35,7 @@ contains
        iComm = MPI_COMM_WORLD
     end if
     call MPI_COMM_RANK(iComm,iProc,iError)
+    if(present(TimeNow))StartTime = TimeNow
 
     g = gamma
     inv_g = 1.0/g
@@ -190,7 +192,7 @@ contains
 
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, UseTD14
-    use EEE_ModTD99, ONLY: get_TD99_fluxrope!, BqField
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
