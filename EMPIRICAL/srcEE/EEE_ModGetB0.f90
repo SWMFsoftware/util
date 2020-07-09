@@ -33,6 +33,7 @@ contains
        B0_D = B0_D + B_D
     elseif(UseTD)then
        call compute_TD99_BqField(x_D, B_D, TimeSimulation)
+       B0_D = B0_D + B_D
     end if
 
   end subroutine EEE_get_B0
