@@ -99,7 +99,9 @@ contains
     Io2No_V = 1/No2Io_V
 
     Gbody  = -cGravitation*mSun*(Si2No_V(UnitU_)**2 * Si2No_V(UnitX_))
-
+    
+    XyzCmeCenterSi_D = XyzCmeCenterSi_D*Io2Si_V(UnitX_)
+    XyzCmeApexSi_D   = XyzCmeApexSi_D  *Io2Si_V(UnitX_)
   end subroutine EEE_initialize
 
   !============================================================================
@@ -115,8 +117,10 @@ contains
     use EEE_ModCms,       ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
-         LongitudeCme, LatitudeCme, OrientationCme, &
+         LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, DoAddTD14
+    use ModNumConst,      ONLY: cDegToRad
+    use ModCoordTransform,ONLY: lonlat_to_xyz
 
     character(len=*), intent(in) :: NameCommand
 
@@ -131,6 +135,10 @@ contains
           call read_var("DoAddFluxRope",  DoAddFluxRope)
           call read_var("LongitudeCme",   LongitudeCme)
           call read_var("LatitudeCme",    LatitudeCme)
+          !
+          ! Get direction vector for the CME
+          call lonlat_to_xyz(LongitudeCme*cDegToRad, &
+               LatitudeCme*cDegToRad, DirCme_D)
           call read_var("OrientationCme", OrientationCme)
           call read_var("TypeCme", TypeCme, IsUpperCase=.true.)
           select case(TypeCme)
