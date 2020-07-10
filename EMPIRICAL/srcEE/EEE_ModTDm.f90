@@ -21,9 +21,9 @@ module EEE_ModTDm
   public :: calc_tdm14_bfield
 
   real, public :: AnalyticTdCoordScale=1., AnalyticTdFieldScale=1.
-  real, public :: AnalyticTdCoeffR = 1.83 ! torus major radius
-  real, public :: AnalyticTdCoeffA = 0.75 ! torus minor radius
-  real, public :: AnalyticTdCoeffD = 0.83 ! depth of torus center
+  real, public :: RTube = 1.83 ! torus major radius
+  real, public :: ATube = 0.75 ! torus minor radius
+  real, public :: Depth = 0.83 ! depth of torus center
 
   real, public :: XyzApex_D(3), Bstrap_D(3)
 
@@ -45,9 +45,9 @@ contains
     case("#CME")
        call read_var('AnalyticTdCoordScale', AnalyticTdCoordScale)
        call read_var('AnalyticTdFieldScale', AnalyticTdFieldScale)
-       call read_var('AnalyticTdCoeffR', AnalyticTdCoeffR)
-       call read_var('AnalyticTdCoeffA', AnalyticTdCoeffA)
-       call read_var('AnalyticTdCoeffD', AnalyticTdCoeffD)
+       call read_var('RTube', RTube)
+       call read_var('ATube', ATube)
+       call read_var('Depth', Depth)
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -70,7 +70,7 @@ contains
     Rotate_DD = matmul(rot_matrix_x(-OrientationCme*cDegToRad),Rotate_DD)
     Rotate_DD = matmul(rot_matrix_y(-cHalfPi),Rotate_DD)
 
-    CoordRef_D = (/ 0., 0., AnalyticTdCoeffR-AnalyticTdCoeffD /)
+    CoordRef_D = (/ 0., 0., RTube-Depth /)
     XyzApex_D =  &
          matmul(CoordRef_D*AnalyticTdCoordScale+(/0.,0.,rBody/), Rotate_DD)
 
@@ -112,36 +112,33 @@ contains
     use ModHyperGeometric, ONLY: calc_elliptic_int_1kind, &
          calc_elliptic_int_2kind
 
-    real, intent(in) :: Coord_D(3)
-    real, intent(out) :: bTd_D(3)
-    real, intent(in) :: bVertIn
+    real, intent(in)    :: Coord_D(3)
+    real, intent(out)   :: bTd_D(3)
+    real, intent(in)    :: bVertIn
     logical, intent(in) :: DoTestWithPointSource
 
     real, parameter :: Delta = 0.1
-    ! real, parameter :: cF0 = -0.406982224701535, cF1 = -1.5464309982239, cF2 = -0.249947772314288, cG1 = -2.38261647628
-    real, save :: TdR, TdA, TdD
-    real, save :: TdL, TdQ
-    logical, save :: IsFirst = .true.
+    real, save      :: RTube, aTube, Depth
+    real, save      :: TdL, TdQ
+    logical, save   :: IsFirst = .true.
 
     real :: x, y, z
     real :: bTheta_D(3), bQ_D(3), bI_D(3)
     real :: rPlus_D(3), rMinus_D(3), LenRPlus, LenRMinus, bVert
-    real :: rVert, Rho, RhoStarF, RhoStarG
-    real :: rVertHat_D(3), ThetaHat_D(3), xHat_D(3)
+    real :: RPerp, RMinus, RhoStarF, RhoStarG
+    real :: RPerpHat_D(3), ThetaHat_D(3), xHat_D(3)
     real :: CurrentI, AxialFlux, Xi, BigTheta
-    real :: VarK, dKdX, dKdR, kStarF, dKSFdX, dKSFdR, kStarG, dKSGdX, dKSGdR
+    real :: Kappa, DKappaDx, DKappaDRperp, kStarF, dKSFdX, dKSFdR, kStarG, dKSGdX, dKSGdR
     real :: EllipticKf, EllipticEf, FuncAf, dFuncAf, d2FuncAf, d3FuncAf
-    real :: EllipticKg, EllipticEg, FuncAg, dFuncAg, d2FuncAg, d3FuncAg
+    real :: EllipticKg, EllipticEg, 
+    real :: FuncAg, dFuncAg, d2FuncAg, d3FuncAg
     real :: SewingH, dSewingH, SewingF, dSewingF, SewingG, dSewingG
     real :: Ai, dAIdX, dAIdR
     real :: TmpG, dGdX, dGdR, TmpH, dHdR, Afx, dAFRdX, dAFXdR
     !--------------------------------------------------------------------------
 
     if (IsFirst) then 
-       TdR = AnalyticTdCoeffR
-       TdA = AnalyticTdCoeffA
-       TdD = AnalyticTdCoeffD
-       TdL = TdR/sqrt(2.)/1.03
+       TdL = RTube/sqrt(2.)/1.03
        TdQ = 1.
        IsFirst = .false.
     endif
@@ -153,34 +150,40 @@ contains
     ! ---- point sources field B_q ----
     bQ_D = 0.
     if (DoTestWithPointSource) then
-       rPlus_D = (/ x-TdL, y, z+TdD /)
-       rMinus_D = (/ x+TdL, y, z+TdD /)
+       rPlus_D = (/ x-TdL, y, z+Depth /)
+       rMinus_D = (/ x+TdL, y, z+Depth /)
        LenRPlus = sqrt(sum(rPlus_D**2))
        LenRMinus = sqrt(sum(rMinus_D**2))
        bQ_D = TdQ * (rPlus_D/LenRPlus**3 - rMinus_D/LenRMinus**3)
-       bVert = - 2*TdQ*TdL/sqrt(TdL**2+TdR**2)**3
+       bVert = - 2*TdQ*TdL/sqrt(TdL**2+RTube**2)**3
     else
        bVert = bVertIn
     endif
     ! In spherical case the straping field magnitude bVert should be provided
 
     ! ---- variables to calculate toroidal and poloidal vector potentials ----
-    rVert = sqrt(y**2+(z+TdD)**2)
-    Rho = sqrt(x**2+(rVert-TdR)**2)
-
-    rVertHat_D = (/ 0., y/rVert, (z+TdD)/rVert /)
-    ThetaHat_D = (/ 0., -(z+TdD)/rVert, y/rVert /)
+    RPerp  = sqrt(y**2 + (z + Depth)**2)
+    RMinus = sqrt(x**2+(RPerp-RTube)**2)
+    !
+    !Coordinate unit vectors
+    !
+    RPerpHat_D = (/ 0., y/RPerp, (z+Depth)/RPerp /)
+    ThetaHat_D = (/ 0., -(z+Depth)/RPerp, y/RPerp /)
     xHat_D = (/ 1., 0., 0. /)
+    !
+    ! Toroidal coordinate, usual argument of special functions
+    ! describing solution in the totoidal coordinates
+    Kappa = sqrt((RPerp*RTube)/(RPerp*RTube+RMinus**2/4.))
+    !
+    ! Derivatives over x and over RPerp
+    DKappaDx = - (x*Kappa**3) / (4*RPerp*RTube)
+    DKappaDRperp = Kappa**3/(8*RPerp**2*RTube) * (RMinus**2-2*RPerp*(RPerp-RTube))
 
-    VarK = sqrt((rVert*TdR)/(rVert*TdR+Rho**2/4.))
-    dKdX = - (x*VarK**3) / (4*rVert*TdR)
-    dKdR = VarK**3/(8*rVert**2*TdR) * (Rho**2-2*rVert*(rVert-TdR))
-
-    CurrentI = - (4*cPi*TdR*bVert) / (log(8*TdR/TdA)-25./24.)
-    AxialFlux = 3./(5*sqrt(2.)) * CurrentI * TdA
+    CurrentI = - (4*cPi*RTube*bVert) / (log(8*RTube/aTube)-25./24.)
+    AxialFlux = 3./(5*sqrt(2.)) * CurrentI * aTube
 
     ! Sewing functions
-    Xi = (Rho-TdA)/(Delta*TdA)
+    Xi = (RMinus-aTube)/(Delta*aTube)
     SewingH = 0.5*(Xi+log(2*cosh(Xi)))
     dSewingH = 0.5*(1+tanh(Xi))
     ! BigTheta = cPi/4*(1+tanh(Xi))
@@ -196,11 +199,11 @@ contains
     ! dSewingG = dSewingH - cF0*exp(cG1*SewingH)*cG1*dSewingH
 
     ! curly-A function and its derivatives for k_(six-edged-star)
-    RhoStarF = TdA*(1+Delta*SewingF)
-    kStarF = sqrt((rVert*TdR)/(rVert*TdR+RhoStarF**2/4.))
-    dKSFdX = - (x*kStarF**3) / (4*rVert*TdR) * dSewingF*RhoStarF/Rho
-    dKSFdR = kStarF**3/(8*rVert**2*TdR) &
-         * (RhoStarF**2 - 2*rVert*(rVert-TdR)*dSewingF*RhoStarF/Rho)
+    RhoStarF = aTube*(1+Delta*SewingF)
+    kStarF = sqrt((RPerp*RTube)/(RPerp*RTube+RhoStarF**2/4.))
+    dKSFdX = - (x*kStarF**3) / (4*RPerp*RTube) * dSewingF*RhoStarF/RMinus
+    dKSFdR = kStarF**3/(8*RPerp**2*RTube) &
+         * (RhoStarF**2 - 2*RPerp*(RPerp-RTube)*dSewingF*RhoStarF/RMinus)
 
     call calc_elliptic_int_1kind(kStarF,EllipticKf)
     call calc_elliptic_int_2kind(kStarF,EllipticEf)
@@ -216,11 +219,11 @@ contains
          /(kStarF**4*(1-kStarF**2)**2) * EllipticKf
 
     ! curly-A function for k_(five-sided-star)
-    RhoStarG = TdA*(1+Delta*SewingG)
-    kStarG = sqrt((rVert*TdR)/(rVert*TdR+RhoStarG**2/4.))
-    dKSGdX = - (x*kStarG**3) / (4*rVert*TdR) * dSewingG*RhoStarG/Rho
-    dKSGdR = kStarG**3/(8*rVert**2*TdR) &
-         * (RhoStarG**2 - 2*rVert*(rVert-TdR)*dSewingG*RhoStarG/Rho)
+    RhoStarG = aTube*(1+Delta*SewingG)
+    kStarG = sqrt((RPerp*RTube)/(RPerp*RTube+RhoStarG**2/4.))
+    dKSGdX = - (x*kStarG**3) / (4*RPerp*RTube) * dSewingG*RhoStarG/RMinus
+    dKSGdR = kStarG**3/(8*RPerp**2*RTube) &
+         * (RhoStarG**2 - 2*RPerp*(RPerp-RTube)*dSewingG*RhoStarG/RMinus)
 
     call calc_elliptic_int_1kind(kStarG,EllipticKg)
     call calc_elliptic_int_2kind(kStarG,EllipticEg)
@@ -236,53 +239,58 @@ contains
          /(kStarG**4*(1-kStarG**2)**2)*EllipticKg
 
     ! ---- ring current field B_I ----
-
-    Ai = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
-         (FuncAf+dFuncAf*(VarK-kStarF)+0.5*d2FuncAf*(VarK-kStarF)**2)
-    dAIdX = CurrentI/cTwoPi*sqrt(TdR/rVert) * &
-         (dFuncAf*dKdX+d2FuncAf*dKdX*(VarK-kStarF) &
-         + 0.5*d3FuncAf*dKSFdX*(VarK-kStarF)**2)
-    dAIdR = CurrentI/cTwoPi*sqrt(TdR/rVert) &
-         *(dFuncAf*dKdR+d2FuncAf*dKdR*(VarK-kStarF) &
-         + 0.5*d3FuncAf*dKSFdR*(VarK-kStarF)**2) - Ai/(2*rVert)
-
-    bI_D = - dAIdX * rVertHat_D + (dAIdR+Ai/rVert) * xHat_D
+    !
+    ! A phi-component of vector potential
+    Ai = CurrentI/cTwoPi*sqrt(RTube/RPerp)* &
+         (FuncAf + dFuncAf*(Kappa - kStarF)+0.5*d2FuncAf*(Kappa - kStarF)**2)
+    !
+    ! Its partial derivatives
+    !
+    dAIdX = CurrentI/cTwoPi*sqrt(RTube/RPerp)*&
+         (dFuncAf*DKappaDx + d2FuncAf*DKappaDx*(Kappa - kStarF) &
+         + 0.5*d3FuncAf*dKSFdX*(Kappa - kStarF)**2)
+    dAIdR = CurrentI/cTwoPi*sqrt(RTube/RPerp) &
+         *(dFuncAf*DKappaDRperp + d2FuncAf*DKappaDRperp*(Kappa-kStarF) &
+         + 0.5*d3FuncAf*dKSFdR*(Kappa-kStarF)**2) - Ai/(2*RPerp)
+    !
+    ! Poloidal magnetic field
+    bI_D = - dAIdX*RPerpHat_D + (dAIdR + Ai/RPerp)*xHat_D
 
     ! ---- toroidal field B_theta ----
 
     ! just a temporary variable, same for tmpH below
-    TmpG = 3+4*dFuncAf*(VarK-kStarF)   
+    TmpG = 3 + 4*dFuncAf*(Kappa-kStarF)   
 
-    dGdX = 4*(d2FuncAf*dKSFdX*(VarK-kStarF)+dFuncAf*(dKdX-dKSFdX))
-    dGdR = 4*(d2FuncAf*dKSFdR*(VarK-kStarF)+dFuncAf*(dKdR-dKSFdR))
+    dGdX = 4*(d2FuncAf*dKSFdX*(Kappa-kStarF)+dFuncAf*(DKappaDx-dKSFdX))
+    dGdR = 4*(d2FuncAf*dKSFdR*(Kappa-kStarF)+dFuncAf*(DKappaDRperp-dKSFdR))
 
-    TmpH = (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*dFuncAg + &
-         TdA**2*kStarG**3*d2FuncAg*(VarK-kStarG)
-    dHdR = (3*VarK**2*dKdR*(x**2+TdR**2-rVert**2)-2*VarK**3*rVert-&
-         3*TdA**2*kStarG**2*dKSGdR)*dFuncAg + &
-         (VarK**3*(x**2+TdR**2-rVert**2)-TdA**2*kStarG**3)*d2FuncAg*dKSGdR + &
-         TdA**2*( (3*kStarG**2*dKSGdR*(VarK-kStarG) &
-         + kStarG**3*(dKdR-dKSGdR))*d2FuncAg &
-         + kStarG**3*(VarK-kStarG)*d3FuncAg*dKSGdR )
+    TmpH = (Kappa**3*(x**2+RTube**2-RPerp**2)-aTube**2*kStarG**3)*dFuncAg + &
+         aTube**2*kStarG**3*d2FuncAg*(Kappa-kStarG)
+    dHdR = (3*Kappa**2*DKappaDRperp*(x**2+RTube**2-RPerp**2)-2*Kappa**3*RPerp-&
+         3*aTube**2*kStarG**2*dKSGdR)*dFuncAg + &
+         (Kappa**3*(x**2+RTube**2-RPerp**2)-aTube**2*kStarG**3)*d2FuncAg*dKSGdR + &
+         aTube**2*( (3*kStarG**2*dKSGdR*(Kappa - kStarG) &
+         + kStarG**3*(DKappaDRperp - dKSGdR))*d2FuncAg &
+         + kStarG**3*(Kappa - kStarG)*d3FuncAg*dKSGdR )
 
-    Afx = AxialFlux/(4*cPi*rVert)*sqrt(TdR/rVert) * &
-         ( FuncAg + (TdA**2*kStarG**3)/(4*rVert*TdR)*dFuncAg &
+    Afx = AxialFlux/(4*cPi*RPerp)*sqrt(RTube/RPerp) * &
+         ( FuncAg + (aTube**2*kStarG**3)/(4*RPerp*RTube)*dFuncAg &
          + TmpG**(5./2.)/(30*sqrt(3.)) &
-         - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*rVert*TdR)*TmpH )
+         - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*RPerp*RTube)*TmpH )
 
-    dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*rVert)/sqrt(rVert*TdR) * &
-         (1.5*sqrt(TmpG)*dGdX*x*VarK**3*dFuncAf + &
-         sqrt(TmpG)**3*(x*VarK**3*d2FuncAf*dKSFdX &
-         + (VarK**3+3*x*VarK**2*dKdX)*dFuncAf))
-    dAFXdR = (AxialFlux*sqrt(TdR))/(4*cPi)*rVert**(-3./2.) &
+    dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*RPerp)/sqrt(RPerp*RTube) * &
+         (1.5*sqrt(TmpG)*dGdX*x*Kappa**3*dFuncAf + &
+         sqrt(TmpG)**3*(x*Kappa**3*d2FuncAf*dKSFdX &
+         + (Kappa**3+3*x*Kappa**2*DKappaDx)*dFuncAf))
+    dAFXdR = (AxialFlux*sqrt(RTube))/(4*cPi)*RPerp**(-3./2.) &
          * ( dFuncAg*dKSGdR + &
-         TdA**2/(4*TdR)*((3*kStarG**2*rVert*dKSGdR-kStarG**3) &
-         /(rVert**2)*dFuncAg + &
-         kStarG**3/rVert*d2FuncAg*dKSGdR) &
+         aTube**2/(4*RTube)*((3*kStarG**2*RPerp*dKSGdR-kStarG**3) &
+         /(RPerp**2)*dFuncAg + &
+         kStarG**3/RPerp*d2FuncAg*dKSGdR) &
          + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
-         1./(12*sqrt(3.)*TdR)*((1.5*sqrt(TmpG)*dGdR*rVert-TmpG**(3./2.)) &
-         /(rVert**2)*TmpH + &
-         TmpG**(3./2.)/rVert*dHdR) ) - 3./(2*rVert)*Afx
+         1./(12*sqrt(3.)*RTube)*((1.5*sqrt(TmpG)*dGdR*RPerp-TmpG**(3./2.)) &
+         /(RPerp**2)*TmpH + &
+         TmpG**(3./2.)/RPerp*dHdR) ) - 3./(2*RPerp)*Afx
 
     bTheta_D = (dAFRdX-dAFXdR) * ThetaHat_D
 
