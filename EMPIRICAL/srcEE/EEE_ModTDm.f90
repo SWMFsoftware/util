@@ -130,7 +130,7 @@ contains
     real :: CurrentI, AxialFlux, Xi, BigTheta
     real :: Kappa, DKappaDx, DKappaDRperp, kStarF, dKSFdX, dKSFdR, kStarG, dKSGdX, dKSGdR
     real :: EllipticKf, EllipticEf, FuncAf, dFuncAf, d2FuncAf, d3FuncAf
-    real :: EllipticKg, EllipticEg, 
+    real :: EllipticKg, EllipticEg
     real :: FuncAg, dFuncAg, d2FuncAg, d3FuncAg
     real :: SewingH, dSewingH, SewingF, dSewingF, SewingG, dSewingG
     real :: Ai, dAIdX, dAIdR
