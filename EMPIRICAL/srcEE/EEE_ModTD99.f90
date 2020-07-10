@@ -131,12 +131,16 @@ contains
        ! Compute the equilibrium toroidal current, Itube, based
        ! on the force balance in direction normal to the surface of
        ! the flux tube.
-       !Itube = 8.0*cPi*q*qDistance*Rtube &
+       !Itube = 8*cPi*q*qDistance*Rtube &
        !     *(qDistance**2+Rtube**2)**(-1.5) &
-       !     /(alog(8.0*Rtube/aTube) &
-       !     -1.5 + Li/2.0)                           ! in [-]
-       BcTube  = 4.0*cPi*bStrapping/(alog(8.0*Rtube/aTube) &
-            -1.5 + Li/2.0)                           ! in [-]
+       !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
+       !     4*cPi*(2*q*qDistance/(qDistance**2 + RTube**2))*RTube/&
+       !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
+       !     4*cPi*bStrapping*RTube/(alog(8.0*Rtube/aTube) -1.5 + Li/2.0) 
+       ! From here, we can calculate BcTube = ITube/(2*RTube)
+       ! in [-]
+       BcTube  = 2*cPi*bStrapping/ &
+           (log(8.0*Rtube/aTube) - 1.5 + Li/2.0)            ! in [-]
     else
        !Normalize field read from parameter file
        BcTube= BcTubeDim*Io2No_V(UnitB_)
@@ -206,6 +210,8 @@ contains
        if (UseDynamicStrapping) then
           write(*,*) prefix,'>>>>> Time-dependent strapping field is used <<<<<'
           write(*,*) prefix,'StartTime = ',StartTime,'[s]'
+          write(*,*) prefix,'Velocity of converging charges = ',&
+               UChargeX,'[R_s/s]'
           write(*,*) prefix
        endif
     endif
@@ -502,7 +508,11 @@ contains
     !sign, therefore the calculated field should be flipped
     BqField_D = - BqField_D
     !When the time is long enough, the moving charges annihilate
-    if((TimeNow - StartTime)*UChargeX >= qDistance)RETURN
+    if((TimeNow - StartTime)*UChargeX >= qDistance)then
+       BqField_D = BqField_D*No2Si_V(UnitB_)
+       RETURN
+    end if
+       
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
     ! charges, -/+q::
     RPlusMoving_D  = Xyz_D - RPlus_D  + (TimeNow - StartTime)*UChargeX*UnitX_D 
