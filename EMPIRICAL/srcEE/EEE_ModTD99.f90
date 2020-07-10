@@ -220,7 +220,7 @@ contains
        write(*,'(a)') prefix//'of Itube is computed!!!'
        write(*,'(a)') prefix
        write(*,'(a,es13.5)') prefix//'The value of Itube is reset to :: ',ItubeSi
-       write(*,'(a,es13.5,a)') prefix,'The free energy of the flux rope is :: ',WFRope,'Ergs.'
+       write(*,'(a,es13.5,a)') prefix//'The free energy of the flux rope is :: ',WFRope,'Ergs.'
        write(*,'(a)') prefix
     endif
 
@@ -271,18 +271,19 @@ contains
        if(trim(TypeCharge)=='bstrap')then
           !
           UseEquilibriumCurrent  = .true.
-       end if
-       call read_var('qDistance',  qDistance)
-       if(trim(TypeCharge)=='steady')then
-          UseStaticCharge = .true.
-       elseif(trim(TypeCharge)=='moving')then
-          UseStaticCharge = .true.
-          UseDynamicStrapping = .true.
-          call read_var('UChargeX', UChargeX)
-       elseif(trim(TypeCharge)=='cancelflux')then
-          UseStaticCharge = .false.
-          UseDynamicStrapping = .true.
-          call read_var('UChargeX', UChargeX)
+       else
+          call read_var('qDistance',  qDistance)
+          if(trim(TypeCharge)=='steady')then
+             UseStaticCharge = .true.
+          elseif(trim(TypeCharge)=='moving')then
+             UseStaticCharge = .true.
+             UseDynamicStrapping = .true.
+             call read_var('UChargeX', UChargeX)
+          elseif(trim(TypeCharge)=='cancelflux')then
+             UseStaticCharge = .false.
+             UseDynamicStrapping = .true.
+             call read_var('UChargeX', UChargeX)
+          end if
        end if
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
