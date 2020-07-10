@@ -79,6 +79,15 @@ module EEE_ModCommonVariables
   ! CME location and orientation
   real :: LongitudeCme = 0.0, LatitudeCme = 0.0, OrientationCme = 0.0
   !
+  ! Direction vector from the heliocenter to the CME center:
+  real :: DirCme_D(3) = 0.0
+  !
+  ! Coordinate vectors of the CME center and apex
+  real :: XyzCmeCenterSi_D(3) = 0.0, XyzCmeApexSi_D(3) = 0.0
+  ! The AMBIENT magnetic field at these points
+  real :: bAmbientCenter_D(3) = 0.0, bAmbientApex_D(3)
+
+  !
   ! Starting time when the dynamic strapping field starts to be applied 
   ! is stored, to calculate the effect of displacement of moving charges
   real    :: StartTime = -1.0
