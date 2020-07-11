@@ -167,6 +167,12 @@ contains
        call read_var('aStretch',     aStretch)      ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
        rDistance1 = 1 + ApexHeight + aStretch - Radius
+       !
+       !Save coordinates of the CME Apex...
+       XyzCmeApexSi_D = DirCme_D*(1 + ApexHeight)
+       ! 
+       !...and center:
+       XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*Radius
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select

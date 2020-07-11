@@ -247,6 +247,13 @@ contains
        call read_var('RadiusMajor', Rtube)
        call read_var('RadiusMinor', aTube)
        call read_var('Depth',       Depth)
+       !
+       ! Save coords of the configuration center...
+       XyzCmeCenterSi_D = DirCme_D*(1 - Depth)
+       !
+       ! ...and those of apex:
+       XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
+
        call read_var('UsePlasmaBeta', UsePlasmaBeta)
        if(UsePlasmaBeta)then
           call read_var('PlasmaBeta', PlasmaBeta)
