@@ -35,7 +35,7 @@ contains
        iComm = MPI_COMM_WORLD
     end if
     call MPI_COMM_RANK(iComm,iProc,iError)
-    if(present(TimeNow))StartTime = TimeNow
+    if(present(TimeNow).and.StartTime < 0.0)StartTime = TimeNow
 
     g = gamma
     inv_g = 1.0/g
@@ -99,9 +99,12 @@ contains
     Io2No_V = 1/No2Io_V
 
     Gbody  = -cGravitation*mSun*(Si2No_V(UnitU_)**2 * Si2No_V(UnitX_))
-    
-    XyzCmeCenterSi_D = XyzCmeCenterSi_D*Io2Si_V(UnitX_)
-    XyzCmeApexSi_D   = XyzCmeApexSi_D  *Io2Si_V(UnitX_)
+    if(DoNormalizeXyz)then
+       XyzCmeCenterSi_D = XyzCmeCenterSi_D*Io2Si_V(UnitX_)
+       XyzCmeApexSi_D   = XyzCmeApexSi_D  *Io2Si_V(UnitX_)
+       !To avoid repeated scaling in subsequent sessions
+       DoNormalizeXyz = .false.
+    end if
   end subroutine EEE_initialize
 
   !============================================================================

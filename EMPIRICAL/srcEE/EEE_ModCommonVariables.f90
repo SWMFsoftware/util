@@ -83,9 +83,10 @@ module EEE_ModCommonVariables
   real :: DirCme_D(3) = 0.0
   !
   ! Coordinate vectors of the CME center and apex
+  logical :: DoNormalizeXyz = .false.
   real :: XyzCmeCenterSi_D(3) = 0.0, XyzCmeApexSi_D(3) = 0.0
   ! The AMBIENT magnetic field at these points
-  real :: bAmbientCenter_D(3) = 0.0, bAmbientApex_D(3)
+  real :: bAmbientCenterSi_D(3) = 0.0, bAmbientApexSi_D(3) = 0.0
 
   !
   ! Starting time when the dynamic strapping field starts to be applied 
