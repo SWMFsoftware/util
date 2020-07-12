@@ -325,14 +325,8 @@ contains
 
     real:: xRel
     real:: RMinus, RPlus2, Rperp
-    real:: Kappa, Kappa2, DKappaDx, DKappaDr
-    real:: KappaA, KappaA2, DKappaAdr
- 
-    ! Vector potential related variables::
-    real:: Ak, dAkdk, D2Akdk2A
-    real:: AI, dAIdx, dAIdr
-    ! Flux-rope related variables::
-    real:: BIPhi_D(3), B1qField_D(3)
+    real:: Kappa, Kappa2 
+    real:: B1qField_D(3)
     
     logical:: DoFirstCall=.true.
     !--------------------------------------------------------------------------
@@ -369,110 +363,7 @@ contains
     ! Define the model input, Kappa
 
     Kappa2 = 4.0*Rperp*Rtube/RPlus2; Kappa = sqrt(Kappa2)
-    if (RMinus >= aTube) then
-       !
-       ! No pressure and density outside flux rope
-       RhoFRope = 0.0; pFluxRope = 0.0
-       ! Compute the field outside the current torus   
-       !
-
-
-       ! Compute the vector potential, Ak, of the magnetic field 
-       ! produced by the ring current Itube and its derivatives
-
-       !Calculate \tilde{P}^{-1}_{-1/2}(\cosh u)
-       Ak     = toroid_P(0, Kappa2In=Kappa2)
-       !Calculate d\tilde{P}^{-1}_{-1/2}(\cosh u)/du
-       dAkDk  = toroid_dpdu(0, Kappa2In=Kappa2)/(1.0 - Kappa2)
-       
-       BFRope_D = BcTube*(Rtube/sqrt(RPlus2))**3*&
-            (dAkDk*(2*xRel*XyzRel_D + (RTube**2 - R2Rel)*UnitX_D)/RPlus2 &
-            + Ak*UnitX_D)
-       !No toroidal field outside the filament
-       BIPhi_D = 0.0
-    else
-       !
-       ! Compute the field and density inside the current torus
-       !
-       ! 1.   
-       ! Define the model input, KappaA. A given point is characterized by
-       ! two coordinates, say, RPepr and RMinus. In this case,
-       ! if we denote 
-       ! Kappa = function(RPerp,RMinus): i.e. Kappa**2 = 4*RPerp*RTube *R_+**2
-       ! then 
-       ! KappaA = function(RPepr,ATube), or
-       KappaA2 = 4.0*Rperp*Rtube/(4.0*Rperp*Rtube + aTube**2)
-       KappaA  = sqrt(KappaA2)
-       ! 
-       ! 2.
-       ! The vector potential of the externap field, Ak and its derivative,
-       ! dAk/dk, are both prolonged to the tube interior using the following 
-       ! sewing function (below we use A_k by a factor of Kappa**3 different
-       ! from what we used above:
-       ! A_i = A_k(KappaA) + dA_k/dKappaA*(Kappa - Kappa_A) (*)
-       !
-       Ak      = toroid_P(0, Kappa2In=KappaA2)*KappaA**3
-       dAkdk   = toroid_dpdu(0, Kappa2In=KappaA2)*KappaA2/(1 - KappaA2) 
-       AI = Ak + dAkdk*(Kappa - KappaA)
-       !
-       ! 3. 
-       ! Now, we derive the field components in terms of x and rPerp 
-       ! derivatives. Function A_i depends on x only via Kappa, so that:
-       ! dA_i/dx = dA_k/dKappaA*dKappa/dx:
-       !
-       dKappadx  = 2.0*xRel*Kappa/RPlus2
-       dAIdx   = dAkdk*dKappadx      
-       !
-       ! 4.
-       ! Analogously we account for the dependence of Kappa on the radial
-       ! coordinate:
-       ! dA_i/dr = dA_k/dKappaA*dKappaA/dr:
-       !
-       dKappadr  = Kappa*(Rtube**2 - R2Rel)/RPlus2
-       dAIdr   = dAkdk*dKappadr
-       !
-       ! 5.
-       ! Now, we account for the dependence of KappaA on rPerp. From (*), the 
-       ! contributions from the first derivative dA_k(KappaA)/dKappaA cancel 
-       ! each other, so that only the second derivative matters, which is 
-       ! equal to  d^2A_k(KappaA)/dKappaA^2:
-       !
-       d2Akdk2A = KappaA/(1 - KappaA**2)*(3*toroid_P(0, Kappa2In=KappaA**2) +&
-           toroid_dpdu(0, Kappa2In=KappaA**2)*(1 + KappaA**2)/(1 - KappaA**2))
-       dKappaAdr = KappaA*aTube**2/&
-            (4.0*Rperp*Rtube + aTube**2)
-       dAIdr = dAIdr + d2Akdk2A*dKappaAdr*(Kappa - KappaA)
-
-       BFRope_D =  BcTube/(Kappa**3)*(Rtube/sqrt(RPlus2))**3*&
-            (dAIdx*XyzRel_D + (dAIdr + AI)*UnitX_D)
-       ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
-       ! produced by the azimuthal current Iphi. This is needed to ensure
-       ! that the flux rope configuration is force free. 
-       BIPhi_D = HelicitySign*BcTube*RTube/(cPi*RPerp*aTube**2) &
-            *sqrt(2.0*(aTube**2 - RMinus**2))*&
-            cross_product(UnitX_D,XyzRel_D)
-       ! Add the prominence material inside the flux rope, assuming that the
-       ! given total amount of mass
-       
-       if (.not.UsePlasmaBeta)then
-          !Cold plasma density is applied with density estimated from
-          !the total mass of eject
-          RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
-          pFluxRope = 0
-       else
-          !
-          !Rescale BIPhi, which is not only a part of total pressure:
-          !
-          BIPhi_D = BIPhi_D/sqrt(1 + PlasmaBeta)
-          pFluxRope = 0.50*sum(BIPhi_D**2)*PlasmaBeta
-          RhoFRope = pFluxRope/EjectaTemperature
-       end if
-    end if
-    ! Add the field of the azimuthal current, Iphi::
-    ! Compute the field produced by the ring current, Itube, both
-    ! inside and outside the torus, BI = BFRope_D(x_:z_)::
-    BFRope_D = BFRope_D + BIPhi_D
-    
+    call td99    
     !
     ! Add the field of two magnetic charges
     !
@@ -485,6 +376,121 @@ contains
     BFRope_D  = BFRope_D *No2Si_V(UnitB_)
     RhoFRope  = RhoFRope *No2Si_V(UnitRho_)
     pFluxRope = pFluxRope*No2Si_V(UnitP_)
+  contains
+    subroutine td99
+      real:: DKappaDx, DKappaDr
+      real:: KappaA, KappaA2, DKappaAdr
+      
+      ! Vector potential related variables::
+      real:: Ak, dAkdk, D2Akdk2A
+      real:: AI, dAIdx, dAIdr
+      ! Flux-rope related variables::
+      real:: BIPhi_D(3)
+      !-----------------------------------------------------------------
+      if (RMinus >= aTube) then
+         !
+         ! No pressure and density outside flux rope
+         RhoFRope = 0.0; pFluxRope = 0.0
+         ! Compute the field outside the current torus   
+         !
+         
+         
+         ! Compute the vector potential, Ak, of the magnetic field 
+         ! produced by the ring current Itube and its derivatives
+         
+         !Calculate \tilde{P}^{-1}_{-1/2}(\cosh u)
+         Ak     = toroid_P(0, Kappa2In=Kappa2)
+         !Calculate d\tilde{P}^{-1}_{-1/2}(\cosh u)/du
+         dAkDk  = toroid_dpdu(0, Kappa2In=Kappa2)/(1.0 - Kappa2)
+         
+         BFRope_D = BcTube*(Rtube/sqrt(RPlus2))**3*&
+              (dAkDk*(2*xRel*XyzRel_D + (RTube**2 - R2Rel)*UnitX_D)/RPlus2 &
+              + Ak*UnitX_D)
+         !No toroidal field outside the filament
+         BIPhi_D = 0.0
+      else
+         !
+         ! Compute the field and density inside the current torus
+         !
+         ! 1.   
+         ! Define the model input, KappaA. A given point is characterized by
+         ! two coordinates, say, RPepr and RMinus. In this case,
+         ! if we denote 
+         ! Kappa = function(RPerp,RMinus): i.e. Kappa**2 = 4*RPerp*RTube *R_+**2
+         ! then 
+         ! KappaA = function(RPepr,ATube), or
+         KappaA2 = 4.0*Rperp*Rtube/(4.0*Rperp*Rtube + aTube**2)
+         KappaA  = sqrt(KappaA2)
+         ! 
+         ! 2.
+         ! The vector potential of the externap field, Ak and its derivative,
+         ! dAk/dk, are both prolonged to the tube interior using the following 
+         ! sewing function (below we use A_k by a factor of Kappa**3 different
+         ! from what we used above:
+         ! A_i = A_k(KappaA) + dA_k/dKappaA*(Kappa - Kappa_A) (*)
+         !
+         Ak      = toroid_P(0, Kappa2In=KappaA2)*KappaA**3
+         dAkdk   = toroid_dpdu(0, Kappa2In=KappaA2)*KappaA2/(1 - KappaA2) 
+         AI = Ak + dAkdk*(Kappa - KappaA)
+         !
+         ! 3. 
+         ! Now, we derive the field components in terms of x and rPerp 
+         ! derivatives. Function A_i depends on x only via Kappa, so that:
+         ! dA_i/dx = dA_k/dKappaA*dKappa/dx:
+         !
+         dKappadx  = 2.0*xRel*Kappa/RPlus2
+         dAIdx   = dAkdk*dKappadx      
+         !
+         ! 4.
+         ! Analogously we account for the dependence of Kappa on the radial
+         ! coordinate:
+         ! dA_i/dr = dA_k/dKappaA*dKappaA/dr:
+         !
+         dKappadr  = Kappa*(Rtube**2 - R2Rel)/RPlus2
+         dAIdr   = dAkdk*dKappadr
+         !
+         ! 5.
+         ! Now, we account for the dependence of KappaA on rPerp. From (*), the 
+         ! contributions from the first derivative dA_k(KappaA)/dKappaA cancel 
+         ! each other, so that only the second derivative matters, which is 
+         ! equal to  d^2A_k(KappaA)/dKappaA^2:
+         !
+         d2Akdk2A = KappaA/(1 - KappaA**2)*(3*toroid_P(0, Kappa2In=KappaA**2) +&
+              toroid_dpdu(0, Kappa2In=KappaA**2)*(1 + KappaA**2)/(1 - KappaA**2))
+         dKappaAdr = KappaA*aTube**2/&
+              (4.0*Rperp*Rtube + aTube**2)
+         dAIdr = dAIdr + d2Akdk2A*dKappaAdr*(Kappa - KappaA)
+         
+         BFRope_D =  BcTube/(Kappa**3)*(Rtube/sqrt(RPlus2))**3*&
+              (dAIdx*XyzRel_D + (dAIdr + AI)*UnitX_D)
+         ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
+         ! produced by the azimuthal current Iphi. This is needed to ensure
+         ! that the flux rope configuration is force free. 
+         BIPhi_D = HelicitySign*BcTube*RTube/(cPi*RPerp*aTube**2) &
+              *sqrt(2.0*(aTube**2 - RMinus**2))*&
+              cross_product(UnitX_D,XyzRel_D)
+         ! Add the prominence material inside the flux rope, assuming that the
+         ! given total amount of mass
+         
+         if (.not.UsePlasmaBeta)then
+            !Cold plasma density is applied with density estimated from
+            !the total mass of eject
+            RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
+            pFluxRope = 0
+         else
+            !
+            !Rescale BIPhi, which is not only a part of total pressure:
+            !
+            BIPhi_D = BIPhi_D/sqrt(1 + PlasmaBeta)
+            pFluxRope = 0.50*sum(BIPhi_D**2)*PlasmaBeta
+            RhoFRope = pFluxRope/EjectaTemperature
+         end if
+      end if
+      ! Add the field of the azimuthal current, Iphi::
+      ! Compute the field produced by the ring current, Itube, both
+      ! inside and outside the torus, BI = BFRope_D(x_:z_)::
+      BFRope_D = BFRope_D + BIPhi_D
+    end subroutine td99
   end subroutine get_TD99_fluxrope
   !============================================================================
   subroutine compute_TD99_BqField(Xyz_D, BqField_D, TimeNow)
