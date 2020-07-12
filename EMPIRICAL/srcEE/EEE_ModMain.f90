@@ -114,14 +114,13 @@ contains
     use ModReadParam,     ONLY: read_var
     use EEE_ModGL98,      ONLY: set_parameters_GL98
     use EEE_ModTD99,      ONLY: set_parameters_TD99
-    use EEE_ModTDm,       ONLY: set_parameters_tdm14
     use EEE_ModArch,      ONLY: set_parameters_arch
     use EEE_ModShearFlow, ONLY: set_parameters_shearflow
     use EEE_ModCms,       ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
          LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
-         UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, DoAddTD14
+         UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak
     use ModNumConst,      ONLY: cDegToRad
     use ModCoordTransform,ONLY: lonlat_to_xyz
 
@@ -150,9 +149,10 @@ contains
              DoAddTD = DoAddFluxRope
              call set_parameters_TD99(NameCommand)
           case("TD14")
+             UseTD = .true.
              UseTD14 = .true.
-             DoAddTD14 = DoAddFluxRope
-             call set_parameters_tdm14(NameCommand)
+             DoAddTD = DoAddFluxRope
+             call set_parameters_TD99(NameCommand)
           case("GIBSON-LOW", "GL")
              UseGL = .true.
              DoAddGL = DoAddFluxRope
@@ -175,16 +175,6 @@ contains
        ! and possibly for expert use (more options than #CME command)
     case("#ARCH")
        call set_parameters_arch(NameCommand)
-    case("#TD99FLUXROPE")
-       UseCme = .true.
-       UseTD  = .true.
-       DoAddTD  = .true.
-       call set_parameters_TD99(NameCommand)
-    case("#GL98FLUXROPE")
-       UseCme = .true.
-       UseGL  = .true.
-       DoAddGL  = .true.
-       call set_parameters_GL98(NameCommand)
     case("#SHEARFLOW")
        UseCme       = .true.
        UseShearFlow = .true.
@@ -204,7 +194,6 @@ contains
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, UseTD14
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
-    use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModCms, ONLY: get_cms
@@ -225,12 +214,6 @@ contains
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
 
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
-    end if
-
-    if (UseTD14) then
-       call calc_tdm14_bfield(Xyz_D, B1_D, Bstrap_D)
-
-       B_D = B_D + B1_D
     end if
 
     if(UseGL)then
@@ -262,7 +245,6 @@ contains
          DoAddGL, UseCms, DoAddSpheromak, DoAddTD14
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
-    use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
     use EEE_ModCms,  ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3)
@@ -282,11 +264,6 @@ contains
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     endif
-
-    if(DoAddTD14)then
-       call calc_tdm14_bfield(Xyz_D, B1_D, Bstrap_D)
-       B_D = B_D + B1_D
-    end if
 
     if(DoAddGL)then
        ! Add Gibson & Low (GL98) flux rope
@@ -308,9 +285,9 @@ contains
     ! Designed to avoid repeatedly adding CME in subsequent sessions
     !
     use EEE_ModCommonVariables, ONLY: DoAddFluxRope, &
-         DoAddTD, DoAddGL, DoAddSpheromak, DoAddTD14
+         DoAddTD, DoAddGL, DoAddSpheromak
     !---------------------
     DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false. 
-    DoAddSpheromak = .false.; DoAddTD14 = .false.
+    DoAddSpheromak = .false.
   end subroutine EEE_do_not_add_cme_again
 end Module EEE_ModMain
