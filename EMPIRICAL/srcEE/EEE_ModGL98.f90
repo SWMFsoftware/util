@@ -173,6 +173,7 @@ contains
        ! 
        !...and center:
        XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*Radius
+       DoNormalizeXyz = .true.
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select

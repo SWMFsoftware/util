@@ -253,7 +253,7 @@ contains
        !
        ! ...and those of apex:
        XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
-
+       DoNormalizeXyz = .true.
        call read_var('UsePlasmaBeta', UsePlasmaBeta)
        if(UsePlasmaBeta)then
           call read_var('PlasmaBeta', PlasmaBeta)
@@ -275,7 +275,7 @@ contains
           RETURN
        end if
        call read_var('bStrappingDim', bStrappingDim)
-       if(trim(TypeCharge)=='bstrap')then
+       if(trim(TypeCharge)=='readbstrap')then
           !
           UseEquilibriumCurrent  = .true.
        else
@@ -285,10 +285,12 @@ contains
           elseif(trim(TypeCharge)=='moving')then
              UseStaticCharge = .true.
              UseDynamicStrapping = .true.
+             StartTime = -1.0
              call read_var('UChargeX', UChargeX)
           elseif(trim(TypeCharge)=='cancelflux')then
              UseStaticCharge = .false.
              UseDynamicStrapping = .true.
+             StartTime = -1.0
              call read_var('UChargeX', UChargeX)
           end if
        end if
