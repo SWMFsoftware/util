@@ -152,15 +152,6 @@ contains
     character(len=*), parameter:: NameSub = 'set_parameters_GL98'
     !--------------------------------------------------------------------------
     select case(NameCommand)
-    case("#GL98FLUXROPE")
-       call read_var('UseFluxRope',     DoAddFluxRope)
-       call read_var('aStretch',           aStretch)       
-       call read_var('rDistance1',          rDistance1)      
-       call read_var('Radius',          Radius)     
-       call read_var('Bstrength',       B0Dim) 
-       call read_var('LongitudeCme',   LongitudeCme)
-       call read_var('LatitudeCme',    LatitudeCme)
-       call read_var('OrientationCme', OrientationCme)
     case("#CME")
        call read_var('BStrength',   B0Dim)         ![Gauss]
        call read_var('Radius',      Radius)        ![rSun]
