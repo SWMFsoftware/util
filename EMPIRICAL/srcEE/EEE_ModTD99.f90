@@ -11,34 +11,6 @@ module EEE_ModTD99
   private
 
   public :: set_parameters_TD99, get_TD99_fluxrope, compute_TD99_BqField
-
-  !
-  ! If .true. in the initial distribution of the magnetic field the
-  ! strapping field from two magnetic charges 
-  logical, public :: UseStaticCharge = .false.
-
-  ! 
-  ! If .true. the current of the configuration is found from the
-  ! equilibrium condition at the given strapping field 
-  logical :: UseEquilibriumCurrent = .false.
-
-  ! 
-  ! If .true., the magnetic field from two magnetic charges is varied
-  ! dynamically, via varied B0Field
-  logical :: UseDynamicStrapping = .false.  
-  !-------------------Parameters of plasma inside the rope------------
-  logical :: UsePlasmaBeta = .false. 
-  ! If ON, the parameter Beta, having a meaning of a constant 
-  ! gaskinetic-to-magnetic pressure
-  ! ratio, is set for the ejecta, as well as the ejecta temperature. In this 
-  ! case both density and pressure are set inside the flux rope. Otherwise, the
-  ! density only is calculated in agreeement with the input parameter of mass.
-  real    :: PlasmaBeta = 0.0
-  real    :: EjectaTemperature, EjectaTemperatureDim = 5.0e4 ! 50,000 K
-  ! If the ejecta is cold ( PlasmaBeta = 0.0), the total mass of ejecta is
-  ! set as the initial condition.
-  real :: MassSi
-  real :: Rho0=0.0
   !
   !
   ! Variables related to the position of the flux rope:
@@ -70,19 +42,56 @@ module EEE_ModTD99
   ! This choice affects only the sign of helicity, but not the direction
   ! of the nagnetic field at the center of configuration.
 
+  !-------------------Parameters of plasma inside the rope------------
+  logical :: UsePlasmaBeta = .false. 
+  ! If ON, the parameter Beta, having a meaning of a constant 
+  ! gaskinetic-to-magnetic pressure
+  ! ratio, is set for the ejecta, as well as the ejecta temperature. In this 
+  ! case both density and pressure are set inside the flux rope. Otherwise, the
+  ! density only is calculated in agreeement with the input parameter of mass.
+  real    :: PlasmaBeta = 0.0
+  real    :: EjectaTemperature, EjectaTemperatureDim = 5.0e4 ! 50,000 K
+  ! If the ejecta is cold ( PlasmaBeta = 0.0), the total mass of ejecta is
+  ! set as the initial condition.
+  real :: MassSi
+  real :: Rho0=0.0  
+  !
+  ! There is an alternative way to parameterize the current in the loop:
+  ! namely, via the strength of the overarching (strapping) field. With
+  ! this choice, the current is determined by the condition of equilibrium
+  !`with the given strapping field intensity. The possible options are:
+  ! readbstrap (the starapping field intensity is provided in the parameter
+  ! file, getbstrap (in this case the field is taken from the MHD solution).
+  character(LEN=10) :: TypeBStrap = 'none'
+  !
+  ! The following logical is set to .true. if TypeBStrap = 'getbstrap'
+  logical :: DoGetBStrap = .false.
+  ! 
+  ! If .true. the current of the configuration is found from the
+  ! equilibrium condition at the given strapping field 
+  logical :: UseEquilibriumCurrent = .false.
+  !
+  !
+  real    :: bStrapping = 0.0, bStrappingDim = 0.0
   ! MAGNETIC CHARGES
   !
   character(LEN=10) :: TypeCharge = 'none'
 
   ! magnetic charge and its distance from the current ring
-  real :: q = 0.0, bStrappingDim, qDistance = 0.0
+  real :: q = 0.0,  qDistance = 0.0
   !
   ! coordinate vectors of the charge location
   !
   real    :: RPlus_D(3), RMinus_D(3)
-  real    :: UChargeX = 0.0   
-  real    :: bStrapping
- ! real :: UChargeY = 0.0
+  real    :: UChargeX = 0.0
+  !
+  ! If .true. in the initial distribution of the magnetic field the
+  ! strapping field from two magnetic charges 
+  logical :: UseStaticCharge = .false.
+  ! 
+  ! If .true., the magnetic field from two magnetic charges is varied
+  ! dynamically, via varied B0Field
+  logical :: UseDynamicStrapping = .false.     
 contains
   !============================================================================
 
@@ -181,7 +190,11 @@ contains
        write(*,'(a)') prefix
        write(*,'(a)') prefix//'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
        write(*,'(a)') prefix
-       write(*,'(a)') prefix//'    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
+       if(UseTD14)then
+          write(*,'(a)') prefix//'    Twisted Flux Rope Model by Titov, 2014.     ' 
+       else
+          write(*,'(a)') prefix//'    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
+       end if
        write(*,'(a)') prefix
        write(*,'(a)') prefix//'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
        write(*,'(a)') prefix
@@ -192,12 +205,14 @@ contains
             aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
        write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
        write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
-       if(UsePlasmaBeta)then
-          write(*,'(a,es13.5,a)') prefix//'Beta   =',PlasmaBeta
-          write(*,'(a,es13.5,a)') prefix//'Tejecta=',EjectaTemperatureDim,'[K]'
-       else
-          write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassSi*1.0e3,'[g] '
-          write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
+       if(.not.UseTD14)then
+          if(UsePlasmaBeta)then
+             write(*,'(a,es13.5,a)') prefix//'Beta   =',PlasmaBeta
+             write(*,'(a,es13.5,a)') prefix//'Tejecta=',EjectaTemperatureDim,'[K]'
+          else
+             write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassSi*1.0e3,'[g] '
+             write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
+          end if
        end if
        write(*,'(a)') prefix
        write(*,'(a,es13.5,a)') prefix//'q      = ', &
@@ -255,14 +270,17 @@ contains
        ! ...and those of apex:
        XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
        DoNormalizeXyz = .true.
-       call read_var('UsePlasmaBeta', UsePlasmaBeta)
-       if(UsePlasmaBeta)then
-          call read_var('PlasmaBeta', PlasmaBeta)
-          call read_var('EjectaTemperature', EjectaTemperatureDim)
-       else
-          PlasmaBeta = 0.0
-          call read_var('MassDim',     MassDim)
-          MassSi = MassDim*1.0e-3  !g to kg
+       if(.not.UseTD14)then
+          call read_var('UsePlasmaBeta', UsePlasmaBeta)
+          if(UsePlasmaBeta)then
+             call read_var('PlasmaBeta', PlasmaBeta)
+             call read_var('EjectaTemperature', EjectaTemperatureDim)
+          else
+             PlasmaBeta = 0.0
+             call read_var('MassDim',     MassDim)
+             MassSi = MassDim*1.0e-3  !g to kg
+          end if
+          !If UseTD14 all these parameters are not effective
        end if
        call read_var('TypeCharge', TypeCharge, iError)
        if(iError/=0)then
@@ -364,7 +382,11 @@ contains
     ! Define the model input, Kappa
 
     Kappa2 = 4.0*Rperp*Rtube/RPlus2; Kappa = sqrt(Kappa2)
-    call td99    
+    if(.not.UseTD14)then
+       call td99    
+    else
+       call tdm
+    end if
     !
     ! Add the field of two magnetic charges
     !
