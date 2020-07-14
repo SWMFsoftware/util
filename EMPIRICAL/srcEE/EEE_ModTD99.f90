@@ -29,18 +29,18 @@ module EEE_ModTD99
   real :: XyzCenter_D(3)
 
   ! magnetic field of the current tube at the center of configuration
-  real :: BcTube, BcTubeDim 
-  ! Magnetic field at the center of configuration is alway positive,
-  ! Starpping field is negative. Phi-conponent of the toroidal current
-  ! is positive. However, the sign of the toroidal field component may be
-  ! both positive and negative. To account for this, we introduce the
-  ! variable to store the helicity sign.
+  real :: BcTube, BcTubeDim, ITube
+  ! Magnetic field at the center of configuration is always parallel,
+  ! while starpping field is antiparallel, to the x-axis. Phi-conponent 
+  ! of the toroidal current is positive. However, the sign of the toroidal 
+  ! field component may be both positive and negative. To account for 
+  ! this, we introduce the variable to store the helicity sign.
   !
   real :: HelicitySign = 1.0
   !
-  ! To set the negative helicity, the input parameter, BcTube, should negative
-  ! This choice affects only the sign of helicity, but not the direction
-  ! of the nagnetic field at the center of configuration.
+  ! To set the negative helicity, the input parameter, BcTube, should be 
+  ! negative. This choice affects only the sign of helicity, but not the 
+  ! direction of the nagnetic field at the center of configuration.
 
   !-------------------Parameters of plasma inside the rope------------
   logical :: UsePlasmaBeta = .false. 
@@ -78,7 +78,7 @@ module EEE_ModTD99
   character(LEN=10) :: TypeCharge = 'none'
 
   ! magnetic charge and its distance from the current ring
-  real :: q = 0.0,  qDistance = 0.0
+  real :: q = 0.0,  qDistance = 0.0, bQStrappingDim, bQStrapFraction
   !
   ! coordinate vectors of the charge location
   !
@@ -99,70 +99,61 @@ contains
 
     use ModCoordTransform, ONLY: rot_matrix_x,rot_matrix_y,rot_matrix_z
 
-    real:: AlphaRope, LInduct, WFRope, FootSepar
+    real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi, bQStrapping
     ! Declare the rotational matrix of coordinate transformation:
-    real :: Rotate_DD(3,3), ITubeSi
+    real :: Rotate_DD(3,3)
     ! internal inductance releted to \mu_0 R_\infty
     real, parameter :: Li = 0.5
+    character(len=*), parameter:: NameSub = 'init_TD99_parameters'
     !--------------------------------------------------------------------------
-    ! Compute the magnetic energy, WFRope, associated with the portion
-    ! of the flux rope current that is above the solar surface::
-
-    AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
-    FootSepar  = Rtube*No2Si_V(UnitX_)*sin(0.5*AlphaRope)/1.0e6  ! in [Mm]
-    LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*(log(8.0 &
-         *(Rtube - Depth)/aTube) - 1.75)            ! in [H]
-
-    if(.not.UsePlasmaBeta)then
-       ! Compute the average density inside the flux rope assuming that the
-       ! total amount of prominence mass is Mass (=10^16g=10^13kg)::
-
-       Rho0  = MassSi/(AlphaRope*Rtube*cPi*aTube**2*No2Si_V(UnitX_)**3)
-       ! in [kg/m^3]
-       Rho0  = Rho0*Si2No_V(UnitRho_)
-    else
-       !Alternatively, if non-zero PlasmaBeta is used, the pressure
-       !is profiled proportionally to the total pressure, and the density 
-       !is found from the plasma pressure and constant ejecta temperature:
-       EjectaTemperature =  EjectaTemperatureDim*Io2No_V(UnitTemperature_)
-    end if
-
     ! Define the normalized model parameters here::
 
     ! Flux rope::
     Rtube = Rtube*Io2No_V(UnitX_)
     aTube = aTube*Io2No_V(UnitX_)
-    Depth     = Depth*Io2No_V(UnitX_)
-
-    if(UseStaticCharge.or.UseEquilibriumCurrent.or.UseDynamicStrapping)&
-         ! In all these cases the strapping field needs to be normalized
-         bStrapping = bStrappingDim*Io2No_V(UnitB_)
-    if(UseEquilibriumCurrent)then
-       ! Compute the equilibrium toroidal current, Itube, based
-       ! on the force balance in direction normal to the surface of
-       ! the flux tube.
-       !Itube = 8*cPi*q*qDistance*Rtube &
-       !     *(qDistance**2+Rtube**2)**(-1.5) &
-       !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
-       !     4*cPi*(2*q*qDistance/(qDistance**2 + RTube**2))*RTube/&
-       !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
-       !     4*cPi*bStrapping*RTube/(alog(8.0*Rtube/aTube) -1.5 + Li/2.0) 
-       ! From here, we can calculate BcTube = ITube/(2*RTube)
-       ! in [-]
-       BcTube  = 2*cPi*bStrapping/ &
-           (log(8.0*Rtube/aTube) - 1.5 + Li/2.0)            ! in [-]
-    else
-       !Normalize field read from parameter file
-       BcTube= BcTubeDim*Io2No_V(UnitB_)
+    Depth = Depth*Io2No_V(UnitX_)
+   
+    if (iProc==0) then
+       write(*,'(a)') prefix
+       write(*,'(a)') prefix//&
+            '>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
+       write(*,'(a)') prefix
+       if(UseTD14)then
+          write(*,'(a)') prefix//&
+               '    Twisted Flux Rope Model by Titov, 2014.     ' 
+       else
+          write(*,'(a)') prefix//&
+               '    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
+       end if
+       write(*,'(a)') prefix
+       write(*,'(a)') prefix//&
+            '>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
+       write(*,'(a)') prefix
+       write(*,'(a,es13.5,a)') prefix//'Depth  = ', &
+            Depth*No2Si_V(UnitX_)/1.0E6,'[Mm]'
+       write(*,'(a,es13.5,a)') prefix//'Rtube  = ', &
+            Rtube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
+       write(*,'(a,es13.5,a)') prefix//'aTube  = ', &
+            aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
+       write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
+       write(*,'(a)') prefix
     end if
-    
-    !Invert the equation, BcTubeSi = 0.5 \Mu_0 * ITubeSi/ RTubeSi
-    ITubeSi = 2*(BcTube*No2Si_V(UnitB_)) * (RTube*No2Si_V(UnitX_))/cMu ![A]
-    WFRope  = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
 
+    ! Computation of the portion of the flux rope current that is above 
+    ! the solar surface:
+    AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
+    FootSepar  = Rtube*No2Si_V(UnitX_)*sin(0.5*AlphaRope)/1.0e6  ! in [Mm]
+    if(iProc==0)then
+       write(*,'(a,es13.5,a)') prefix//'Separation of flux rope ends is ',&
+            FootSepar,'[Mm],'
+       write(*,'(a,es13.5,a)') prefix//'   or ',AlphaRope*cRadToDeg,'[deg].'
+       write(*,'(a)') prefix
+    end if
+    !
+    !
     ! Construct the rotational matrix, Rotate_DD, to position the
     ! flux rope in the desired way on the solar surface::
-
+    
     Rotate_DD = matmul(rot_matrix_y(-0.5*cPi),&
          rot_matrix_x(-OrientationCme*cDegToRad))
     Rotate_DD = matmul(Rotate_DD,          &
@@ -171,75 +162,143 @@ contains
          rot_matrix_z(-LongitudeCme*cDegToRad))
     UnitX_D = matmul([1.0, 0.0, 0.0], Rotate_DD)
     XyzCenter_D = matmul([0.0, 0.0, 1 - Depth], Rotate_DD)
+    if(.not.UseTD14)then
+       if(.not.UsePlasmaBeta)then
+          !
+          ! Compute the average density inside the flux rope assuming that the
+          ! total amount of prominence mass is Mass (=10^16g=10^13kg):          
+          Rho0  = MassSi/(AlphaRope*Rtube*cPi*aTube**2*No2Si_V(UnitX_)**3)
+          !
+          ! Convert density from [kg/m^3] to dimensionless units
+          Rho0  = Rho0*Si2No_V(UnitRho_)
+          if(iProc==0)then
+             write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassSi*1.0e3,'[g] '
+             write(*,'(a,es13.5,a)') prefix//'Rho0   = ',&
+                  Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
+             write(*,'(a)') prefix
+          end if
+       else
+          !Alternatively, if non-zero PlasmaBeta is used, the pressure
+          !is profiled proportionally to the total pressure, and the density 
+          !is found from the plasma pressure and constant ejecta temperature:
+          EjectaTemperature =  EjectaTemperatureDim*Io2No_V(UnitTemperature_)
+          if(iProc==0)then
+             write(*,'(a,es13.5,a)') prefix//'Beta   =',PlasmaBeta
+             write(*,'(a,es13.5,a)') prefix//'Tejecta=',&
+                  EjectaTemperatureDim,'[K]'
+             write(*,'(a)') prefix
+          end if
+       end if
+    end if
+
+    if(UseEquilibriumCurrent)then
+       if(DoGetBStrap)then
+          !
+          ! Calculate projection of the MHD field at the apex point
+          ! anti-parallel to the X-axis
+          bStrapping = - sum(BAmbientApexSi_D*UnitX_D)*Si2No_V(UnitB_)
+          if(bStrapping < 0.0)call stop_mpi(NameSub//&
+               ': Strapping MHD field is negative')
+       else
+          !
+          ! Normalize field read from PARAM.in file
+          bStrapping = bStrappingDim*Io2No_V(UnitB_)
+       end if
+       if(.not.UseTD14)then
+          ! Compute the equilibrium toroidal current, Itube, based
+          ! on the force balance in direction normal to the surface of
+          ! the flux tube.
+          ! Itube = 8*cPi*q*qDistance*Rtube &
+          !     *(qDistance**2+Rtube**2)**(-1.5) &
+          !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
+          !     4*cPi*(2*q*qDistance/(qDistance**2 + RTube**2))*RTube/&
+          !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
+          !     4*cPi*bStrapping*RTube/(alog(8.0*Rtube/aTube) -1.5 + Li/2.0) 
+          ! From here, we can calculate BcTube = ITube/(2*RTube)
+          ! in [-]
+          BcTube  = 2*cPi*bStrapping/ &
+               (log(8.0*Rtube/aTube) - 1.5 + Li/2.0)            ! in [-]
+          !Invert the equation, BcTubeSi = 0.5 \Mu_0 * ITubeSi/ RTubeSi
+          ITubeSi = 2*(BcTube*No2Si_V(UnitB_))*&
+               (RTube*No2Si_V(UnitX_))/cMu ![A]
+       else
+          ! Use equation from TD14:
+          ITube =  (4*cPi*RTube*bStrapping) / (log(8*RTube/aTube)-25./24.)
+          ITubeSi = ITube*No2Si_V(UnitB_)*No2Si_V(UnitX_)/cMu ![A]
+       end if
+       if (iProc==0) then
+          write(*,'(a,es13.5,a)') prefix//' The strapping field, bStrapping=',&
+               bStrapping*No2Io_V(UnitB_),' [Gs] is introduced and' 
+          write(*,'(a)') prefix//' EQUILIBRIUM value of Itube is computed!!!'
+          write(*,'(a)') prefix
+          write(*,'(a,es13.5,a)') prefix//' The value of Itube is reset to: ',&
+               ItubeSi,' [A]'
+          write(*,'(a)') prefix
+       endif
+       if(UseStaticCharge.or.UseDynamicStrapping)&
+            bQStrapping = bStrapping*bQStrapFraction
+    else
+       !Normalize field read from parameter file
+       BcTube= BcTubeDim*Io2No_V(UnitB_)
+       !Invert the equation, BcTube = 0.5  * ITube/ RTube
+       ITube   = 2*BcTube*RTube
+       ITubeSi = ITube*No2Si_V(UnitB_)*No2Si_V(UnitX_)/cMu ![A]
+       if(iProc==0)then
+          write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
+          write(*,'(a)') prefix
+       end if
+       if(UseStaticCharge.or.UseDynamicStrapping)&
+            bQStrapping = bQStrappingDim*Io2No_V(UnitB_)
+    end if
+    if(iProc==0)then
+       write(*,'(a,f4.0)') prefix//'Sign of helicity is ', HelicitySign
+       write(*,'(a)') prefix
+    end if
+
+ 
+    LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*(log(8.0 &
+         *(Rtube - Depth)/aTube) - 1.75)               ! in [H]
+    WFRope  = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
+
+    if(iProc==0)then
+       write(*,'(a,es13.5,a)') prefix//'Free energy of flux rope is ',&
+            WFRope,'[erg].'
+       write(*,'(a)') prefix
+    end if
 
     if(UseStaticCharge.or.UseDynamicStrapping)then
        qDistance = qDistance*Io2No_V(UnitX_)
-       ! Strapping field::
+       ! Strapping field of charges::
        ! Invert formula:
-       ! bStrapping = 2*q*qDistance &
+       ! bQStrapping = 2*q*qDistance &
        !     *(qDistance**2+Rtube**2)**(-1.5)
-       q = bStrapping**(qDistance**2 + Rtube**2)**1.50/(2*qDistance)
+       q = bQStrapping**(qDistance**2 + Rtube**2)**1.50/(2*qDistance)
+       if(iProc==0)then
+          write(*,'(a)') prefix//&
+               ' The field of point magnetic charges is introduced'
+          write(*,'(a,es13.5,a)') prefix//'q      = ', &
+               q*No2Si_V(UnitB_)*No2Si_V(UnitX_)**2,'[T m^2]'
+          write(*,'(a,es13.5,a)') prefix//'L      = ',&
+               qDistance*No2Si_V(UnitX_)/1.0e6,'[Mm]'
+          write(*,'(a)') prefix
+       end if
        RPlus_D  = XyzCenter_D + qDistance*UnitX_D
        RMinus_D = XyzCenter_D - qDistance*UnitX_D
-       if(UseDynamicStrapping)&
-            UChargeX = UChargeX*Io2Si_V(UnitU_) &   !From km/s to m/s
-            *Si2No_V(UnitX_)                        !To R_sun per s
-    end if
-   
-    if (iProc==0) then
-       write(*,'(a)') prefix
-       write(*,'(a)') prefix//'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
-       write(*,'(a)') prefix
-       if(UseTD14)then
-          write(*,'(a)') prefix//'    Twisted Flux Rope Model by Titov, 2014.     ' 
-       else
-          write(*,'(a)') prefix//'    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
-       end if
-       write(*,'(a)') prefix
-       write(*,'(a)') prefix//'>>>>>>>>>>>>>>>>>>>                   <<<<<<<<<<<<<<<<<<<<<'
-       write(*,'(a)') prefix
-       write(*,'(a,es13.5,a)') prefix//'Depth  = ',Depth*No2Si_V(UnitX_)/1.0E6,'[Mm]'
-       write(*,'(a,es13.5,a)') prefix//'Rtube  = ', &
-            Rtube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
-       write(*,'(a,es13.5,a)') prefix//'aTube  = ', &
-            aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
-       write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
-       write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
-       if(.not.UseTD14)then
-          if(UsePlasmaBeta)then
-             write(*,'(a,es13.5,a)') prefix//'Beta   =',PlasmaBeta
-             write(*,'(a,es13.5,a)') prefix//'Tejecta=',EjectaTemperatureDim,'[K]'
-          else
-             write(*,'(a,es13.5,a)') prefix//'Mass   = ',MassSi*1.0e3,'[g] '
-             write(*,'(a,es13.5,a)') prefix//'Rho0   = ',Rho0*No2Io_V(UnitRho_),'[g/cm^3]'
-          end if
-       end if
-       write(*,'(a)') prefix
-       write(*,'(a,es13.5,a)') prefix//'q      = ', &
-            q*No2Si_V(UnitB_)*No2Si_V(UnitX_)**2,'[T m^2]'
-       write(*,'(a,es13.5,a)') prefix//'L      = ',qDistance*No2Si_V(UnitX_)/1.0e6,'[Mm]'
-       write(*,'(a)') prefix
-       write(*,'(a,es13.5,a)') prefix//'Free energy of flux rope is ',WFRope,'[erg].'
-       write(*,'(a,es13.5,a)') prefix//'Separation of flux rope ends is ',FootSepar,'[Mm],'
-       write(*,'(a,es13.5,a)') prefix//'   or ',AlphaRope*cRadToDeg,'[deg].'
-       write(*,'(a)') prefix
-       if (UseDynamicStrapping) then
-          write(*,*) prefix,'>>>>> Time-dependent strapping field is used <<<<<'
-          write(*,*) prefix,'StartTime = ',StartTime,'[s]'
-          write(*,*) prefix,'Velocity of converging charges = ',&
-               UChargeX,'[R_s/s]'
-          write(*,*) prefix
-       endif
-    endif
-    if (UseEquilibriumCurrent.and.iProc==0) then
-       write(*,'(a)') prefix//'The strapping field, Bq, is added and the EQUILIBRIUM value'
-       write(*,'(a)') prefix//'of Itube is computed!!!'
-       write(*,'(a)') prefix
-       write(*,'(a,es13.5)') prefix//'The value of Itube is reset to :: ',ItubeSi
-       write(*,'(a,es13.5,a)') prefix//'The free energy of the flux rope is :: ',WFRope,'Ergs.'
-       write(*,'(a)') prefix
-    endif
-
+       if(UseDynamicStrapping)then
+          UChargeX = UChargeX*Io2Si_V(UnitU_) &   !From km/s to m/s
+               *Si2No_V(UnitX_)                        !To R_sun per s
+          if(iProc==0)then
+             write(*,'(a)') prefix,&
+                  '>>>>> Time-dependent strapping field is used <<<<<'
+             write(*,'(a,es13.5,a)') prefix//&
+                  'StartTime = ',StartTime,'[s]'
+             write(*,'(a,es13.5,a)') prefix//&
+                  'Velocity of converging charges = ',&
+                  UChargeX,'[R_s/s]'
+             write(*,*) prefix
+          end if !iProc==0
+       endif  ! UseDynamicStrapping
+    end if  ! UseCharge
   end subroutine init_TD99_parameters
   !===========================================================================
   subroutine set_parameters_TD99(NameCommand)
@@ -254,6 +313,13 @@ contains
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#CME")
+       !Set defaults:
+       UseEquilibriumCurrent = .false.
+       DoGetBStrap = .false.
+       UseStaticCharge = .false.
+       UseDynamicStrapping = .false.
+       TypeBStrap = 'none'
+       TypeCharge = 'none'
        call read_var('BcTubeDim', BcTubeDim)
        !
        ! Set negative helicity, if the input is negative:
@@ -282,37 +348,85 @@ contains
           end if
           !If UseTD14 all these parameters are not effective
        end if
-       call read_var('TypeCharge', TypeCharge, iError)
+       call read_var('TypeBStrap', TypeBStrap, iError)
        if(iError/=0)then
-          TypeCharge = 'none'; UseStaticCharge = .false.
+          !The line is empty, return
+          TypeBStrap = 'none'
           RETURN
        elseif(len_trim(TypeCharge)==0)then
-          TypeCharge = 'none'; UseStaticCharge = .false.
-          RETURN
-       elseif(trim(TypeCharge)=='none')then
-          UseStaticCharge = .false.
+          !The line is empty, return
+          TypeBStrap = 'none'
           RETURN
        end if
-       call read_var('bStrappingDim', bStrappingDim)
-       if(trim(TypeCharge)=='readbstrap')then
-          !
+       select case(trim(TypeBStrap))
+       case('readbstrap')
           UseEquilibriumCurrent  = .true.
-       else
-          call read_var('qDistance',  qDistance)
-          if(trim(TypeCharge)=='steady')then
-             UseStaticCharge = .true.
-          elseif(trim(TypeCharge)=='moving')then
-             UseStaticCharge = .true.
-             UseDynamicStrapping = .true.
-             StartTime = -1.0
-             call read_var('UChargeX', UChargeX)
-          elseif(trim(TypeCharge)=='cancelflux')then
-             UseStaticCharge = .false.
-             UseDynamicStrapping = .true.
-             StartTime = -1.0
-             call read_var('UChargeX', UChargeX)
+          call read_var('bStrappingDim', bStrappingDim)
+          call read_var('TypeCharge', TypeCharge, iError)
+          if(iError/=0)then
+             !The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          elseif(len_trim(TypeCharge)==0)then
+             !The line is empty, return
+             TypeCharge = 'none'
+             RETURN
           end if
+       case('getbstrap')
+          UseEquilibriumCurrent  = .true.
+          DoGetBStrap = .true.
+          call read_var('TypeCharge', TypeCharge, iError)
+          if(iError/=0)then
+             !The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          elseif(len_trim(TypeCharge)==0)then
+             !The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          end if
+       case('none')
+          ! No TypeCharge, no TypeBStrap. Do nothing
+          RETURN
+       case('steady','moving','cancelflux')
+          !In this line, there is TypeCharge, not TypeBStrap
+          UseEquilibriumCurrent  = .false.
+          TypeCharge = trim(TypeBStrap)
+          if(iProc==0)write(*,'(a)')TypeCharge//'                TypeCharge'
+          TypeBStrap = 'none'
+       case default
+          if(iProc==0)call stop_mpi(NameSub// ': '//&
+              trim(TypeBStrap)//' is unknown as TypeCharge or TypeBStrap')
+       end select
+       ! Now, TypeCharge is read, either after TypeBStrap or instead of it'
+       if(UseEquilibriumCurrent)then
+          ! In this case we read, which fraction of the above
+          ! defined strapping field is due to magnetic charges
+          call read_var('bQStrapFraction', bQStrapFraction)
+       else
+          ! The magnetude of magnetic charges is characterized in terms
+          ! of the strapping field they produce at the apex of flux rope 
+          call read_var('bQStrappingDim', bQStrappingDim)
        end if
+       call read_var('qDistance',  qDistance)
+     
+       select case(trim(TypeCharge))
+       case('steady')
+          UseStaticCharge = .true.
+       case('cancelflux')
+          UseDynamicStrapping = .true.
+          StartTime = -1.0
+          call read_var('UChargeX', UChargeX)
+       case('moving')
+          UseStaticCharge = .true.
+          UseDynamicStrapping = .true.
+          StartTime = -1.0
+          call read_var('UChargeX', UChargeX)
+       case default
+          if(iProc==0)call stop_mpi(&
+               NameSub//': TypeCharge='//trim(TypeCharge)//' is unknown')
+       end select
+
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -524,7 +638,7 @@ contains
        real :: bTheta_D(3),  bI_D(3)
        real :: RhoStarF, RhoStarG
        real :: RPerpHat_D(3), ThetaHat_D(3)
-       real :: ITube, AxialFlux, Xi, BigTheta
+       real :: AxialFlux, Xi, BigTheta
        real :: DKappaDx, DKappaDRperp, kStarF, dKSFdX, dKSFdR, kStarG, dKSGdX, dKSGdR
        real :: EllipticKf, EllipticEf, FuncAf, dFuncAf, d2FuncAf, d3FuncAf
        real :: EllipticKg, EllipticEg
@@ -550,7 +664,6 @@ contains
        DKappaDx = - (xRel*Kappa**3) / (4*RPerp*RTube)
        DKappaDRperp = Kappa**3/(8*RPerp**2*RTube) * (RMinus**2-2*RPerp*(RPerp-RTube))
        
-       ITube =  (4*cPi*RTube*bStrapping) / (log(8*RTube/aTube)-25./24.)
        AxialFlux = 3./(5*sqrt(2.)) * ITube * aTube
        
        ! Sewing functions
