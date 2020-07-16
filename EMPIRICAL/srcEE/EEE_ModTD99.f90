@@ -197,7 +197,7 @@ contains
           ! Calculate projection of the MHD field at the apex point
           ! anti-parallel to the X-axis
           bStrapping = - sum(BAmbientApexSi_D*UnitX_D)*Si2No_V(UnitB_)
-          if(bStrapping < 0.0)call stop_mpi(NameSub//&
+          if(bStrapping < 0.0)call CON_stop(NameSub//&
                ': Strapping MHD field is negative')
        else
           !
@@ -395,7 +395,7 @@ contains
           if(iProc==0)write(*,'(a)')TypeCharge//'                TypeCharge'
           TypeBStrap = 'none'
        case default
-          if(iProc==0)call stop_mpi(NameSub// ': '//&
+          if(iProc==0)call CON_stop(NameSub// ': '//&
               trim(TypeBStrap)//' is unknown as TypeCharge or TypeBStrap')
        end select
        ! Now, TypeCharge is read, either after TypeBStrap or instead of it'
@@ -423,7 +423,7 @@ contains
           StartTime = -1.0
           call read_var('UChargeX', UChargeX)
        case default
-          if(iProc==0)call stop_mpi(&
+          if(iProc==0)call CON_stop(&
                NameSub//': TypeCharge='//trim(TypeCharge)//' is unknown')
        end select
 
