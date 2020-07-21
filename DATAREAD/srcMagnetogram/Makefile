@@ -23,7 +23,7 @@ harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
 
 POTENTIAL: ${LIBDIR}/libSHARE.a potential_field.o 
 	${LINK.f90} -o POTENTIAL.exe potential_field.o \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${Lflag}
 
 ############## FDIPS #############
 
@@ -92,14 +92,14 @@ HARMONICSEXE = ${BINDIR}/HARMONICS.exe
 
 ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${Lflag}
 
 DIPOLE11:
 	make DIPOLE11.exe
 
 DIPOLE11.exe: dipole11.o
 	${LINK.f90} -o DIPOLE11.exe dipole11.o \
-	-L${LIBDIR} -lSHARE ${Lflag1}
+	-L${LIBDIR} -lSHARE ${Lflag}
 
 LIB:
 	make ${MY_LIB}
