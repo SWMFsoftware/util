@@ -63,12 +63,13 @@ contains
   subroutine read_fdips_param
 
     use ModReadParam
+    use ModMPI, ONLY: MPI_COMM_SELF
 
     character(len=lStringLine) :: NameCommand
     character(len=10):: TypeOutput
     character(len=*), parameter:: NameSub = 'read_fdips_param'
     !-----------------------------------------------------------------------
-    call read_file('POTENTIAL.in')
+    call read_file('POTENTIAL.in', iCommIn = MPI_COMM_SELF)
     call read_init
     do
        if(.not.read_line() ) EXIT
@@ -668,8 +669,6 @@ program potential_field
   integer :: n, i, iError, iR, iPhi, iTheta, i_D(3)
   !--------------------------------------------------------------------------
 
-  call MPI_init(iError)
-
   call read_fdips_param
 
   if(DoReadMagnetogram) call read_magnetogram
@@ -795,8 +794,6 @@ program potential_field
   deallocate(PlotVar_VC)
 
   call save_potential_field
-
-  call MPI_finalize(iError)
 
 end program potential_field
 !==============================================================================

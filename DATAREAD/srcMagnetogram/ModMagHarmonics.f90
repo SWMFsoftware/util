@@ -70,12 +70,13 @@ contains
 
     use ModReadParam
     use ModReadMagnetogram, ONLY: read_magnetogram_param
+    use ModMpi,             ONLY: MPI_COMM_SELF
 
     character(len=lStringLine) :: NameCommand
 
     character(len=*), parameter:: NameSub = 'read_harmonics_param'
     !-----------------------------------------------------------------------
-    call read_file('HARMONICS.in')
+    call read_file('HARMONICS.in', iCommIn = MPI_COMM_SELF)
     call read_init
     call read_echo_set(.true.)
 

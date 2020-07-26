@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # this magnetogram remapping can either be run as a script from 
 # the unix command line
@@ -15,7 +15,7 @@
 
 import pyfits as fits
 #from astropy.io import fits
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
 import numpy as np
@@ -641,5 +641,5 @@ if __name__ == '__main__':
         args.iend = args.istart
 
     for i in range(args.istart,args.iend+1):
-        out=args.outputfile+'_'+str(i)+'.out' 
+        out=args.outputfile+'_'+str(i).zfill(2)+'.out' 
         remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)

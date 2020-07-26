@@ -23,7 +23,7 @@ harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
 
 POTENTIAL: ${LIBDIR}/libSHARE.a potential_field.o 
 	${LINK.f90} -o POTENTIAL.exe potential_field.o \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${Lflag}
 
 ############## FDIPS #############
 
@@ -54,7 +54,7 @@ FDIPSEXE = ${BINDIR}/FDIPS.exe
 
 ${FDIPSEXE}: ${OBJECTS_FDIPS}
 	${LINK.f90} -o ${FDIPSEXE} ${OBJECTS_FDIPS} \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${LflagMpi}
 
 ############## FDIPS_HYPRE #############
 
@@ -73,13 +73,13 @@ OBJECTS_FDIPS_HYPRE= \
 
 ${FDIPS_HYPREEXE}: ${OBJECTS_FDIPS_HYPRE}
 	${LINK.f90} -o ${FDIPS_HYPREEXE} ${OBJECTS_FDIPS_HYPRE} \
-		-L${LIBDIR} -lSHARE ${Lflag1} ${HYPRELIB}
+		-L${LIBDIR} -lSHARE ${LflagMpi} ${HYPRELIB}
 
 ############## HYPRE ONLY #############
 
 HYPRE: ${LIBDIR}/libSHARE.a ${HYPRELIB}/libHYPRE.a hypre.o
 	${LINK.f90} -o HYPRE.exe hypre.o \
-		-L${LIBDIR} -lSHARE ${Lflag1} ${HYPRELIB}
+		-L${LIBDIR} -lSHARE ${LflagMpi} ${HYPRELIB}
 
 ############## HARMONICS #############
 
@@ -92,14 +92,14 @@ HARMONICSEXE = ${BINDIR}/HARMONICS.exe
 
 ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${Lflag}
 
 DIPOLE11:
 	make DIPOLE11.exe
 
 DIPOLE11.exe: dipole11.o
 	${LINK.f90} -o DIPOLE11.exe dipole11.o \
-	-L${LIBDIR} -lSHARE ${Lflag1}
+	-L${LIBDIR} -lSHARE ${Lflag}
 
 LIB:
 	make ${MY_LIB}
@@ -138,7 +138,7 @@ test_harmonics:
 	@echo "test_harmonics_run..." >> test_harmonics.diff
 	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/' HARMONICS.in.orig \
 		> HARMONICS.in
-	${SERIAL} ./HARMONICS.exe | tee harmonics.log
+	./HARMONICS.exe | tee harmonics.log
 	@echo "test_harmonics_check..." >> test_harmonics.diff
 	make test_harmonics_check
 
@@ -156,7 +156,7 @@ test_potential:
 	make DIPOLE11
 	./DIPOLE11.exe
 	@echo "test_potential_run..." >> test_potential.diff
-	${SERIAL} ./POTENTIAL.exe > potential.log
+	./POTENTIAL.exe > potential.log
 	@echo "test_potential_check..." >> test_potential.diff
 	make test_potential_check
 
