@@ -4,6 +4,7 @@
 *.out
 *.log
 *.protex
+*.pyc
 
 Makefile.DEPEND
 Makefile.RULES
