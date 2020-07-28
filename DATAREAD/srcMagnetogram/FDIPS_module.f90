@@ -24,6 +24,7 @@ module ModPotentialField
 
   ! domain decomposition
   integer:: nProcTheta = 0, nProcPhi = 0
+  logical :: IsProcIdle = .false.
 
   ! solver parameters
   character(len=20):: NameSolver         = 'BICGSTAB' ! or 'GMRES' or 'AMG'
@@ -82,7 +83,8 @@ module ModPotentialField
   real, dimension(:), allocatable :: &
        d_I, e_I, e1_I, e2_I, f_I, f1_I, f2_I
 
-  integer, parameter :: iComm = MPI_COMM_WORLD
+  integer, parameter :: iCommWorld = MPI_COMM_WORLD
+  integer :: iComm = iCommWorld
   integer :: iProc, nProc, iProcTheta, iProcPhi
   integer :: iTheta0, iPhi0
   integer :: nTheta, nPhi
@@ -221,15 +223,17 @@ contains
        end select
     end do
 
-    if ( nProcTheta*nProcPhi /= nProc .and. &
-         nProcTheta*nProcPhi /= 0 .and. iProc==0) then
-       write(*,*) NameSub, ': WARNING: nProcTheta, nProcPhi, nProc=', &
-            nProcTheta, nProcPhi, nProc
-       write(*,*) NameSub, &
-            ': Changing to default decomposition. Look I am intelligent!'
-       nProcTheta = 0
-       nProcPhi = 0
-    end if
+    if (nProcTheta*nProcPhi > min(nProc,999) .or. &
+        max(nProcTheta,nProcPhi) > 99 .or. min(nProcTheta,nProcPhi) <= 0) then
+      if (iProc == 0) then
+        write(*,*)
+        write(*,'(A,2I4,I6)') 'WARNING: nProcTheta, nProcPhi, nProc=', nProcTheta, nProcPhi, nProc
+        write(*,'(A)') 'Changing to default decomposition!'
+        write(*,*)
+      endif
+      nProcTheta = 0
+      nProcPhi = 0
+    endif
 
     ! Do timing on proc 0 only, if at all
     if(iProc > 0) UseTiming = .false.
@@ -279,8 +283,9 @@ contains
     use ModConst, ONLY: cTwoPi
     use ModReadMagnetogram, ONLY: UseCosTheta, nThetaAll, nPhiAll
 
-    integer :: iR, iTheta, iPhi
-    integer :: i, j
+    integer :: iR, iTheta, iPhi, nTotalProc
+    integer :: i, j, k
+    integer :: iError, iColor=0, iProcInner, nProcInner
 
     real:: dR, dLogR, dTheta, dPhi, dZ, z
     real:: CellShiftPhi
@@ -288,28 +293,60 @@ contains
 
     !--------------------------------------------------------------------------
 
+    ! decompose the total number of processors to theta (i) and phi (j) directions
+    ! 0<ni<100, 0<nj<100, ni*nj<=1000, ni*nj<=nproc
     if (nProcTheta*nProcPhi == 0) then
-       nProcPhi = 1
-       Err = real(max(nPhiAll,nThetaAll))
-       do i = 1, floor(sqrt(real(nProc)))
-          j = nProc/i
-          if (i*j == nProc) then
-             ErrNew = abs(nPhiAll/real(i)-nThetaAll/real(j))
-             if (ErrNew < Err) then
-                Err = ErrNew
-                nProcPhi = i
-             endif
-             ErrNew = abs(nPhiAll/real(j)-nThetaAll/real(i))
-             if (ErrNew < Err) then
-                Err = ErrNew
-                nProcPhi = j
-             endif
+      nTotalProc = min(nProc,1000)
+      Err = real(nPhiAll)*real(nThetaAll)*nTotalProc
+      i = 1
+      do while (i<=floor(sqrt(real(nTotalProc))))
+        j = nTotalProc/i
+        if (j > 99) then
+          i = i+1
+          CYCLE
+        endif
+        do k = 0, 1
+          ErrNew = (ceiling(nPhiAll/real(i))+2.)*(ceiling(nThetaAll/real(j))+2.)*real(nTotalProc)/real(i*j)
+          if (ErrNew < Err) then
+            Err = ErrNew
+            nProcPhi = i
+            nProcTheta = j
           endif
-       enddo
-       nProcTheta = nProc/nProcPhi
-       if (iProc == 0) write(*,*) 'New nProcTheta, nProcPhi, nProc=', &
-            nProcTheta, nProcPhi, nProc
+          i = i+j
+          j = i-j
+          i = i-j
+        enddo
+        i = i+1
+      enddo
+      if (nProcPhi == 0 .and. iProc == 0) then
+        ! Supposedly we shouldn't reach here
+        write(*,*)
+        write(*,'(A,I0,A)') 'Failed to find a proper composition for ',nTotalProc,' processors.'
+        write(*,*)
+        nProcPhi = 1
+        nProcTheta = 1
+      endif
+      if (iProc == 0) then 
+        write(*,*)
+        write(*,'(A,2I4,I6)') 'New intelligent nProcTheta, nProcPhi, nProc=', nProcTheta, nProcPhi, nProcTheta*nProcPhi
+        write(*,*)
+      endif
     endif
+
+    nTotalProc = nProcTheta*nProcPhi
+    if (iProc >= nTotalProc) then
+      IsProcIdle = .true.
+      iColor = 1
+    endif
+    if (nProc > nTotalProc) then
+      if (iProc == 0) then
+        write(*,*)
+        write(*,'(A,I6,A)') 'WARNING: ',nProc-nTotalProc,' processor(s) are idle.'
+        write(*,*)
+      endif
+      call MPI_Comm_split(iCommWorld,iColor,iProc,iComm,iError)
+    endif
+    if (IsProcIdle) RETURN
 
     ! The processor coordinate
     iProcTheta = iProc/nProcPhi
@@ -583,8 +620,8 @@ contains
     endif
 
     call  MPI_bcast(StringMagHeader, len(StringMagHeader), MPI_CHARACTER, 0, iComm, iError)
-    call  MPI_bcast(LongCR, 5 , MPI_REAL, 0, iComm, iError)
-    call  MPI_bcast(CarRot, 10 , MPI_REAL, 0, iComm, iError)
+    call  MPI_bcast(LongCR, 1 , MPI_REAL, 0, iComm, iError)
+    call  MPI_bcast(CarRot, 1 , MPI_REAL, 0, iComm, iError)
 
     if(DoSaveField)then
        ! Note the fake processor index to be used by redistribute.pl

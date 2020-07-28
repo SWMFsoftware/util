@@ -260,6 +260,11 @@ program potential_field
   if(UseTiming) TimeStart = mpi_wtime()
 
   call init_potential_field
+  if (IsProcIdle) then
+    call MPI_FINALIZE(iError)
+    STOP
+  endif
+
   if(.not.DoReadMagnetogram)then
      allocate(Br_II(nThetaAll,nPhiAll))
      do iPhi = 1, nPhiAll; do iTheta = 1, nThetaAll; 
@@ -431,7 +436,9 @@ program potential_field
      deallocate(PlotVar_VC)
   end if
 
-  call save_potential_field
+  if (.not. IsProcIdle) then
+    call save_potential_field
+  endif
 
   call MPI_FINALIZE(iError)
 
