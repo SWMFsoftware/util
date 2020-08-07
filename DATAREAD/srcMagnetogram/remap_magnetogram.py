@@ -388,7 +388,7 @@ def read_hmi(nlat,nlon,mapgrid,DoHMI):
     return(hmi_LongI,hmi_LatI,hmi_BrMap,hmi_BlonMap,hmi_BlatMap)
 ##############################################################################
     
-def FITS_RECOGNIZE(inputfile):
+def FITS_RECOGNIZE(inputfile, IsSilent=1):
     """
     This function opens inputfile and tries to determine what type of
     magnetogram it is as well as the type of grid on which the datatype is 
@@ -405,13 +405,15 @@ def FITS_RECOGNIZE(inputfile):
     grid_type = 'unknown'
     map_data = 'unknown'
     g = fits.open(inputfile)
-    g.info()
     header0 = g[0].header
+
     # Print out the headers
-    print("====================================================\n")
-    print("Primary Extension Header:\n")
-    print(repr(header0))
-    print("====================================================\n")
+    if (IsSilent != 1):
+        g.info()
+        print("====================================================\n")
+        print("Primary Extension Header:\n")
+        print(repr(header0))
+        print("====================================================\n")
 
     # Which telescope & instrument
     try:
@@ -573,10 +575,13 @@ def FITS_RECOGNIZE(inputfile):
         print ("I don't recognize the type of this magnetogram.")
         return(-1)
 
-    g.close()                
-    print()
-    print ("I think this is a",magnetogram_type,"magnetogram on a",\
+    g.close()
+
+    if (IsSilent != 1):
+        print()
+        print ("I think this is a",magnetogram_type,"magnetogram on a",\
                str(nla),"X",str(nlo),grid_type,"grid.")
+    
     return( (magnetogram_type, grid_type, map_data, nlo, nla, CRnumber, CR, long0, bunit, mapdate) )
 
 if __name__ == '__main__':
