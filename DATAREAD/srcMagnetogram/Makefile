@@ -124,6 +124,7 @@ test:
 	-@(make test_potential)
 	-@(make test_fdips)
 	-@(make test_fdips_hypre)
+	cd ${DIR}; ./Config.pl -nohypre
 	-@(make test_fdips_wedge)
 	@echo "All test results:"
 	@ls -l *.diff
@@ -199,6 +200,7 @@ test_fdips_check:
 ###############################################################################
 
 test_fdips_hypre:
+	cd ${DIR}; ./Config.pl -hypre
 	@echo "test_fdips_hypre_compile..." > test_fdips_hypre.diff
 	make FDIPS_HYPRE
 	make DIPOLE11
