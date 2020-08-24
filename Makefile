@@ -1,6 +1,11 @@
+include ../Makefile.conf
+include ../Makefile.def
+
 install:
 	@(if [ -d HYPRE ];     then cd HYPRE;      make install; fi);
-
+	@(if [ -d DATAREAD ]; then cd DATAREAD/srcMagnetogram; \
+	rm -f pyfits; \
+	ln -s ${COMMONDIR}/Python/pyfits/ .; fi)
 ###	@(if [ -d FISHPAK ];   then cd FISHPAK/src;make LIB; fi);
 
 test:
