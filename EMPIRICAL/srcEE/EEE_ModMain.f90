@@ -219,7 +219,7 @@ contains
     if(UseGL)then
        ! Add Gibson & Low (GL98) flux rope
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D)
-       B_D = B_D + B1_D
+       B_D = B_D + B1_D, Rho = Rho + Rho1, p = p + p1
     endif
 
    if(UseSpheromak)then
