@@ -39,6 +39,8 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
                        br_field:fltarr(nlon,nlat),$
                        bphi_field:fltarr(nlon,nlat),$
                        btheta_field:fltarr(nlon,nlat),$
+                       occPos:fltarr(nlon,nlat),$
+                       occNeg:fltarr(nlon,nlat),$
                        neqpar:neqpar,$
                        eqpar:fltarr(neqpar)}
 
@@ -48,6 +50,8 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
            mag_info.eqpar    = eqpar
            if nw ge 2 then mag_info.bphi_field = w(*,*,1)
            if nw ge 3 then mag_info.btheta_field = w(*,*,2)
+           if nw ge 4 then mag_info.occPos = w(*,*,3)
+           if nw ge 5 then mag_info.occNeg = w(*,*,4)
            
         end
 
