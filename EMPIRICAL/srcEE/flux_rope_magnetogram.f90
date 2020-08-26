@@ -19,9 +19,8 @@ program magnetogram
   integer:: Long0, i, j, k, iError, iLong
   real:: Radius, Longitude, Latitude, dR
   real:: Radius_I(nR), Longitude_I(nLong), Latitude_I(nLat), Long_I(nD), Lat_I(nD)
-  real:: PlotVar_V(5,nR,nD,nD) = 0
+  real:: PlotVar_V(3,nR,nD,nD) = 0
   real:: BSurface_DC(3,nLong,nLat) = 0, B_DC(3,nR,nD,nD) = 0
-  real:: Rho_C(nR,nD,nD) = 0, P_C(nR,nD,nD) = 0
   real::Xyz_D(3),SinLong,CosLong,SinLat,CosLat, Rho, p, U_D(3), B_D(3)
   character(LEN=3)::TypeLatAxis
   character(LEN=100):: StringLine, NameCommand
@@ -76,7 +75,7 @@ program magnetogram
      case('sin')
         SinLat = asin((2.0*i - nLat - 1.0)/nLat)
         if (i <= nD) then
-           Lat_I(i) = SinLat*cRadToDeg + LatitudeCme - nD/2
+           Lat_I(i) = SinLat*cRadToDeg + LatitudeCme - nD/2 + 90.5
         endif
         Latitude_I(i) = SinLat*cRadToDeg
      case default
@@ -85,8 +84,10 @@ program magnetogram
  
   if (DoDebug)then 
      write(*,*)'Radius_I = ',Radius_I
-     write(*,*)'Longitude_I =',Long_I
-     write(*,*)'Latitude_I =',Lat_I
+     write(*,*)'Long_I =',Long_I
+     write(*,*)'Lat_I =',Lat_I
+     write(*,*)'Longitude_I =',Longitude_I
+     write(*,*)'Latitude_I =',Latitude_I     
   endif
 
   do k = 1,nD
@@ -101,8 +102,6 @@ program magnetogram
            Radius = Radius_I(i)
 	   call rlonlat_to_xyz(Radius,Longitude,Latitude, Xyz_D)
            call EEE_get_state_BC(Xyz_D,Rho,U_D,B_D,p,0.0,0,0)
-           Rho_C(i,j,k) = Rho
-           P_C(i,j,k) = p
            B_DC(1,i,j,k) = sum(Xyz_D*B_D)
            B_DC(2,i,j,k) = B_D(y_)*CosLong - B_D(x_)*SinLong
            B_DC(3,i,j,k) = (B_D(x_)*CosLong + B_D(y_)*SinLong)*(-SinLat) &
@@ -112,8 +111,6 @@ program magnetogram
   end do
   
   PlotVar_V(1:3,:,:,:) = B_DC
-  PlotVar_V(4,:,:,:)   = Rho_C
-  PlotVar_V(5,:,:,:)   = P_C
 
   write(*,*)'Saving 3d Flux Rope output file'
   call save_plot_file(&
@@ -124,9 +121,9 @@ program magnetogram
        ParamIn_I = (/float(Long0)/),         &
        Coord1In_I = Radius_I, &
        Coord2In_I = Longitude_I,       &
-       Coord3In_I= Latitude_I,        &
-       NameVarIn = 'Radius Longitude Latitude Br BLon BLat Rho P Long0',&
-       VarIn_VIII = PlotVar_V(1:5,:,:,:))
+       Coord3In_I = Latitude_I,        &
+       NameVarIn  = 'Radius Longitude Latitude Br BLon BLat Long0',&
+       VarIn_VIII = PlotVar_V(1:3,:,:,:))
 
   do j = 1,nLat
      Latitude = Latitude_I(j) * cDegToRad
