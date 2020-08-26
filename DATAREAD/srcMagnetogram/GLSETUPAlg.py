@@ -1,117 +1,221 @@
 #!/usr/bin/env python
 import numpy as np
+import remap_magnetogram as rmag
 import os
+import fnmatch
+import math
 import subprocess
 BMax = 1900.0
-
-cPi = np.pi
+cPi  = np.pi
 Rad2Deg = 180/cPi
+Deg2Rad = cPi/180
 
 def round_my(x):
    i = int(round(x))
    return(i)
 
-def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
-        CMESpeed,UseNoARSize,GLRadius,SizeFactor, 
-        GLRadiusRange_I, UseCMEGrid): 
+def get_angular_dist(Point1_I,Point2_I):
+   #Calculate the angular distance between two points on a sphere
+   AngularDist = math.acos(np.sin(Point1_I[1]) * np.sin(Point2_I[1]) +
+                           np.cos(Point1_I[1]) * np.cos(Point2_I[1]) * 
+                           np.cos(Point1_I[0] - Point2_I[0]))
+   return(AngularDist)
+
+def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLong,Lat_I,Long_I,\
+                           IsUniformLat):
+   LonIndex = round_my(X)
+   LatIndex = round_my(Y)
+   print('\n Chosen Longitude, Latitude =',Long_I[LonIndex]*Rad2Deg,
+         Lat_I[LatIndex]*Rad2Deg)
+   #Occcupancy matrix
+   occ = np.zeros([nLat,nLong])
+   occ[LatIndex,LonIndex] = 1
+   #Occupancy level
+   occ_level = 0
+   #Occupancy level check
+   occ_check = 1
+   while occ_check > 0:
+      occ_level = occ_level + 1
+      [row,col] = np.where(occ == occ_level)
+      n = row.size
+      # row= lat, col = long
+      for i in np.arange(n):
+         rowp = row[i]
+         colp = col[i]
+         if BrThreshold > 0. :
+            if rowp-1 > 0:
+               if (Br_C[rowp-1,colp] > BrThreshold and occ[rowp-1,colp] == 0):
+                  occ[rowp-1,colp] = occ_level + 1
+            if rowp+1 < nLat:
+               if (Br_C[rowp+1,colp] > BrThreshold and occ[rowp+1,colp] == 0):
+                  occ[rowp+1,colp] = occ_level + 1
+            if colp-1 > 0:
+               if (Br_C[rowp,colp-1] > BrThreshold and occ[rowp,colp-1] == 0):
+                  occ[rowp,colp-1] = occ_level + 1
+            if colp+1 < nLong:
+               if (Br_C[rowp,colp+1] > BrThreshold and occ[rowp,colp+1] == 0):
+                  occ[rowp,colp+1] = occ_level + 1
+         elif BrThreshold < 0.:
+            if rowp-1 > 0:
+               if (Br_C[rowp-1,colp] < BrThreshold and occ[rowp-1,colp] == 0):
+                  occ[rowp-1,colp] = occ_level + 1
+            if rowp+1 < nLat:
+               if (Br_C[rowp+1,colp] < BrThreshold and occ[rowp+1,colp] == 0):
+                  occ[rowp+1,colp] = occ_level + 1
+            if colp-1 > 0:
+               if (Br_C[rowp,colp-1] < BrThreshold and occ[rowp,colp-1] == 0):
+                  occ[rowp,colp-1] = occ_level + 1
+            if colp+1 < nLong:
+               if (Br_C[rowp,colp+1] < BrThreshold and occ[rowp,colp+1] == 0):
+                  occ[rowp,colp+1] = occ_level + 1
+      occ_check = n
+   #end whileloop
+   #Calculate weighted center
+   [LatOcc,LonOcc] = np.where(occ>0)
+   nSize = LatOcc.size
+   LatCenter=0.
+   LonCenter=0.
+   Flux=0.
+   Area = 0.
+   #flux = SUM(area * Br)
+   dLon    = 2.*cPi/nLong
+   dLat    = cPi/nLat
+   dSinLat = 2.0/nLat
+   for i in np.arange(nSize):
+      iLon  = LonOcc[i]
+      iLat  = LatOcc[i]
+      if IsUniformLat : # uniform in lat
+         dArea = np.cos(Lat_I[iLat]) * dLat * dLon   # in radians^2
+      else:
+         dArea = dSinLat * dLon   # in radians^2
+      dFlux = Br_C[iLat,iLon] * dArea
+      LonCenter += Long_I[iLon] * dFlux
+      LatCenter +=  Lat_I[iLat] * dFlux
+      Flux += dFlux
+      Area += dArea
+   LonCenter /= Flux  # in Radians
+   LatCenter /= Flux  # in Radians
+   # return the longitude and latitude of the weighted center in radians, 
+   # area in radians^2, and the occupancy matrix for plotting
+   return(LatCenter,LonCenter,occ,Area) 
+
+def calculate_index(Y, Y_I, n):
+   # Calculate the index from an interpolated array
+   # Y   - lon/lat for which index in the lon/lat array needs to be calculated
+   # Y_I - lon/lat array
+   # n   - resolution of lon/lat array
+   X_I = np.linspace(0, n, n)  # array of data indices
+   Index = np.interp(Y, Y_I, X_I) # index of Y
+   Index = round_my(Index)
+   return(Index)
+
+def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
+        SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
+        Stretch, Distance, Helicity, DoHMI, IsPositionInput, UsePNDist, 
+        UseARArea, DoScaling, gridtype):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    xPositive = Param_I[2]
    yPositive = Param_I[3]
    xNegative = Param_I[4]
    yNegative = Param_I[5]
+   #unnecessary can be removed because check is done below
+   if abs(Lat_I[2]-2*Lat_I[1]+Lat_I[0])<1.0e-5:
+      IsUniformLat = True
+      print('Uniform in Latitude grid')
+   else:
+      IsUniformLat = False
+      print('Uniform in Sin(Latitude) grid')
+
+   if Distance == -1 :
+      Distance = 1.8   #standard parameter
+   if Stretch == -1 :
+      Stretch  = 0.6   #standard parameter
    
-   print ("You chose  x/y for Positive and negative spots:")
-   print ("{0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f}".format(
-      xPositive, yPositive,xNegative, yNegative))
-   iBoxSize = round_my((16.*nLong)/360)
-   
-   #Calculate the weighted centers for positive and negative spots.
-   xPositiveWeight=0.
-   yPositiveWeight=0.
-   TotalPositiveFlux=0.
+   # Pass the x, y indices of the clicks to calculate weighted center
+   # and their indices
 
-   for j in np.arange(yPositive-iBoxSize//2,yPositive+iBoxSize//2+1):
-      for i in np.arange(xPositive-iBoxSize//2,xPositive+iBoxSize//2+1):
-         if (Br_C[round_my(j),round_my(i)] > 0.0):
-            xPositiveWeight=xPositiveWeight+Br_C[round_my(j),round_my(i)]*i
-            yPositiveWeight=yPositiveWeight+Br_C[round_my(j),round_my(i)]*j
-            TotalPositiveFlux=TotalPositiveFlux+Br_C[round_my(j),round_my(i)]
-   xPositive=xPositiveWeight/TotalPositiveFlux
-   yPositive=yPositiveWeight/TotalPositiveFlux
+   if IsPositionInput == 1:
+      print ("\n User input  Lon/Lat for Positive and negative spots:")
+      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f}".format(
+            xPositive, yPositive,xNegative, yNegative))
+      xPositive = calculate_index(xPositive*Deg2Rad,Long_I,nLong)
+      yPositive = calculate_index(yPositive*Deg2Rad,Lat_I, nLat)
+      xNegative = calculate_index(xNegative*Deg2Rad,Long_I,nLong)
+      yNegative = calculate_index(yNegative*Deg2Rad,Lat_I, nLat)
 
-   xNegativeWeight=0.
-   yNegativeWeight=0.
-   TotalNegativeFlux=0.
-   for j in np.arange(yNegative-iBoxSize//2,yNegative+iBoxSize//2+1):
-      for i in np.arange(xNegative-iBoxSize//2,xNegative+iBoxSize//2+1):
-         if (Br_C[round_my(j),round_my(i)] < 0.0):
-            xNegativeWeight=xNegativeWeight+Br_C[round_my(j),round_my(i)]*i
-            yNegativeWeight=yNegativeWeight+Br_C[round_my(j),round_my(i)]*j
-            TotalNegativeFlux=TotalNegativeFlux+Br_C[round_my(j),round_my(i)]
-            
-   xNegative=xNegativeWeight/TotalNegativeFlux
-   yNegative=yNegativeWeight/TotalNegativeFlux
-   print ("Weighted  x/y for Positive and negative spots:")
-   print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f}".format(
-      xPositive, yPositive,xNegative, yNegative))
-  
-   #Find center of the active region as the point on the line
-   #connecting the positive and negetive center in which the MF is minumal
-   #(i.e as intersection of this with PIL, 
-   #herewith PIL=Polarity Inversion Line 
-   nProfile = max([round_my(abs(xPositive-xNegative)), 
-                   round_my(abs(yPositive-yNegative))]) +1
+   # get weighted centers(Lon,Lat), occupancy matrix, Area of AR for
+   # positive and negative regions
+   [LatPos,LonPos,occPos,AreaPos] = \
+       get_weighted_center(xPositive,yPositive,Br_C,20.,\
+                              nLat,nLong,Lat_I,Long_I,IsUniformLat)
+   LonPosIndex = calculate_index(LonPos,Long_I,nLong)
+   LatPosIndex = calculate_index(LatPos,Lat_I, nLat)
 
-   Misc = BMax +1.0 
+   print('\n Positive Weighted Center (lon,lat) =',\
+            LonPos*Rad2Deg, LatPos*Rad2Deg)
+
+   [LatNeg,LonNeg,occNeg,AreaNeg] = \
+       get_weighted_center(xNegative,yNegative,Br_C,-20.,\
+                              nLat,nLong,Lat_I,Long_I,IsUniformLat)
+   LonNegIndex = calculate_index(LonNeg,Long_I,nLong)
+   LatNegIndex = calculate_index(LatNeg,Lat_I, nLat)
+
+   print('\n Negative Weighted Center (lon,lat) =',\
+            LonNeg*Rad2Deg,LatNeg*Rad2Deg)
+
+   Point1_I=[LonNeg,LatNeg] # negative spot
+   Point2_I=[LonPos,LatPos] # positive spot
+
+   # Find center of the active region as the point on the line
+   # connecting the positive and negative center at which the MF is minimal
+   # (i.e as intersection of this with PIL,
+   # herewith PIL=Polarity Inversion Line
+   nProfile = max([round_my(abs(LonPos - LonNeg)*Rad2Deg),
+                   round_my(abs(LatPos-LatNeg)*Rad2Deg)]) + 1
+   LonProfile_C = np.zeros(nProfile)
+   LatProfile_C = np.zeros(nProfile)
+   BTmp = BMax + 1.0
    for i in np.arange(nProfile):
-      xProfile = xPositive+(
-         xNegative - xPositive)*i/(nProfile-1.)
-      yProfile = yPositive+(
-         yNegative - yPositive)*i/(nProfile-1.)
-      AbsBr = abs(Br_C[round_my(yProfile),round_my(xProfile)])
-      if (AbsBr < Misc):
-         Misc = AbsBr
-         XyARCenter_D = [xProfile,yProfile]
-   print ("Center for Active region:" )
-   print ("{0:4.1f} {1:4.1f}".format(XyARCenter_D[0],
-      XyARCenter_D[1]))
-   iXARCenter=round_my(XyARCenter_D[0])
-   iYARCenter=round_my(XyARCenter_D[1])
-   #Save the physical coordinates to use as the GL flux rope center 
-   GL_Latitude  = Lat_I[ iYARCenter]*Rad2Deg
-   GL_Longitude = Long_I[iXARCenter]*Rad2Deg
+      LonProfile = LonPos+(
+         LonNeg - LonPos)*i/(nProfile - 1)
+      LonProfile_C[i] = LonProfile
+      LatProfile = LatPos+(
+         LatNeg - LatPos)*i/(nProfile - 1)
+      LatProfile_C[i] = LatProfile
+      IndexLon = calculate_index(LonProfile,Long_I,nLong)
+      IndexLat = calculate_index(LatProfile,Lat_I, nLat)
+      AbsBr = abs(Br_C[IndexLat,IndexLon])
+      if (AbsBr < BTmp):
+         BTmp = AbsBr
+         IndexARCenter_D = [IndexLon,IndexLat]
+   iLonAR = IndexARCenter_D[0]
+   iLatAR = IndexARCenter_D[1]
+   LonAR  = Long_I[iLonAR]  # in radians
+   LatAR  =  Lat_I[iLatAR]  # in radians
+   print ("Center for Active region(Lon,Lat in deg):" )
+   print ("{0:4.1f} {1:4.1f}".format(LonAR*Rad2Deg,LatAR*Rad2Deg))
+   GL_Latitude  = LatAR * Rad2Deg
+   GL_Longitude = LonAR * Rad2Deg
    if Long0>0:
       GL_Longitude +=Long0
       if GL_Longitude>=360:
          GL_Longitude-=360
    print ("GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
-      GL_Longitude, GL_Latitude))
+         GL_Longitude, GL_Latitude))
 
-   #Distances from the AR center and spot centers:
-   DisCenter_C = np.zeros([nLat,nLong])
-   PCenter_C   = np.zeros([nLat,nLong])
-   NCenter_C   = np.zeros([nLat,nLong])
-   for j in np.arange(nLat):
-      for i in np.arange(nLong):
-         DisCenter_C[j,i] = np.sqrt(
-            (i-XyARCenter_D[0])**2+(j-XyARCenter_D[1])**2)
-         PCenter_C[j,i]  = np.sqrt((i-xPositive)**2+(j-yPositive)**2)
-         NCenter_C[j,i]  = np.sqrt((i-xNegative)**2+(j-yNegative)**2)
-   #Calculate Active Region Size for determining the GL size.
-   #Below, the distances are mostly compared with the distance between
-   #the centers of positive and negative spots.
-   NPCentersDist = np.sqrt((xPositive - xNegative)**2 + 
-                           (yPositive - yNegative)**2)
-    
-   ARThreshold=12.*nLong/360*NPCentersDist/13.6
-   PSizeMap_C = np.where(Br_C >  20., Br_C, 0.)
-   PSizeMap_C = np.where(PCenter_C <= ARThreshold, PSizeMap_C, 0.)   
-   NSizeMap_C = np.where(Br_C < -20., Br_C, 0.)
-   NSizeMap_C = np.where(NCenter_C <= ARThreshold, NSizeMap_C, 0.)
-  
- 
-   #Calculate gradient of the Br field
+   # Determines the non-zero elements of the occupancy matrix 
+   # to fill the SizeMap arrays with the magnetic field values
+   # within the AR
+   PSizeMap_C = np.zeros([nLat,nLong])
+   NSizeMap_C = np.zeros([nLat,nLong])
+   # Location of points within positive and negative active regions
+   [rowP,colP] = np.where(occPos > 0)
+   [rowN,colN] = np.where(occNeg > 0)
+   PSizeMap_C[rowP,colP] = Br_C[rowP,colP]
+   NSizeMap_C[rowN,colN] = Br_C[rowN,colN]
+
+   #Calculate the gradient of the Br field
    DDx_C = np.zeros([nLat,nLong])
    DDy_C = np.zeros([nLat,nLong]) 
    DDx_C[:,1:nLong-1] = (Br_C[:,2:nLong] - Br_C[:,0:nLong-2])/2.
@@ -126,12 +230,10 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    GradBrMap_C = np.where(GradBr_C > 0.5, Br_C, 0.)
 
    # Cell size is used to divide the magnetogram to sub regions 
-   #in order to determine the PIL. 
-   nCell = 1
-
-   #Setup the threshold for selecting cells near the PIL.
+   # in order to determine the PIL. 
+   # Setup the threshold for selecting cells near the PIL.
    BThreshold = 2.0
-
+   nCell = 1
    #Calculate the PILBitMap_C (1/0) for determining the PIL.
    M = nLong//nCell
    N = nLat//nCell
@@ -144,56 +246,104 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
             >  BThreshold):
             #PIL intersects this quadrant. Among these 4 points 
             #we do not include those in which the gradient is too small: 
-            PILBitMap_C[j*nCell:(j+1)*nCell+1,i*nCell:(i+1)*nCell+1
-                        ] = GradBrMap_C[
-               j*nCell:(j+1)*nCell+1,i*nCell:(i+1)*nCell+1]
-             
+            PILBitMap_C[j*nCell:(j+1)*nCell+1,i*nCell:(i+1)*nCell+1] = \
+                GradBrMap_C[j*nCell:(j+1)*nCell+1,i*nCell:(i+1)*nCell+1]
+   # Vector along PN spots
+   Diff_LonPN = LonNeg - LonPos
+   Diff_LatPN = LatNeg - LatPos
+   Dist_PN     = np.sqrt(Diff_LonPN**2 + Diff_LatPN**2)  # in radians
+   AngularDistance = get_angular_dist(Point1_I,Point2_I)
 
-    #Distance cut-off for determining the PIL.
-    # 8.*(nLon/360.)*DisWeight/13.6        for calculating PIL_Length
-    # 3 for calculating PIL orientation)
-    # min([6.*(nLon/360.),8.*(nLon/360.)*DisWeight/13.6]) -                 
-    # for calculating bt_pil 6.*(nLon/360.) and for vizualization
-   DisThreshold=(8.0*nLong)/360*NPCentersDist/13.6
-   DisMax      =(6.0*nLong)/360
-   DisThresholdS=3
-      
+   # Distances from the AR center and spot centers:
+   DisCenter_C = np.zeros([nLat,nLong])
+   for j in np.arange(nLat):
+      for i in np.arange(nLong):
+         DisCenter_C[j,i] = np.sqrt(
+            (Long_I[i]-LonAR)**2+(Lat_I[j]-LatAR)**2)  # in radians
+   # Distance cut-off for determining the PIL.
+   # Min:2/3 of the distance between positive and negative spots.
+   # Max:dist between the two spots
+   NPCentersDist = np.sqrt((LonPosIndex - LonNegIndex)**2 +
+                           (LatPosIndex - LatNegIndex)**2)
+   DisThreshold = Dist_PN * (2./3.)
+   DisMax      = Dist_PN
+   PILMap_C = np.where(DisCenter_C<=min([DisMax,DisThreshold]),PILBitMap_C, 0.)
 
-      #Calculate the GL flux rope orientation from the two weighted points.
-   r1=[xNegative-xPositive,yNegative-yPositive]
+   # Calculate Active Region Size for determining the GL size.
+   # AR size can be determined in two ways:
+   # 1) based on distance between two spot centers
+   # 2) based on area of the Active Region (DEFAULT)
+   if UsePNDist:
+      if GLRadius <= 0.:
+         # Use the law of cosines to calculate the GLRadius
+         # Angular width is twice the distance between positive and 
+         # negative spot centers
+         # AngularDist is the angle subtended by two points
+         # at the center of the sphere
+         AngularWidth = SizeFactor * AngularDistance   #default SizeFactor is 1
+         Stretch1 = 1 + Stretch                    #Radius of the stretched Sun
+         GLRadius = np.sqrt( Stretch1**2 + Distance**2 -
+                             2 * Stretch1 * Distance * np.cos(AngularWidth))
+   elif UseARArea:  #Default option
+      # area is already calculated from occupancy matrix
+      ARArea = AreaPos + AreaNeg # in radian^2
+      #ARSize=np.count_nonzero(PSizeMap_C) + np.count_nonzero(NSizeMap_C)
+      #GLRadiusOLD= 0.8/280.* ARSize
+      # Based on AR for March 2011 event(Meng Jin's paper),
+      # GLRadius = 0.8, therefore, we use (area ~ 0.55) as the factor 
+      GLRadius = (0.8/0.055) * ARArea
+   # Radius is limited by the range
+   GLRadius= max([min([GLRadius,GLRadiusRange_I[1]]),GLRadiusRange_I[0]])
+   print('GLRadius =',GLRadius)
+   
+   # Solve the 2nd order equation below to get the scaling factor
+   # Radius^2 = (1+Stretch)^2 + (Distance)^2 - 2*(1+Stretch)Distance*cos(angle)
+   # angle is the angle made by the two points at the center of the Sun
+   # R -> Alpha*R , Dist -> Alpha*Dist , Stretch -> Alpha*Stretch
+   if DoScaling:
+      AlphaInv = Distance * np.cos(AngularDistance) - Stretch + \
+          np.sqrt(GLRadius**2 - (Distance**2 * (np.sin(AngularDistance))**2))
+      # Below is the negative root
+      # AlphaInv = Distance * np.cos(AngularDistance) - Stretch - \
+      #  np.sqrt(GLRadius**2 - (Distance**2 * (np.sin(AngularDistance))**2))
+      Distance = Distance/AlphaInv
+      GLRadius = GLRadius/AlphaInv
+      Stretch  = Stretch/AlphaInv            
+      print('Alpha= ',1/AlphaInv)
+      print('Scaled Distance,GLRadius,Stretch =',
+            Distance,GLRadius,Stretch)
+
+   # GL_Orientation calculation
+   # Calculate the GL flux rope orientation from the two weighted points.
+   r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex]
    r1=r1/np.sqrt(r1[0]**2+r1[1]**2) 
    r2=[1.0,0.0]
-   GL_Orientation=np.arccos(r1[0]*r2[0]+r1[1]*r2[1])*Rad2Deg
-   if r1[1] < 0:
-      GL_Orientation=360-GL_Orientation
-
-   if UseNoARSize:
-      if (GLRadius<=0.):
-       #At this moment, the PIL length is represented by degree and does not 
-       #take into account the effect of different latitude. It will be 
-       #improved later.
-         PILMap_C = np.where(DisCenter_C<=DisThreshold, PILBitMap_C, 0.)
-         PIL_Length=np.count_nonzero(PILMap_C)/2.*360./nLong
-         GLRadius=PIL_Length/SizeFactor
+   if Orientation != -1.0 :
+      GL_Orientation = Orientation
    else:
-      
-       #Use Active Region size to specify the GL flux rope Radius.
-      ARSize=np.count_nonzero(PSizeMap_C) +np.count_nonzero(NSizeMap_C)      
-      GLRadius=0.8/280.*ARSize
-      GLRadius = max([min([GLRadius,GLRadiusRange_I[1]]),GLRadiusRange_I[0]])
-
-   PILMap_C = np.where(DisCenter_C<=min([DisMax,DisThreshold]), 
-                       PILBitMap_C, 0.)
-   #Calculate the poloidal flux needed for the observed CME velocity.
+      GL_Orientation=np.arccos(r1[0]*r2[0]+r1[1]*r2[1])*Rad2Deg
+      if r1[1] < 0:
+         GL_Orientation=360-GL_Orientation
+   # Orientation calculation based on the angle as a func of radius needs
+   # to be calcualted for both GLRadius formulations and included here. 
+   if GL_Orientation > 360 :
+      GL_Orientation = abs(360 - GL_Orientation)
+  
+   # Calculate the poloidal flux needed for the observed CME velocity.
+   # Flux is calculated using average of the radial field around the 
+   # weighted center spots.
+   # The second option of taking avg of field along PIL is currently removed.
    #These relationships are based on the GONG magnetogram with nsmooth = 5
    RegionSize_ARMag=round_my((4.0*nLong)/360)
    br_ar=np.mean(
-      abs(Br_C[round_my(XyARCenter_D[1]-RegionSize_ARMag//2):
-               round_my(XyARCenter_D[1]+RegionSize_ARMag//2)+1,
-               round_my(XyARCenter_D[0]-RegionSize_ARMag//2):
-               round_my(XyARCenter_D[0]+RegionSize_ARMag//2)+1]))
+      abs(Br_C[(iLatAR-RegionSize_ARMag//2):
+                  (iLatAR+RegionSize_ARMag//2)+1,
+               (iLonAR-RegionSize_ARMag//2):
+                  (iLonAR+RegionSize_ARMag//2)+1]))
+   
    GL_poloidal=(CMESpeed*br_ar**0.43989278-3043.9307)/565.05018
-   # Print WARNING information is GL_Bstrength is negative                                               
+   # Removed the ARMag =2 part
+   # Print WARNING information is GL_Bstrength is negative
    if GL_poloidal <= 0 :
       print ('*********************************************')
       print ('WARNING: CALCULATION FAILED!USE WITH CAUTION!')
@@ -202,29 +352,104 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       print ('GL Poloidal Flux is set to 0!')
       print ('*********************************************')
       GL_poloidal = 0.0
-       #Relationship between the PIL length and the GL flux rope Radius.   
-       #This factor is now based on the 2011 March 7 CME. More tests  
-       #are needed in order to get a more precise value.  
-   
-   
-      #Relationship between the GL Poloidal flux and GL Bstrength.
-      #Flux rope helicity is determined by the hemisphere, northern
-      #hemisphere - negative helicity.
-   
-   GL_Bstrength=13.1687517342067082*GL_poloidal/(21.457435*GLRadius**2)
-   if GL_Latitude > 0: 
-      GL_Bstrength = -GL_Bstrength
-      
+   #Relationship between the PIL length and the GL flux rope Radius.   
+   #This factor is now based on the 2011 March 7 CME. More tests  
+   #are needed in order to get a more precise value.  
+   GL_Bstrength=13.1687517342067082*GL_poloidal/(21.457435*GLRadius**2)   
 
-     #Recommended GL flux rope parameters
-   Distance = 1.8
-   Stretch  = 0.6
+   if(Br_C[iLatAR,iLonAR]>0):
+      iYPIL_I,iXPIL_I=np.where(PILMap_C>0)
+   else:
+      iYPIL_I,iXPIL_I=np.where(PILMap_C<0)
+   nPIL=len(iXPIL_I)
+   
+   if IsUniformLat :
+      grid_type = 'uniform'
+   else:
+      grid_type = 'sin(lat)'
+
+   # Flux rope helicity is determined by:
+   # (1) HMI vector magnetograms 
+   # (2) Angle between PN spots and PIL
+   # (3) Hemisphere of the GL FR 
+   # Vector along PIL
+   Diff_LonPIL = Long_I[int(round(iXPIL_I[nPIL-1]))] - \
+       Long_I[int(round(iXPIL_I[0]))]
+   Diff_LatPIL = Lat_I[int(round(iYPIL_I[nPIL-1]))] - \
+       Lat_I[int(round(iYPIL_I[0]))]
+   Dist_PIL    = np.sqrt(Diff_LonPIL**2 + Diff_LatPIL**2)
+
+   IsPresentHMI = 0
+   HMI_helicity = 0
+   # (1) Helicity based on HMI vector map
+   # Save magnetic field componets from HMI vector magnetogram
+   if DoHMI :
+      hmi_data = rmag.read_hmi(nLat,nLong,grid_type,1)
+      IsPresentHMI = hmi_data[0]
+      if (IsPresentHMI == 1):
+         hmi_Brad = hmi_data[3]
+         hmi_Blon = hmi_data[4]
+         hmi_Blat = hmi_data[5]
+         
+         hmi_BradSum = 0.
+         hmi_BlatSum = 0.
+         hmi_BlonSum = 0.
+      #Average field components along PIL
+         for i in np.arange(nPIL):
+            hmi_BradSum += \
+                hmi_Brad[int(round(iYPIL_I[i])),int(round(iXPIL_I[i]))]
+            hmi_BlatSum += \
+                hmi_Blat[int(round(iYPIL_I[i])),int(round(iXPIL_I[i]))]
+            hmi_BlonSum += \
+                hmi_Blon[int(round(iYPIL_I[i])),int(round(iXPIL_I[i]))]
+         
+         hmi_BradAvg = hmi_BradSum / nPIL
+         hmi_BlonAvg = hmi_BlonSum / nPIL
+         hmi_BlatAvg = hmi_BlatSum / nPIL
+      #helicity calculation
+      #cross product of vector along the PN spots and average field along PIL
+         cross_pro = \
+             (hmi_BlatAvg * Diff_LonPN - hmi_BlonAvg * Diff_LatPN)/Dist_PN
+         HMI_helicity = np.sign(cross_pro)
+
+   if Helicity != 0 : # helicity input by user
+      GL_Bstrength = Helicity * GL_Bstrength
+      print('Using user input helicity = ', Helicity)
+   elif IsPresentHMI == 0: # helicity if HMI is not used
+      # based on hemisphere
+      if GL_Latitude > 0: 
+         GL_Bstrength = -GL_Bstrength
+         print('Helicity based on hemisphere: ',np.sign(GL_Bstrength))
+   else: # helicity if HMI is present & used
+      GL_Bstrength = HMI_helicity * GL_Bstrength
+   
+   # (2) Helicity based on angle between PN vector & PIL vector
+   # DOT product 
+   dot_product   = (Diff_LonPN * Diff_LonPIL + Diff_LatPN * Diff_LatPIL)/\
+       (Dist_PN * Dist_PIL)
+   cross_product = (Diff_LatPIL * Diff_LonPN - Diff_LonPIL * Diff_LatPN)/\
+       (Dist_PN * Dist_PIL)
+   tan_theta = cross_product / dot_product
+   theta = math.atan2(cross_product,dot_product)
+   print(' ')
+   hem_helicity = 1 
+   if IsPresentHMI == 1 :
+      print('Helicity based on HMI vector magnetogram      : ', HMI_helicity)
+   
+   print('Helicity based on angle b/w PN & PIL vectors  : ',np.sign(tan_theta))
+
+   if GL_Latitude > 0:
+      hem_helicity = - hem_helicity
+   print('Helicity based on North/South Hemisphere      :',hem_helicity)
+   
    ApexHeight = GLRadius + Distance - Stretch - 1.0
+
+   #Recommended GL flux rope parameters
    print ('========================================')
    print ('The Recommended GL FLux Rope Parameters')
    print ('========================================')
    print ('#CME')
-   print ('%6.2f                Latitude: '%(GL_Latitude))
+   print ('                Latitude: %6.2f'%(GL_Latitude))
    print ('               Longitude: %6.2f'%(GL_Longitude))
    print ('             Orientation: %6.2f'%(GL_Orientation))
    print ('                  Radius: %6.2f'%(GLRadius))
@@ -250,8 +475,29 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    FileId.write("%-10.2f          ApexHeight \n"% ApexHeight)
    FileId.write(" \n")
    FileId.write("#END \n")
-   FileId.close()
-   
+   FileId.write("\n")
+   FileId.write("Angular Size            = %5.2f\n"%(2*GLRadius/Distance*Rad2Deg))
+   FileId.write("Poloidal flux [1E21 Mx] = %5.2f\n"%(GL_poloidal))
+   FileId.write("Average HMI field components along PIL :\n")
+   if DoHMI:
+      FileId.write("HMI Brad = %-5.2f \n"%hmi_BradAvg)
+      FileId.write("HMI Blon = %-5.2f \n"%hmi_BlonAvg)
+      FileId.write("HMI Blat = %-5.2f \n"%hmi_BlatAvg)
+      FileId.write("\n")
+      FileId.write("Before HMI helicity correction : \n")
+      FileId.write("GL_BStrength = %5.2f \n"%(GL_Bstrength/HMI_helicity))
+      FileId.write("GL_poloidal  = %5.2f \n"%GL_poloidal)
+      FileId.write("Gl_Radius    = %5.2f \n"%GLRadius)
+      FileId.write("\n")
+   FileId.write("Helicity: \n")
+   FileId.write("Input Helicity                     : %4.2f\n"%Helicity)
+   FileId.write("From HMI vector mag                : %4.2f\n"%HMI_helicity)
+   FileId.write("From angle between PN & PIL vector : %4.2f\n"%np.sign(tan_theta))
+   FileId.write("From hemisphere                    : %4.2f\n"%hem_helicity)
+   FileId.write('Dot product   : value, angle b/w PN & PIL vectors, sign = {0:5.2f} {1:5.2f} {2:5.2f} \n'.format(dot_product,math.acos(dot_product)*Rad2Deg, np.sign(dot_product)))
+   FileId.write('Cross product : value, angle b/w PN & PIL vectors, sign = {0:5.2f} {1:5.2f} {2:5.2f} \n'.format(cross_product,math.asin(cross_product)*Rad2Deg,np.sign(cross_product)))
+   FileId.write('Tan(theta)    : value, angle b/w PN & PIL vectors, sign = {0:5.2f} {1:5.2f} {2:5.2f} \n'.format(tan_theta,theta*Rad2Deg, np.sign(tan_theta)))
+   FileId.close() 
 
    if UseCMEGrid:
       #Calculate the CME grid refinement parameters based on the flux rope
@@ -286,54 +532,42 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    #For comparison, make magnetogram of a flux rope field
    FileId=open('RunFRM','w')
    FileId.write('%-3d \n'%Long0)
-   if abs(Lat_I[2]-2*Lat_I[1]+Lat_I[0])<1.0e-5:
+   if IsUniformLat :
       FileId.write('uniform latitude \n')
    else:
-      FileId.write('sin(latitude) \n')
+       FileId.write('sin(latitude) \n')
    FileId.close()
    FileId=open('RunFRM','r')
    subprocess.call('../../../bin/FRMAGNETOGRAM.exe',stdin=FileId)
    FileId.close()
    
-   if(Br_C[iYARCenter,iXARCenter]>0):
-      iYPIL_I,iXPIL_I=np.where(PILMap_C>0)
-   else:
-      iYPIL_I,iXPIL_I=np.where(PILMap_C<0)
-   nPIL=len(iXPIL_I)
-  
-   print('nPIL=',nPIL)
    nParam = 8 + 2*nPIL
    Param_I = np.zeros(nParam)
-   Param_I[0:8] = [Long0,LongEarth,xPositive,yPositive,xNegative,yNegative,
-         XyARCenter_D[0],XyARCenter_D[1]]
+   Param_I[0:8] = [Long0,LongEarth,LonPosIndex,LatPosIndex,LonNegIndex,
+                   LatNegIndex,iLonAR,iLatAR]
    Param_I[8:8+nPIL]=iXPIL_I
    Param_I[8+nPIL:8+2*nPIL]=iYPIL_I
    FileId = open('AfterGLSETUP.out','w')
     
    FileId.write('After GLSETUP: Br[Gauss]'+'\n')
    FileId.write(
-      '       0      0.00000       2      %2d       3 \n'% nParam)
+      '       0      0.00000       2      %2d       5 \n'% nParam)
    FileId.write('      '+str(nLong)+'     '+str(nLat)+'\n')
    FileId.write(
-      ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(
-         Long0,LongEarth,xPositive,yPositive,xNegative,yNegative,
-         XyARCenter_D[0],XyARCenter_D[1]) )
+      ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(Long0,LongEarth,LonPosIndex,LatPosIndex,LonNegIndex,LatNegIndex,iLonAR,iLatAR))
    for j in iXPIL_I:
       FileId.write(' %4.0f'%float(j))
    for j in iYPIL_I:
       FileId.write(' %4.0f'%float(j))
    FileId.write('\n')
    FileId.write(
-      'Longitude Latitude Br PMap NMap Long0 LongEarth xP yP xN yN xC yC xPIL1({0:2d}) yPIL1({0:2d})\n'.format(nPIL))
-    
+      'Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})\n'.format(nPIL))
+   
    for k in np.arange(nLat):
       for l in np.arange(nLong):
-         FileId.write("{0:6.1f} {1:6.1f} {2:14.6e} {3:14.6e} {4:14.6e}\n".format(
-               (180./cPi)*Long_I[l],(180./cPi)*Lat_I[k],
-               max([-BMax,min([BMax,Br_C[k,l]])]),
-                      PSizeMap_C[k,l],NSizeMap_C[k,l]))
+         FileId.write("{0:6.1f} {1:6.1f} {2:14.6e} {3:14.6e} {4:14.6e} {5:3.1f} {6:3.1f}\n".format((180./cPi)*Long_I[l],(180./cPi)*Lat_I[k],max([-BMax,min([BMax,Br_C[k,l]])]),PSizeMap_C[k,l],NSizeMap_C[k,l], occPos[k,l], occNeg[k,l]))
     
    FileId.close()
 
+   return(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C,occPos,occNeg)
 
-   return(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C)
