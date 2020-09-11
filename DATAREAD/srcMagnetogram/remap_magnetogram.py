@@ -124,10 +124,13 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         #    if magtype == 'ADAPT Synchronic':
         # nim = g[0].header['NAXIS3'] # number of images
         imdex = i  #which of the 12 maps do you want?
-        print ('This file contains ', str(nim), ' images.Writing out file ',\
-                   i+1)
+        print ('This file contains ', str(nim), ' images. Writing out file ', \
+               '{:2d}'.format(i+1), ', output filename=', outputfile)
         if nim > 1:  #just keep one of them for now
             d = d[imdex,:,:]
+    else:
+        print ('This file contains only 1 images. Writing out file ', \
+               '{:2d}'.format(i+1), ', output filename=', outputfile)
             
     g[0].header['NAXIS1'] = nlong # new number of longitude points
     g[0].header['NAXIS2'] = nlat  #               latitude
@@ -408,7 +411,7 @@ def read_hmi(nlat,nlon,mapgrid,DoHMI):
         fid.close()
     return(IsPresentHMI,hmi_LongI,hmi_LatI,hmi_BrMap,hmi_BlonMap,hmi_BlatMap)
 ##############################################################################
-def FITS_RECOGNIZE(inputfile):
+def FITS_RECOGNIZE(inputfile, IsSilent=True):
     """
     This function opens inputfile and tries to determine what type of
     magnetogram it is as well as the type of grid on which the datatype is 
@@ -425,13 +428,15 @@ def FITS_RECOGNIZE(inputfile):
     grid_type = 'unknown'
     map_data = 'unknown'
     g = fits.open(inputfile)
-    g.info()
     header0 = g[0].header
-    # Print out the headers
-#    print("====================================================\n")
-#    print("Primary Extension Header:\n")
-#    print(repr(header0))
-#    print("====================================================\n")
+
+    # Print out the headers if needed
+    if not IsSilent:
+        g.info()
+        # print("====================================================\n")
+        # print("Primary Extension Header:\n")
+        # print(repr(header0))
+        # print("====================================================\n")
 
     # Which telescope & instrument
     try:
@@ -594,9 +599,12 @@ def FITS_RECOGNIZE(inputfile):
         return(-1)
 
     g.close()                
-    print()
-    print ("I think this is a",magnetogram_type,"magnetogram on a",\
+
+    if not IsSilent:
+        print()
+        print ("I think this is a",magnetogram_type,"magnetogram on a",\
                str(nla),"X",str(nlo),grid_type,"grid.")
+        
     return( (magnetogram_type, grid_type, map_data, nlo, nla, CRnumber, CR, long0, bunit, mapdate) )
 
 if __name__ == '__main__':
@@ -637,8 +645,6 @@ if __name__ == '__main__':
     parser.add_argument('nlat', nargs='?', type=int, default=-1, help='Number of latitude points in output. Default is same as input.')
     parser.add_argument('nlon', nargs='?', type=int, default=-1, help='Number of longitude points in output. Default is same as input.')
     parser.add_argument('-grid',choices=['uniform','sinlat'],help="type of latitude grid in the output. Default is same as input.")
-    parser.add_argument('-istart', type=int, help='Initial map index. Default is the first map.', default=1)
-    parser.add_argument('-iend', type=int, help='Final map number. Default is the first map.', default=1)
 
     args = parser.parse_args()
 
@@ -655,11 +661,14 @@ if __name__ == '__main__':
     elif args.grid == 'uniform':
         grid_type = 'uniform'
 
-    if args.istart == None:
-            args.istart = 0
-    if args.iend < args.istart:
-        args.iend = args.istart
+    istart = 1
+    iend   = 1
+    map_local  = FITS_RECOGNIZE(args.inputfile,IsSilent=False)
 
-    for i in range(args.istart,args.iend+1):
-        out=args.outputfile+'_'+str(i).zfill(2)+'.out' 
+    if map_local[0] == 'ADAPT Synchronic':
+        istart = 1
+        iend   = 12
+
+    for i in range(istart,iend+1):
+        out=args.outputfile+'_'+str(i).zfill(2)+'.out'
         remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
