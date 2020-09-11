@@ -632,7 +632,6 @@ if __name__ == '__main__':
     ./remap_magnetogram.py test.fits test.out
     ./remap_magnetogram.py test.fits test.out 180 360
     ./remap_magnetogram.py test.fits test.out -grid=uniform
-    ./remap_magnetogram.py test.fits -istart 1 -iend 12
 
     Within Python, the remapping is done with the remap function contained
     in this file.
