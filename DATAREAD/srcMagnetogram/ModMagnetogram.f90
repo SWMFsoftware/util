@@ -129,8 +129,9 @@ contains
     real::HLCMM     !Heliographic Longitude of the central meridian of map
     integer::iHLCMM !The same, but HLCMM is integer at WSO magnetograms
     integer::iErrorRead,iPosition
-    iPosition=index(Head_PFSSM,'Centered')	
-    if (iPosition>0.and.Shift<0.0)then	
+    
+    iPosition=index(Head_PFSSM,'Centered')
+    if (iPosition>0.and.Shift<0.0)then
        Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
             Head_PFSSM(iPosition+1:len(Head_PFSSM))
        iPosition=index(Head_PFSSM,':')
@@ -143,11 +144,10 @@ contains
        if(iErrorRead>0)call Con_stop(&
             'Cannot find HLCMM, '//File_PFSSM//&
             ' is not a true WSO magnetogram')
-       Shift=modulo(iHLCMM-180-dLongitudeHgrDeg, 360.0) 
-       if(iProc==0)then
-          write(*,*) prefix, 'PhiOffset=',Shift
-       end if
-       return
+       ! Rotates based on magnetogram central meridian + HGR system
+       Shift=modulo(iHLCMM-180-dLongitudeHgrDeg, 360.0)
+       if(iProc==0)write(*,*) prefix, ' PhiOffset = ',Shift
+       RETURN
     end if
     iPosition=index(Head_PFSSM,'Central')
     if(iPosition>0.and.Shift<0.0)then
@@ -160,10 +160,17 @@ contains
        if(iErrorRead>0)call CON_stop(&
             'Cannot find HLCMM, '//File_PFSSM//&
             ' is not a true MDI magnetogram')
+       ! Rotates based on magnetogram central meridian + HGR system
        Shift=modulo(HLCMM-180-dLongitudeHgrDeg, 360.0) 
-       if(iProc==0)then
-          write(*,*) prefix, 'PhiOffset=',Shift
-       end if
+       if(iProc==0)write(*,*) prefix, ' PhiOffset = ',Shift
+       RETURN
+    end if
+    
+    ! Rotation of HGR system is applied 
+    if (Shift == 0.)then
+       Shift = modulo(Shift-dLongitudeHgrDeg, 360.0)
+       if(iProc==0)write(*,*) prefix, ' PhiOffset = ',Shift
+       RETURN
     end if
   end subroutine get_hlcmm
 
@@ -292,7 +299,7 @@ contains
                 N_PFSSM=nOrderIn
              end if
           end if
-          if(PhiOffset<0.0)call get_hlcmm(Head_PFSSM,PhiOffset)
+          call get_hlcmm(Head_PFSSM,PhiOffset)
        enddo
        if(PhiOffset<0.0)call CON_stop(&
             'Did not find central meridian longitude')
