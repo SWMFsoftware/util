@@ -60,10 +60,13 @@ program magnetogram
      Radius_I(i+1) = 1 + i*dR
   enddo
   do i = 1, nLong
+     ! Include the Phishift to correctly place the CME
+     iLong = i + Long0
+     iLong = 1 + modulo(iLong - 1, nLong)
      if (i <= nD) then
-        Long_I(i) = i + LongitudeCme - nD/2
+        Long_I(i) = iLong + LongitudeCme - nD/2
      endif
-     Longitude_I(i) = i - 0.5
+     Longitude_I(i) = iLong - 0.5
   end do
   do i = 1, nLat
      select case(TypeLatAxis)
@@ -83,11 +86,11 @@ program magnetogram
   end do
  
   if (DoDebug)then 
-     write(*,*)'Radius_I = ',Radius_I
-     write(*,*)'Long_I =',Long_I
-     write(*,*)'Lat_I =',Lat_I
+     write(*,*)'Radius_I    = ',Radius_I
+     write(*,*)'Long_I      =',Long_I
+     write(*,*)'Lat_I       =',Lat_I
      write(*,*)'Longitude_I =',Longitude_I
-     write(*,*)'Latitude_I =',Latitude_I     
+     write(*,*)'Latitude_I  =',Latitude_I     
   endif
 
   do k = 1,nD
