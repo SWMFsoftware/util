@@ -141,7 +141,7 @@ DIPOLE11.exe: dipole11.o
 clean: cleanfiles
 
 distclean: clean
-	rm -f *.dat *.out *.log *.diff FDIPS.in HARMONICS.in
+	rm -f *.dat *.out *.log *.diff FDIPS.in HARMONICS.in pyfits
 
 ### TESTS ###
 
