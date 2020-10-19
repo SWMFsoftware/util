@@ -20,7 +20,7 @@ module ModReadMagnetogram
   integer, public:: nThetaorig, nPhiorig  ! original magnetogram theta and phi
   logical, public:: UseCosTheta = .true.  ! To check the latitude grid
   real,    public:: dPhi=1.0, dTheta=1.0, dSinTheta=1.0
-  logical, public:: UseChebyshevNode = .false.
+  logical, public:: UseChebyshevNode = .true.
   real,    public,  allocatable:: ChebyshevWeightE_I(:), ChebyshevWeightW_I(:)
   ! Carrington rotation #. If the map covers parts of two rotations,
   ! the carrington rotation for the central meridian is provided
