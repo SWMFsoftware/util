@@ -135,7 +135,8 @@ contains
     ! is already uniform in theta
     UseCosTheta = abs(Lat0_I(3) - 2*Lat0_I(2) + Lat0_I(1)) > 1e-6
     if(.not.UseCosTheta)then
-       if(UseChebyshevNode) write(*,*)'Already Uniform in Theta, Chebyshev is not done'
+       if(UseChebyshevNode) write(*,*) &
+            'Already uniform in theta, Chebyshev transform is not needed'
        UseChebyshevNode = .false.
     endif
 
@@ -148,30 +149,20 @@ contains
                (PolarFactor-1)*abs(sin(cDegToRad*Lat0_I(iTheta)))&
                **PolarExponent)
        end do
-       write(StringMagHeader,'(a,f4.1,a,f4.1)')trim(stringMagHeader)//&
-            trim('; PolarFactor = '),PolarFactor,trim('; PolarExponent = '&
-            ),PolarExponent
+       write(StringMagHeader,'(a,f4.1,a,f4.1)')trim(StringMagHeader)//&
+            '; PolarFactor = ', PolarFactor,'; PolarExponent = ', PolarExponent
     end if
 
     ! options not supported with UseWedge
     if(present(UseWedge))then
-       if(DoChangePolarField .and. UseWedge)then
-          call CON_stop('UseWedge currently does not support DoChangePolarField.')
-       endif
-       if(UseCosTheta .and. UseWedge)then
-          call CON_stop(NameSub//&
-               ': Currently UseWedge only works with uniform latitude grid')
-       endif
-       if(present(DoRemoveMonopole))then
-          if(DoRemoveMonopole .and. (.not. UseWedge))then
-             IsRemoveMonopole = .true.
-          else
-             IsRemoveMonopole = .false.
-          endif
-          if (.not. DoRemoveMonopole .and. .not. UseWedge)then
-             IsRemoveMonopole = .false.
-          endif
-       endif
+       if(DoChangePolarField .and. UseWedge) &
+            call CON_stop('UseWedge does not support DoChangePolarField.')
+       if(UseCosTheta .and. UseWedge) &
+            call CON_stop(NameSub//&
+               ': UseWedge only works with uniform latitude grid')
+
+       if(present(DoRemoveMonopole)) &
+            IsRemoveMonopole = DoRemoveMonopole .and. (.not. UseWedge)
     endif
 
     ! For #CHANGEWEAKFIELD
@@ -180,7 +171,7 @@ contains
             Br0_II = sign(min(abs(Br0_II) + BrMin, &
             BrFactor*abs(Br0_II)), Br0_II)
        write(StringMagHeader,'(a,f4.1,a,f4.1)')trim(StringMagHeader)//&
-            trim('; BrFactor ='),BrFactor,trim('; BrMin = '),BrMin
+            '; BrFactor =', BrFactor, '; BrMin = ', BrMin
     endif
 
     ! Fix too large values of Br
