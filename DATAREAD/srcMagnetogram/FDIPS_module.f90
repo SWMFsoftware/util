@@ -6,7 +6,7 @@ module ModPotentialField
   use ModMpi
   use ModUtilities, ONLY: CON_stop
   use ModConst, ONLY: cPi, cTwoPi, cHalfPi
-  use ModNumConst,    ONLY: cHalfPi, cPi, cDegToRad
+  use ModNumConst,    ONLY: cHalfPi, cPi, cDegToRad, cRadToDeg
 
   implicit none
 
@@ -86,7 +86,7 @@ module ModPotentialField
   integer, parameter :: iCommWorld = MPI_COMM_WORLD
   integer :: iComm = iCommWorld
   integer :: iProc, nProc, iProcTheta, iProcPhi
-  integer :: iTheta0, iPhi0
+  integer :: iTheta0, iPhi0, iLat0
   integer :: nTheta, nPhi
   real,  allocatable :: TmpXPhi0_II(:,:),TmpXPhipi_II(:,:)
   integer :: nThetaLgr,nThetaSml,nPhiLgr,nPhiSml
@@ -535,9 +535,10 @@ contains
     real   :: r, CosTheta, SinTheta, CosPhi, SinPhi
     real   :: Br, Btheta, Bphi, XyzSph_DD(3,3)
     real   :: rI, rJ, rInv
-    real, allocatable:: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:), bAll_DG(:,:,:,:)
+    real, allocatable:: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:)
     real, allocatable:: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
     real, allocatable:: Potential_G(:,:,:), PlotVar_VG(:,:,:,:)
+    real, allocatable:: LonAll_I(:), LatAll_I(:), bAll_DG(:,:,:,:)
     integer:: iError
     integer:: iStatus_I(mpi_status_size)
     integer:: nPhiOut, MinLat, MaxLat, MinTheta, MaxTheta, MinPhi, MaxPhi
@@ -690,53 +691,58 @@ contains
           end do
        endif
 
-       ! Note the fake processor index to be used by redistribute.pl
-       write(NameFile,'(a,2i2.2,a,i3.3,a)') &
-            trim(NameFileBxyz)//'_np01', nProcPhi, nProcTheta, '_', &
-            iProcPhi + (nProcTheta - 1 - iProcTheta)*nProcPhi, '.out'
+       ! Coordinates and magnetic field for the whole grid with ghost cells
+       allocate(LonAll_I(nPhiAll+1), LatAll_I(0:nThetaAll+1), &
+            bAll_DG(3,nR+1,nPhiAll+1,0:nThetaAll+1))
+       LonAll_I = -1000.0
+       LatAll_I = -1000.0
+       bAll_DG  = 0.0
 
-       ! Magnetic field array for the whole grid including ghost cells
-       allocate(bAll_DG(3,nR+1,nPhiAll+1,nThetaAll+2))
-       bAll_DG = 0.0
-       bAll_DG(:,:,iPhi0+1:iPhi0+nPhi,1:nTheta) = b_DX
+       ! Starting index for the latitude (not trivial formula)
+       iLat0 = nThetaAll -iTheta0 - nLat
 
-       call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, iComm, iError)
+       LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)
+       LatAll_I(iLat0+MinLat:iLat0+MaxLat) = Lat_I
+       bAll_DG(:,:,iPhi0+1:iPhi0+nPhiOut,iLat0+MinLat:iLat0+MaxLat) = b_DX
+
+       call MPI_reduce_real_array(LonAll_I, size(LonAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(LatAll_I, size(LatAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, &
+            iComm, iError)
 
        if(iProc==0)then
-          call save_plot_file(&
-               trim(NameFileBxyz)//'.dat', &
-               TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = trim(StringMagHeader), &
-               NameVarIn  = &
-               'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
-               ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
-               VarIn_VIII = bAll_DG, &
-               CoordMinIn_D = [ log10(rMin), PhiMin+dPhi_I(1)/2, &
-               cHalfPi-ThetaMax ], &
-               CoordMaxIn_D = [ log10(rMax), PhiMax+dPhi_I(1)/2, &
-               cHalfPi-ThetaMin ] )
+          if(UseLogRadius)then
+             call save_plot_file(&
+                  trim(NameFileBxyz)//'.out', &
+                  TypeFileIn=TypeFileBxyz, &
+                  StringHeaderIn = trim(StringMagHeader), &
+                  NameVarIn  = &
+                  'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR',&
+                  ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
+                  VarIn_VIII = bAll_DG, &
+                  Coord1In_I = log10(RadiusNode_I), &
+                  Coord2In_I = LonAll_I, &
+                  Coord3In_I = LatAll_I)
+          else
+             call save_plot_file(&
+                  trim(NameFileBxyz)//'.out', &
+                  TypeFileIn=TypeFileBxyz, &
+                  StringHeaderIn = trim(StringMagHeader), &
+                  NameVarIn  = &
+                  'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR',&
+                  ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
+                  VarIn_VIII = bAll_DG, &
+                  Coord1In_I = RadiusNode_I, &
+                  Coord2In_I = LonAll_I, &
+                  Coord3In_I = LatAll_I)
+          end if
        end if
 
-       if(UseLogRadius)then
-          call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = trim(StringMagHeader),&
-               NameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
-               ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
-               nDimIn=3, VarIn_VIII=b_DX, &
-               Coord1In_I=log10(RadiusNode_I), &
-               Coord2In_I=Phi_I(1:nPhiOut), &
-               Coord3In_I=Lat_I)
-       else
-          call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = trim(StringMagHeader), &
-               NameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
-               ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
-               nDimIn=3, VarIn_VIII=b_DX, &
-               Coord1In_I=RadiusNode_I, &
-               Coord2In_I=Phi_I(1:nPhiOut), &
-               Coord3In_I=Lat_I)
-       end if
-       deallocate(Bpole_DII, Btotal_DII)
+       deallocate(Bpole_DII, Btotal_DII, LonAll_I, LatAll_I, bAll_DG)
 
     end if
 
