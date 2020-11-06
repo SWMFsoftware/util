@@ -211,7 +211,6 @@ test_fdips:
 	@echo "test_fdips_run..." >> test_fdips.diff
 	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
 	./redistribute.pl fdips_field_np010202.out fdips.out
-	./redistribute.pl fdips_bxyz_np010202.out fdips_bxyz.out
 	@echo "test_fdips_check..." >> test_fdips.diff
 	make test_fdips_check
 
