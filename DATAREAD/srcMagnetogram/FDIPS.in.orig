@@ -24,22 +24,22 @@ CHANGEWEAKFIELD
 T			UseLogRadius (default is F)
 F			UseWedge
 
-! For Uniform Theta Transform
-! Default is False
+! For Uniform Theta Transform from a sin-lat grid.
+! Default is true so the lookup table is more uniform and accurate.
 
 #CHEBYSHEV
-F			UseChebyshevNode
+T			UseChebyshevNode
 
 ! In the Theta and Phi directions coarsening relative to the magnetogram 
 ! resolution by an integer ratio is allowed. Refinement is not possible.
 
-! Grid for testing
+! Grid for testing only
 #GRID
 20			nR
 20			nTheta
 20			nPhi
 
-! Reasonable grid For a production run
+! Reasonable grid for a production run
 GRID
 400			nR     (number of cells in the radial direction)
 180			nTheta (set 0 to use the magnetogram resolution)
@@ -58,6 +58,7 @@ TESTIJK
 1			iThetaTest
 
 ! nProcTheta*nProcPhi should agree with the number of procs FDIPS.exe uses
+! Default is a reasonably good decomposition, so this command is not needed
 #PARALLEL
 2			nProcTheta
 2			nProcPhi
