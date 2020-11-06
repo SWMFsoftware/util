@@ -145,6 +145,11 @@ distclean: clean
 
 ### TESTS ###
 
+# Setting BLESS=YES or Y will copy the solution into the reference solution
+BLESS=NO
+
+DIFFNUM = ${SCRIPTDIR}/DiffNum.pl -BLESS=${BLESS}
+
 test:
 	@rm -f *.diff
 	-@(make test_harmonics)
@@ -171,7 +176,7 @@ test_harmonics:
 	make test_harmonics_check
 
 test_harmonics_check:
-	${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
+	${DIFFNUM} -t -r=1e-5 -a=1e-12 \
 		harmonics11uniform.dat \
 		harmonics.ref > test_harmonics.diff
 	@ls -l test_harmonics.diff
@@ -189,7 +194,7 @@ test_potential:
 	make test_potential_check
 
 test_potential_check:
-	${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
+	${DIFFNUM} -t -r=1e-5 -a=1e-12 \
 		potential.log \
 		potential.ref > test_potential.diff
 	@ls -l test_potential.diff
@@ -211,10 +216,10 @@ test_fdips:
 	make test_fdips_check
 
 test_fdips_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
 		fdips.out \
 		fdips_ref.out.gz > test_fdips.diff
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
 		fdips_bxyz.out \
 		fdips_bxyz_ref.out.gz >> test_fdips.diff
 	@ls -l test_fdips.diff
@@ -237,7 +242,7 @@ test_fdips_hypre:
 	make test_fdips_hypre_check
 
 test_fdips_hypre_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
 		fdips.out \
 		fdips_ref.out.gz > test_fdips_hypre.diff
 	@ls -l test_fdips_hypre.diff
@@ -257,10 +262,10 @@ test_fdips_wedge:
 	make test_fdips_wedge_check
 
 test_fdips_wedge_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-8 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-8 -a=1e-9 \
 		fdips_b.out \
 		fdips_ref_wedge_b.gz > test_fdips_wedge.diff
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-8 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-8 -a=1e-9 \
 		fdips_g.out \
 		fdips_ref_wedge_g.gz >> test_fdips_wedge.diff
 	@ls -l test_fdips_wedge.diff
