@@ -293,58 +293,63 @@ contains
 
     !--------------------------------------------------------------------------
 
-    ! decompose the total number of processors to theta (i) and phi (j) directions
+    ! decompose the total number of processors to 
+    ! theta (i) and phi (j) directions
     ! 0<ni<100, 0<nj<100, ni*nj<=1000, ni*nj<=nproc
     if (nProcTheta*nProcPhi == 0) then
-      nTotalProc = min(nProc,1000)
-      Err = real(nPhiAll)*real(nThetaAll)*nTotalProc
-      i = 1
-      do while (i<=floor(sqrt(real(nTotalProc))))
-        j = nTotalProc/i
-        if (j > 99) then
-          i = i+1
-          CYCLE
-        endif
-        do k = 0, 1
-          ErrNew = (ceiling(nPhiAll/real(i))+2.)*(ceiling(nThetaAll/real(j))+2.)*real(nTotalProc)/real(i*j)
-          if (ErrNew < Err) then
-            Err = ErrNew
-            nProcPhi = i
-            nProcTheta = j
+       nTotalProc = min(nProc,1000)
+       Err = real(nPhiAll)*real(nThetaAll)*nTotalProc
+       i = 1
+       do while (i<=floor(sqrt(real(nTotalProc))))
+          j = nTotalProc/i
+          if (j > 99) then
+             i = i+1
+             CYCLE
           endif
-          i = i+j
-          j = i-j
-          i = i-j
-        enddo
-        i = i+1
-      enddo
-      if (nProcPhi == 0 .and. iProc == 0) then
-        ! Supposedly we shouldn't reach here
-        write(*,*)
-        write(*,'(A,I0,A)') 'Failed to find a proper composition for ',nTotalProc,' processors.'
-        write(*,*)
-        nProcPhi = 1
-        nProcTheta = 1
-      endif
-      if (iProc == 0) then 
-        write(*,*)
-        write(*,'(A,2I4,I6)') 'New intelligent nProcTheta, nProcPhi, nProc=', nProcTheta, nProcPhi, nProcTheta*nProcPhi
-        write(*,*)
-      endif
+          do k = 0, 1
+             ErrNew = (ceiling(nPhiAll/real(i))+2.) * &
+                  (ceiling(nThetaAll/real(j))+2.)*real(nTotalProc)/real(i*j)
+             if (ErrNew < Err) then
+                Err = ErrNew
+                nProcPhi = i
+                nProcTheta = j
+             endif
+             i = i+j
+             j = i-j
+             i = i-j
+          enddo
+          i = i+1
+       enddo
+       if (nProcPhi == 0 .and. iProc == 0) then
+          ! Supposedly we shouldn't reach here
+          write(*,*)
+          write(*,'(A,I0,A)') &
+               'Failed to find proper layout for ',nTotalProc,' processors.'
+          write(*,*)
+          nProcPhi = 1
+          nProcTheta = 1
+       endif
+       if (iProc == 0) then 
+          write(*,*)
+          write(*,'(A,2I4,I6)') 'New nProcTheta, nProcPhi, nProc=', &
+               nProcTheta, nProcPhi, nProcTheta*nProcPhi
+          write(*,*)
+       endif
     endif
 
     nTotalProc = nProcTheta*nProcPhi
     if (iProc >= nTotalProc) then
-      IsProcIdle = .true.
-      iColor = 1
+       IsProcIdle = .true.
+       iColor = 1
     endif
     if (nProc > nTotalProc) then
-      if (iProc == 0) then
-        write(*,*)
-        write(*,'(A,I6,A)') 'WARNING: ',nProc-nTotalProc,' processor(s) are idle.'
-        write(*,*)
-      endif
-      call MPI_Comm_split(iCommWorld,iColor,iProc,iComm,iError)
+       if (iProc == 0) then
+          write(*,*)
+          write(*,'(A,I6,A)') 'WARNING: ',nProc-nTotalProc, &
+               ' processor(s) are idle.'
+          write(*,*)
+       endif
+       call MPI_Comm_split(iCommWorld,iColor,iProc,iComm,iError)
     endif
     if (IsProcIdle) RETURN
 
@@ -378,7 +383,7 @@ contains
             'Actual nPhiAll is:   ', nPhiAll
     end if
 
-    !Both iProcTheta and iProcPhi in the large region
+    ! Both iProcTheta and iProcPhi in the large region
     if (iProcTheta < nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
        nTheta = nThetaLgr
        nPhi   = nPhiLgr
@@ -386,7 +391,7 @@ contains
        iPhi0   = iProcPhi  * nPhiLgr
     end if
 
-    !Only iProcTheta in the large region
+    ! Only iProcTheta in the large region
     if (iProcTheta < nProcThetaLgr .and. iProcPhi >= nProcPhiLgr) then
        nTheta = nThetaLgr
        nPhi   = nPhiSml
@@ -394,7 +399,7 @@ contains
        iPhi0   = nProcPhiLgr * nPhiLgr + (iProcPhi - nProcPhiLgr)*nPhiSml
     end if
 
-    !Only iProcPhi in the large region
+    ! Only iProcPhi in the large region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
        nTheta  = nThetaSml
        nPhi    = nPhiLgr
@@ -403,7 +408,7 @@ contains
        iPhi0   = iProcPhi      * nPhiLgr
     end if
 
-    !Both iProcTheta and iProcPhi in the small region
+    ! Both iProcTheta and iProcPhi in the small region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi >= nProcPhiLgr) then
        nTheta = nThetaSml
        nPhi   = nPhiSml
@@ -426,8 +431,7 @@ contains
          DivB_C(nR,nTheta,nPhi))
 
     ! Set BrLocal_II, this is used in set_boundary when UseBr is true
-    BrLocal_II(:,:) = Br_II(iTheta0 + 1: iTheta0 + nTheta, &
-         iPhi0   + 1: iPhi0   + nPhi)
+    BrLocal_II(:,:) = Br_II(iTheta0+1:iTheta0+nTheta,iPhi0+1:iPhi0+nPhi)
 
     ! nR is the number of mesh cells in radial direction
     ! cell centered radial coordinate
@@ -531,9 +535,9 @@ contains
     real   :: r, CosTheta, SinTheta, CosPhi, SinPhi
     real   :: Br, Btheta, Bphi, XyzSph_DD(3,3)
     real   :: rI, rJ, rInv
-    real, allocatable :: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:)
-    real, allocatable :: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
-    real, allocatable :: Potential_G(:,:,:), PlotVar_VG(:,:,:,:)
+    real, allocatable:: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:), bAll_DG(:,:,:,:)
+    real, allocatable:: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
+    real, allocatable:: Potential_G(:,:,:), PlotVar_VG(:,:,:,:)
     integer:: iError
     integer:: iStatus_I(mpi_status_size)
     integer:: nPhiOut, MinLat, MaxLat, MinTheta, MaxTheta, MinPhi, MaxPhi
@@ -691,10 +695,32 @@ contains
             trim(NameFileBxyz)//'_np01', nProcPhi, nProcTheta, '_', &
             iProcPhi + (nProcTheta - 1 - iProcTheta)*nProcPhi, '.out'
 
+       ! Magnetic field array for the whole grid including ghost cells
+       allocate(bAll_DG(3,nR+1,nPhiAll+1,nThetaAll+2))
+       bAll_DG = 0.0
+       bAll_DG(:,:,iPhi0+1:iPhi0+nPhi,1:nTheta) = b_DX
+
+       call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, iComm, iError)
+
+       if(iProc==0)then
+          call save_plot_file(&
+               trim(NameFileBxyz)//'.dat', &
+               TypeFileIn=TypeFileBxyz, &
+               StringHeaderIn = trim(StringMagHeader), &
+               NameVarIn  = &
+               'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
+               ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
+               VarIn_VIII = bAll_DG, &
+               CoordMinIn_D = [ log10(rMin), PhiMin+dPhi_I(1)/2, &
+               cHalfPi-ThetaMax ], &
+               CoordMaxIn_D = [ log10(rMax), PhiMax+dPhi_I(1)/2, &
+               cHalfPi-ThetaMin ] )
+       end if
+
        if(UseLogRadius)then
           call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
                StringHeaderIn = trim(StringMagHeader),&
-               nameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
+               NameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
                ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
                nDimIn=3, VarIn_VIII=b_DX, &
                Coord1In_I=log10(RadiusNode_I), &
@@ -703,7 +729,7 @@ contains
        else
           call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
                StringHeaderIn = trim(StringMagHeader), &
-               nameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
+               NameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
                ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
                nDimIn=3, VarIn_VIII=b_DX, &
                Coord1In_I=RadiusNode_I, &
