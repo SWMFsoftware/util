@@ -209,15 +209,15 @@ test_fdips:
 	cp -f FDIPS.in.orig FDIPS.in
 	perl -i -pe 's/real8/ascii/' FDIPS.in
 	@echo "test_fdips_run..." >> test_fdips.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
+	${MPIRUN} ./FDIPS.exe > fdips.log
 	@echo "test_fdips_check..." >> test_fdips.diff
 	make test_fdips_check
 
 test_fdips_check:
-	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
 		fdips_field.out \
 		fdips_ref.out.gz > test_fdips.diff
-	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
 		fdips_bxyz.out \
 		fdips_bxyz_ref.out.gz >> test_fdips.diff
 	@ls -l test_fdips.diff
@@ -234,12 +234,12 @@ test_fdips_hypre:
 	perl -i -pe 's/real8/ascii/' FDIPS.in
 	perl -i -pe 's/^BiCGSTAB/GMRES/i;s/^ILU/AMG/' FDIPS.in
 	@echo "test_fdips_hypre_run..." >> test_fdips_hypre.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS_HYPRE.exe > fdips_hypre.log
+	${MPIRUN} ./FDIPS_HYPRE.exe > fdips_hypre.log
 	@echo "test_fdips_hypre_check..." >> test_fdips_hypre.diff
 	make test_fdips_hypre_check
 
 test_fdips_hypre_check:
-	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
 		fdips_field.out \
 		fdips_ref.out.gz > test_fdips_hypre.diff
 	@ls -l test_fdips_hypre.diff
