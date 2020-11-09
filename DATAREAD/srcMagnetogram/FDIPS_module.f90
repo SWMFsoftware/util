@@ -37,11 +37,11 @@ module ModPotentialField
 
   ! output paramters
   logical           :: DoSaveBxyz   = .false.
-  character(len=100):: NameFileBxyz = 'potentialBxyz'
+  character(len=100):: NameFileBxyz = 'potentialBxyz.out'
   character(len=5)  :: TypeFileBxyz = 'real8'
 
   logical           :: DoSaveField   = .false.
-  character(len=100):: NameFileField = 'potentialfield'
+  character(len=100):: NameFileField = 'potentialfield.out'
   character(len=5)  :: TypeFileField = 'real8'
 
   logical           :: DoSavePotential   = .false.
@@ -186,16 +186,10 @@ contains
              DoSaveBxyz = .true.
              call read_var('NameFileBxyz', NameFileBxyz)
              call read_var('TypeFileBxyz', TypeFileBxyz)
-             ! remove .out extension if present
-             i = index(NameFileBxyz,'.out')
-             if(i>0) NameFileBxyz = NameFileBxyz(1:i-1)
           case('field')
              DoSaveField = .true.
              call read_var('NameFileField', NameFileField)
              call read_var('TypeFileField', TypeFileField)
-             ! remove .out extension if present
-             i = index(NameFileField,'.out')
-             if(i>0) NameFileField = NameFileField(1:i-1)
           case('potential')
              DoSavePotential = .true.
              call read_var('NameFilePotential', NameFilePotential)
@@ -624,26 +618,53 @@ contains
        end if
     endif
 
-    call  MPI_bcast(StringMagHeader, len(StringMagHeader), MPI_CHARACTER, 0, iComm, iError)
-    call  MPI_bcast(LongCR, 1 , MPI_REAL, 0, iComm, iError)
-    call  MPI_bcast(CarRot, 1 , MPI_REAL, 0, iComm, iError)
-
     if(DoSaveField)then
-       ! Note the fake processor index to be used by redistribute.pl
-       write(NameFile,'(a,2i2.2,a,i3.3,a)') &
-            trim(NameFileField)//'_np01', nProcPhi, nProcTheta, '_', &
-            iProcPhi + (nProcTheta - 1 - iProcTheta)*nProcPhi, '.out'
 
-       call save_plot_file(NameFile, TypeFileIn=TypeFileField, &
-            StringHeaderIn = &
-            'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
-            nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
-            //' Ro_PFSSM Rs_PFSSM LongCR CR', &
-            ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
-            nDimIn=3, VarIn_VIII=b_DX(:,:,1:nPhiOut,1:nTheta), &
-            Coord1In_I=RadiusNode_I, &
-            Coord2In_I=Phi_I(1:nPhiOut), &
-            Coord3In_I=Lat_I(1:nLat))
+       ! Coordinates and magnetic field for the whole grid with
+       ! ghost cells in the Phi direction
+       allocate(LonAll_I(nPhiAll+1), LatAll_I(nThetaAll), &
+            bAll_DG(3,nR+1,nPhiAll+1,nThetaAll))
+       LonAll_I = -1000.0
+       LatAll_I = -1000.0
+       bAll_DG  = 0.0
+
+       ! Starting index for the latitude (not trivial formula)
+       iLat0 = nThetaAll - iTheta0 - nLat
+
+       LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)
+       LatAll_I(iLat0+1:iLat0+nTheta)  = Lat_I(1:nLat)
+       bAll_DG(:,:,iPhi0+1:iPhi0+nPhiOut,iLat0+1:iLat0+nTheta) = &
+            b_DX(:,:,:,1:nLat)
+
+       call MPI_reduce_real_array(LonAll_I, size(LonAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(LatAll_I, size(LatAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, &
+            iComm, iError)
+
+
+       if(iProc==0)then
+          ! Switch sign for the theta -> Latitude component
+          bAll_DG(3,:,:,:) = -bAll_DG(3,:,:,:)
+
+          call save_plot_file(&
+               NameFileField, TypeFileIn=TypeFileField, &
+               StringHeaderIn = &
+               'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
+               nameVarIn = 'Radius Longitude Latitude Br Bphi Blat' &
+               //' Ro_PFSSM Rs_PFSSM LongCR CR', &
+               ParamIn_I = [ rMin, rMax, LongCR, CarRot ], &
+               nDimIn=3, VarIn_VIII=bAll_DG, &
+               Coord1In_I=RadiusNode_I, &
+               Coord2In_I=LonAll_I, &
+               Coord3In_I=LatAll_I)
+       end if
+
+       deallocate(LonAll_I, LatAll_I, bAll_DG)
+
     end if
 
     if(DoSaveBxyz)then
@@ -654,7 +675,7 @@ contains
              Br     = b_DX(1,iR,iPhi,iLat)
              Btheta = b_DX(3,iR,iPhi,iLat)
              Bphi   = b_DX(2,iR,iPhi,iLat)
-             b_DX(:,iR,iPhi,iLat) = matmul(XyzSph_DD, (/Br, Btheta, Bphi/))
+             b_DX(:,iR,iPhi,iLat) = matmul(XyzSph_DD, [Br, Btheta, Bphi])
           end do
        end do; end do
 
@@ -699,7 +720,7 @@ contains
        bAll_DG  = 0.0
 
        ! Starting index for the latitude (not trivial formula)
-       iLat0 = nThetaAll -iTheta0 - nLat
+       iLat0 = nThetaAll - iTheta0 - nLat
 
        LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)
        LatAll_I(iLat0+MinLat:iLat0+MaxLat) = Lat_I
@@ -717,9 +738,8 @@ contains
        if(iProc==0)then
           if(UseLogRadius)then
              call save_plot_file(&
-                  trim(NameFileBxyz)//'.out', &
-                  TypeFileIn=TypeFileBxyz, &
-                  StringHeaderIn = trim(StringMagHeader), &
+                  NameFileBxyz, TypeFileIn=TypeFileBxyz, &
+                  StringHeaderIn = StringMagHeader, &
                   NameVarIn  = &
                   'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR',&
                   ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
@@ -729,9 +749,8 @@ contains
                   Coord3In_I = LatAll_I)
           else
              call save_plot_file(&
-                  trim(NameFileBxyz)//'.out', &
-                  TypeFileIn=TypeFileBxyz, &
-                  StringHeaderIn = trim(StringMagHeader), &
+                  NameFileBxyz, TypeFileIn=TypeFileBxyz, &
+                  StringHeaderIn = StringMagHeader, &
                   NameVarIn  = &
                   'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR',&
                   ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
@@ -824,7 +843,7 @@ contains
             StringHeaderIn = &
             'Potential field with ghost cells, face centered magnetic field', &
             nameVarIn = 'Radius Theta Phi Pot Br Btheta Bphi rMin rMax', &
-            ParamIn_I = (/ rMin, rMax /), nDimIn=3, Coord1In_I=Radius_I, &
+            ParamIn_I = [rMin, rMax], nDimIn=3, Coord1In_I=Radius_I, &
             Coord2In_I=Theta_I(MinTheta:MaxTheta), &
             Coord3In_I=Phi_I(MinPhi:MaxPhi), &
             VarIn_VIII=PlotVar_VG(:,:,MinTheta:MaxTheta,MinPhi:MaxPhi))
