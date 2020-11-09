@@ -654,7 +654,7 @@ contains
                NameFileField, TypeFileIn=TypeFileField, &
                StringHeaderIn = &
                'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
-               nameVarIn = 'Radius Longitude Latitude Br Bphi Blat' &
+               nameVarIn = 'Radius Longitude Latitude Br Blon Blat' &
                //' Ro_PFSSM Rs_PFSSM LongCR CR', &
                ParamIn_I = [ rMin, rMax, LongCR, CarRot ], &
                nDimIn=3, VarIn_VIII=bAll_DG, &
