@@ -210,13 +210,12 @@ test_fdips:
 	perl -i -pe 's/real8/ascii/' FDIPS.in
 	@echo "test_fdips_run..." >> test_fdips.diff
 	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
-	./redistribute.pl fdips_field_np010202.out fdips.out
 	@echo "test_fdips_check..." >> test_fdips.diff
 	make test_fdips_check
 
 test_fdips_check:
 	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
-		fdips.out \
+		fdips_field.out \
 		fdips_ref.out.gz > test_fdips.diff
 	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
 		fdips_bxyz.out \
@@ -236,13 +235,12 @@ test_fdips_hypre:
 	perl -i -pe 's/^BiCGSTAB/GMRES/i;s/^ILU/AMG/' FDIPS.in
 	@echo "test_fdips_hypre_run..." >> test_fdips_hypre.diff
 	${PARALLEL} ${NPFLAG} 4 ./FDIPS_HYPRE.exe > fdips_hypre.log
-	./redistribute.pl fdips_field_np010202.out fdips.out
 	@echo "test_fdips_hypre_check..." >> test_fdips_hypre.diff
 	make test_fdips_hypre_check
 
 test_fdips_hypre_check:
 	-${DIFFNUM} -t -r=1e-9 -a=1e-9 \
-		fdips.out \
+		fdips_field.out \
 		fdips_ref.out.gz > test_fdips_hypre.diff
 	@ls -l test_fdips_hypre.diff
 
@@ -255,7 +253,6 @@ test_fdips_wedge:
 	gunzip -c fdips_wedge_input.gz > fitsfile.dat
 	@echo "test_fdips_wedge_run..." >> test_fdips_wedge.diff
 	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
-	./redistribute.pl fdips_field_np010202.out fdips_b.out
 	./redistribute.pl fdips_ghostface_np010202.out fdips_g.out
 	@echo "test_fdips_check..." >> test_fdips_wedge.diff
 	make test_fdips_wedge_check
