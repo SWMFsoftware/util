@@ -622,8 +622,13 @@ contains
 
        ! Coordinates and magnetic field for the whole grid with
        ! ghost cells in the Phi direction
-       allocate(LonAll_I(nPhiAll+1), LatAll_I(nThetaAll), &
-            bAll_DG(3,nR+1,nPhiAll+1,nThetaAll))
+       if(UseWedge) then
+          allocate(LonAll_I(nPhiAll), LatAll_I(nThetaAll), &
+               bAll_DG(3,nR+1,nPhiAll,nThetaAll))
+       else
+          allocate(LonAll_I(nPhiAll+1), LatAll_I(nThetaAll), &
+               bAll_DG(3,nR+1,nPhiAll+1,nThetaAll))
+       end if
        LonAll_I = -1000.0
        LatAll_I = -1000.0
        bAll_DG  = 0.0
