@@ -252,16 +252,12 @@ test_fdips_wedge:
 	cp -f FDIPS.in.wedge FDIPS.in
 	gunzip -c fdips_wedge_input.gz > fitsfile.dat
 	@echo "test_fdips_wedge_run..." >> test_fdips_wedge.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
-	./redistribute.pl fdips_ghostface_np010202.out fdips_g.out
+	${MPIRUN} ./FDIPS.exe > fdips.log
 	@echo "test_fdips_check..." >> test_fdips_wedge.diff
 	make test_fdips_wedge_check
 
 test_fdips_wedge_check:
 	-${DIFFNUM} -t -r=1e-8 -a=1e-9 \
-		fdips_b.out \
-		fdips_ref_wedge_b.gz > test_fdips_wedge.diff
-	-${DIFFNUM} -t -r=1e-8 -a=1e-9 \
-		fdips_g.out \
-		fdips_ref_wedge_g.gz >> test_fdips_wedge.diff
+		fdips_field.out \
+		fdips_wedge_ref.gz > test_fdips_wedge.diff
 	@ls -l test_fdips_wedge.diff

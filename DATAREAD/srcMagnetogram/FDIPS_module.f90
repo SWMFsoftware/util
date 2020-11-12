@@ -51,10 +51,6 @@ module ModPotentialField
   logical           :: DoSaveTecplot   = .false.
   character(len=100):: NameFileTecplot = 'potentialfield.dat'
 
-  logical           :: DoSaveGhostFace   = .false.
-  character(len=100):: NameFileGhostFace = 'ghostface'
-  character(len=5)  :: TypeFileGhostFace = 'real8'
-
   ! testing parameters
   logical :: UseTiming = .true.
   real    :: TimeStart, TimeEnd
@@ -202,13 +198,6 @@ contains
                   ': TypeOutput=tecplot works for serial runs only')
              DoSaveTecplot = .true.
              call read_var('NameFileTecplot', NameFileTecplot)
-          case('ghostface')
-             DoSaveGhostFace = .true.
-             call read_var('NameFileGhostFace', NameFileGhostFace)
-             call read_var('TypeFileGhostFace', TypeFileGhostFace)
-             ! remove .out extension if present
-             i = index(NameFileGhostFace,'.out')
-             if(i>0) NameFileGhostFace = NameFileGhostFace(1:i-1)
           case default
              call CON_stop(NameSub//': unknown TypeOutput='//trim(TypeOutput))
           end select
@@ -279,10 +268,9 @@ contains
 
     integer :: iR, iTheta, iPhi, nTotalProc
     integer :: i, j, k
-    integer :: iError, iColor=0, iProcInner, nProcInner
+    integer :: iError, iColor=0
 
     real:: dR, dLogR, dTheta, dPhi, dZ, z
-    real:: CellShiftPhi
     real:: Err, ErrNew
 
     !--------------------------------------------------------------------------
@@ -531,11 +519,10 @@ contains
     real   :: rI, rJ, rInv
     real, allocatable:: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:)
     real, allocatable:: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
-    real, allocatable:: Potential_G(:,:,:), PlotVar_VG(:,:,:,:)
     real, allocatable:: LonAll_I(:), LatAll_I(:), bAll_DG(:,:,:,:)
     integer:: iError
     integer:: iStatus_I(mpi_status_size)
-    integer:: nPhiOut, MinLat, MaxLat, MinTheta, MaxTheta, MinPhi, MaxPhi
+    integer:: nPhiOut, MinLat, MaxLat
     !-------------------------------------------------------------------------
 
     ! Only the last processors in the phi direction write out the ghost cell
@@ -813,49 +800,6 @@ contains
     end if
 
     deallocate(b_DX)
-
-    if (DoSaveGhostFace) then
-       allocate( Potential_G(0:nR+1,0:nTheta+1,0:nPhi+1), &
-            PlotVar_VG(4,0:nR+1,0:nTheta+1,0:nPhi+1))
-
-       MinTheta = 1
-       MaxTheta = nTheta
-       MinPhi   = 1
-       MaxPhi   = nPhi
-       if(iProcTheta == 0)               MinTheta = 0
-       if(iProcTheta == nProcTheta - 1)  MaxTheta = nTheta+1
-       if(iProcPhi   == 0)               MinPhi   = 0
-       if(iProcPhi   == nProcPhi - 1)    MaxPhi   = nPhi+1
-
-       call set_boundary(Potential_C, Potential_G)
-
-       PlotVar_VG = -1.
-       PlotVar_VG(1,:,:,:) = Potential_G
-       PlotVar_VG(2:4,1:nR+1,1:nTheta+1,1:nPhi+1) = B0_DF
-
-       ! Note that the processor number here is changed. For redistribute.pl,
-       ! the grid is ordered such that the first dimension is shifted first,
-       ! then the second dimension, then the third. Here we are outputing a 
-       ! [r,t,p] grid that has the processor numbered as phi first, then theta.
-       write(NameFile,'(a,2i2.2,a,i3.3,a)') &
-            trim(NameFileGhostFace)//'_np01', nProcPhi, nProcTheta, '_', &
-            iProcTheta + iProcPhi*nProcTheta, '.out'
-
-       ! For redistribute.pl to work, the output must contain a line of 
-       ! parameters, so even if rMin and rMax are not quite needed here,
-       ! we do need to include them here
-       call save_plot_file(NameFile, TypeFileIn=TypeFileGhostFace, &
-            StringHeaderIn = &
-            'Potential field with ghost cells, face centered magnetic field', &
-            nameVarIn = 'Radius Theta Phi Pot Br Btheta Bphi rMin rMax', &
-            ParamIn_I = [rMin, rMax], nDimIn=3, Coord1In_I=Radius_I, &
-            Coord2In_I=Theta_I(MinTheta:MaxTheta), &
-            Coord3In_I=Phi_I(MinPhi:MaxPhi), &
-            VarIn_VIII=PlotVar_VG(:,:,MinTheta:MaxTheta,MinPhi:MaxPhi))
-
-       deallocate(Potential_G, PlotVar_VG)
-    endif
-
 
   end subroutine save_potential_field
 
