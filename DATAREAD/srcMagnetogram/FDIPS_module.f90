@@ -623,8 +623,8 @@ contains
        ! Starting index for the latitude (not trivial formula)
        iLat0 = nThetaAll - iTheta0 - nLat
 
-       LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)
-       LatAll_I(iLat0+1:iLat0+nTheta)  = Lat_I(1:nLat)
+       LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)*cRadToDeg
+       LatAll_I(iLat0+1:iLat0+nTheta)  = Lat_I(1:nLat)*cRadToDeg
        bAll_DG(:,:,iPhi0+1:iPhi0+nPhiOut,iLat0+1:iLat0+nTheta) = &
             b_DX(:,:,:,1:nLat)
 
@@ -645,7 +645,7 @@ contains
           call save_plot_file(&
                NameFileField, TypeFileIn=TypeFileField, &
                StringHeaderIn = &
-               'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
+               'Radius [Rs] Longitude [Deg] Latitude [Deg] B [G]', &
                nameVarIn = 'Radius Longitude Latitude Br Blon Blat' &
                //' Ro_PFSSM Rs_PFSSM LongCR CR', &
                ParamIn_I = [ rMin, rMax, LongCR, CarRot ], &
@@ -714,8 +714,8 @@ contains
        ! Starting index for the latitude (not trivial formula)
        iLat0 = nThetaAll - iTheta0 - nLat
 
-       LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)
-       LatAll_I(iLat0+MinLat:iLat0+MaxLat) = Lat_I
+       LonAll_I(iPhi0+1:iPhi0+nPhiOut)     = Phi_I(1:nPhiOut)*cRadToDeg
+       LatAll_I(iLat0+MinLat:iLat0+MaxLat) = Lat_I*cRadToDeg
        bAll_DG(:,:,iPhi0+1:iPhi0+nPhiOut,iLat0+MinLat:iLat0+MaxLat) = b_DX
 
        call MPI_reduce_real_array(LonAll_I, size(LonAll_I), MPI_MAX, 0, &
