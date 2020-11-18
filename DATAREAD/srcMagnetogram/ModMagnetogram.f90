@@ -236,7 +236,8 @@ contains
     NameOutDir = NamePlotDir
 
     call read_harmonics
-
+    call set_sqrt_arrays(N_PFSSM)
+    
     timing0 = timing_cpu()
     call set_magnetogram
     if(iProc==0) &
@@ -338,9 +339,6 @@ contains
     enddo
     ! Leave out monopole (n=0) term::
     g_II(1,1) = 0.0
-
-    ! Set the Sqrt_I and SqrtRatio_I arrays (n_PFSSM is needed)
-    call set_sqrt_arrays(n_PFSSM)
 
   end subroutine read_harmonics
   !============================================================================
