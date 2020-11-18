@@ -2,73 +2,39 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModMagnetogram
+
   use ModNumConst
   use ModMpi
   use ModIoUnit,   ONLY: io_unit_new
   use CON_axes,    ONLY: dLongitudeHgrDeg
   use ModUtilities, ONLY: CON_stop
+  use ModTiming, ONLY: timing_cpu
 
   implicit none
   save
 
   private
 
-  ! PFSSM related control parameters
-
-  ! Maximum order of spherical harmonics
-  integer,parameter::nHarmonicsMax=180 ! 90
-
-  ! Weights of the spherical harmonics
-  real, dimension(nHarmonicsMax+1,nHarmonicsMax+1):: g_II, h_II
-
-  integer:: N_PFSSM=nHarmonicsMax
-
-  ! Number of header lines in the file
-  integer:: iHead_PFSSM=12
-
-  ! Name of the input file
-  character (LEN=32):: File_PFSSM='mf.dat', NameNewFile = 'newmf.dat'
-
-  ! Name of output directory
-  character(len=32):: NameOutDir
-
-  ! Rs - radius of outer source surface where field is taken to be 0.
-  ! Ro - radius of inner boundary for the potential
-  ! H  - height of ??
-  !
-
+  public:: get_pfss_field
+  
+  ! Rs - radius of outer source surface where field is taken to be radial
+  ! Ro - radius of inner boundary for the potential field
+  ! H  - height above measurements
+  
   real, public :: Rs_PFSSM=2.5, Ro_PFSSM=1.0, H_PFSSM=0.0
 
   ! Units of the magnetic field in the file including corrections
   ! relative to the magnetic units in the SC (Gauss)
   real, public :: UnitB=1.0, UnitBNew=1.0
 
-  ! Rotation angle around z-axis, in degrees,
-  ! from the coordinate system of the component
-  ! towards the coordinate system of the magnetic
-  ! map in the positive direction - hence, is positive.
-  ! Is set automatically to be equal to the
-  ! H(eliographic) L(ongitude) of C(entral) M(eridian)
-  ! of the M(ap) minus 180 Deg, if in the input file
-  ! PhiOffset is negative.
-  real :: PhiOffset=-1.0, NewPhiShift = -1.0
-
   ! Global arrays at the magnetogram grid
-  integer, parameter, public :: nDim=3,R_=1,Phi_=2,Theta_=3
+  integer, parameter, public :: nDim=3, R_=1, Phi_=2, Theta_=3
 
-  real,allocatable,dimension(:,:,:,:)::B_DN, BNew_DN
   ! Time to which the field in B_DN corresponds
-  real :: tMagnetogram = -1.0
 
-  real, public :: dR=1.0,dPhi=1.0,dSinTheta=1.0,dInv_D(nDim)=1.0
-  integer, public :: nThetaPerProc,nRExt=2
+  real, public :: dR=1.0, dPhi=1.0, dSinTheta=1.0, dInv_D(nDim)=1.0
+  integer, public :: nThetaPerProc, nRExt=2
   integer, public :: nR=29, nPhi=72, nTheta=29
-
-  ! private variables for MPI
-  integer :: iProc, nProc, iComm
-
-  ! write prefix for magnetogram processing
-  character(len=*), parameter :: prefix=''
 
   ! public available procedures
   public :: read_magnetogram_file, read_new_magnetogram_file
@@ -91,11 +57,48 @@ module ModMagnetogram
   ! read the potential field source surface solution
   public :: update_magnetogram
 
-  ! Local variables
+  ! Local variables -------------
+
+  ! private variables for MPI
+  integer :: iProc, nProc, iComm
   
+  ! PFSSM related control parameters
+
+  ! Rotation angle around z-axis, in degrees,
+  ! from the coordinate system of the component
+  ! towards the coordinate system of the magnetic
+  ! map in the positive direction - hence, is positive.
+  ! Is set automatically to be equal to the
+  ! H(eliographic) L(ongitude) of C(entral) M(eridian)
+  ! of the M(ap) minus 180 Deg, if in the input file
+  ! PhiOffset is negative.
+  real :: PhiOffset=-1.0, NewPhiShift = -1.0
+
+  ! Maximum order of spherical harmonics
+  integer, parameter:: nHarmonicsMax=180 ! 90
+
+  ! Weights of the spherical harmonics
+  real, dimension(nHarmonicsMax+1,nHarmonicsMax+1):: g_II, h_II
+
+  integer:: N_PFSSM=nHarmonicsMax
+
+  ! Number of header lines in the file
+  integer:: iHead_PFSSM=12
+
+  ! Name of the input file
+  character (LEN=32):: File_PFSSM='mf.dat', NameNewFile = 'newmf.dat'
+
+  ! Name of output directory
+  character(len=32):: NameOutDir
+
   integer, parameter:: MaxInt=100000
   real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
-  
+
+  real, allocatable:: B_DN(:,:,:,:), Bnew_DN(:,:,:,:)
+
+  ! write prefix for magnetogram processing
+  character(len=*), parameter :: prefix=''
+
 contains
   !============================================================================
   real function sin_latitude(iTheta)
@@ -217,15 +220,16 @@ contains
     character(len=*),intent(in) :: NamePlotDir
     integer,intent(in)          :: iProcIn, nProcIn, iCommIn
 
+    real:: timing0
     !--------------------------------------------------------------------------
     iComm = iCommIn
     nProc = nProcIn
     iProc = iProcIn
 
     if (iProc==0) then
-       write(*,*) prefix, 'Norder = ',N_PFSSM
-       write(*,*) prefix, 'Entered coefficient file name :: ',File_PFSSM
-       write(*,*) prefix, 'Entered number of header lines:: ',iHead_PFSSM
+       write(*,*) prefix, 'nOrder = ',N_PFSSM
+       write(*,*) prefix, 'Coefficient file name : ',File_PFSSM
+       write(*,*) prefix, 'Number of header lines: ',iHead_PFSSM
     endif
     ! Initialize once g(n+1,m+1) & h(n+1,m+1) by reading a file
     ! created from Web data::
@@ -233,7 +237,10 @@ contains
 
     call read_harmonics
 
+    timing0 = timing_cpu()
     call set_magnetogram
+    if(iProc==0) &
+         write(*,*) prefix, 'CPU timing:', timing_cpu() - timing0
 
   end subroutine read_magnetogram_file
   !============================================================================
@@ -387,21 +394,13 @@ contains
     ! consistent with the the expansion. There is no reference for
     ! this correction.
 
-    integer:: i,n,m,iTheta,iPhi,iR
-    real:: c_n
-    real:: SinPhi,CosPhi
-    real:: SinPhi_I(0:N_PFSSM),CosPhi_I(0:N_PFSSM)
-    real:: CosTheta,SinTheta
-    real:: Coef1,Coef2,Coef3
-    real:: SumR,SumT,SumP,SumPsi
+    integer:: iTheta, iPhi, iR
     real:: Theta,Phi,R_PFSSM
 
     integer::iBcast, iStart, nSize, iError
-    integer::iNorth,isouth
 
     ! True spherical components of the magnetic field and the potential
-    real:: Bsph_D(3), Potential
-    
+    real:: Bsph_D(3)
     !--------------------------------------------------------------------------
     ! Introduce a spherical grid with the resolution, depending on the
     ! magnetogram resolution (N_PFSSM)
@@ -494,21 +493,20 @@ contains
     real, intent(in):: r, Theta, Phi ! r in Rs, Theta and Phi in radians
     real, intent(out):: Bsph_D(3)    ! Bsph_D with r, Theta, Phi components
     
-    integer:: i, n, m, iTheta, iPhi, iR
-    real:: c_n
-    real:: SinPhi, CosPhi
-    real:: SinPhi_I(0:N_PFSSM), CosPhi_I(0:N_PFSSM)
+    integer:: n, m
     real:: CosTheta, SinTheta
 
-    ! The 3 spherical components of the magnetic field
+    ! Azimuthal functions sin(m*phi) and cos(m*phi)
+    real, allocatable, save:: SinPhi_I(:), CosPhi_I(:)
+
+    ! The spherical components of the magnetic field
     real:: SumR, SumT, SumP
 
     ! Legendre polynomials and its derivative
-    real, dimension(N_PFSSM+1,N_PFSSM+1):: p_II, Dp_II
+    real, save, allocatable:: p_II(:,:), Dp_II(:,:)
 
     ! Powers of radius ratios
-    real:: rRsPower_I(-1:N_PFSSM+2), &
-         RoRsPower_I(0:N_PFSSM+2), RoRPower_I(0:N_PFSSM+2)
+    real, save, allocatable:: rRsPower_I(:), RoRsPower_I(:), RoRPower_I(:)
 
     real:: Coef1, Coef2, Coef3, Coef4
     !--------------------------------------------------------------------
@@ -518,14 +516,10 @@ contains
 
     ! Calculate the set of Legendre polynoms for given Theta
     CosTheta = cos(Theta)
-    SinTheta = max(sin(Theta), 1.0E-10)
+    SinTheta = max(sin(Theta), 1E-10)
     call calc_legendre_polynomial(SinTheta, CosTheta, N_PFSSM)
 
-    ! Calculate azimuthal harmonics for given Phi
-    do m = 0, N_PFSSM
-       CosPhi_I(m) = cos(m*Phi)
-       SinPhi_I(m) = sin(m*Phi)
-    end do
+    call calc_azimuthal_functions(Phi, N_PFSSM)
 
     ! Initialize the values for the sums
     SumR = 0.0; SumT = 0.0; SumP = 0.0
@@ -566,49 +560,61 @@ contains
       integer, intent(in):: nOrder
 
       real:: SinThetaM, SinThetaM1  ! sin(Theta)^m, sin(Theta)^(m-1)
-      integer:: m, delta_m0
+      integer:: m
+
+      integer:: nOrderOld = -10
+      real:: SinThetaOld = -10.0, CosThetaOld = -10.0
       !------------------------------------------------------------------------
+      ! Cache previous values
+      if(nOrder == nOrderOld .and. SinTheta == SinThetaOld &
+           .and. CosTheta == CosThetaOld) RETURN
+
+      if(.not.allocated(p_II)) &
+           allocate(p_II(nOrder+1,nOrder+1), Dp_II(nOrder+1,nOrder+1))
+
+      nOrderOld = nOrder; SinThetaOld = SinTheta; CosThetaOld = CosTheta
+
       SinThetaM  = 1.0
       SinThetaM1 = 1.0
       p_II  = 0.0
       Dp_II = 0.0
-
+      
       do m = 0, nOrder
          if (m == 0) then
-            delta_m0 = 1
+            Coef1 = Sqrt_I(2*m+1)
          else
-            delta_m0 = 0
+            Coef1 = Sqrt_I(2*(2*m+1))
          endif
          ! Eq.(27) from Altschuler et al. 1976::
-         p_II(m+1,m+1) = SqrtRatio_I(m+1)*Sqrt_I((2-delta_m0)*(2*m+1))* &
-              SinThetaM
+         p_II(m+1,m+1) = SqrtRatio_I(m+1)*Coef1* SinThetaM
          ! Eq.(28) from Altschuler et al. 1976::
          if (m < nOrder) p_II(m+2,m+1) = p_II(m+1,m+1)*Sqrt_I(2*m+3)* &
               CosTheta
          ! Eq.(30) from Altschuler et al. 1976::
-         Dp_II(m+1,m+1) = SqrtRatio_I(m+1)*Sqrt_I((2-delta_m0)*(2*m+1))*&
-              m*CosTheta*SinThetaM1
+         Dp_II(m+1,m+1) = SqrtRatio_I(m+1)*Coef1*m*CosTheta*SinThetaM1
          ! Eq.(31) from Altschuler et al. 1976::
          if (m < nOrder) &
-              Dp_II(m+2,m+1) = Sqrt_I(2*m+3)*(CosTheta*&
-              Dp_II(m+1,m+1)-SinTheta*p_II(m+1,m+1))
+              Dp_II(m+2,m+1) = Sqrt_I(2*m+3)* &
+              (CosTheta*Dp_II(m+1,m+1) - SinTheta*p_II(m+1,m+1))
 
          SinThetaM1 = SinThetaM
          SinThetaM  = SinThetaM*SinTheta
 
       enddo
 
+      ! Recursive rules
       do m = 0, nOrder-2; do n = m+2, nOrder
          ! Eq.(29) from Altschuler et al. 1976::
-         Coef1         = Sqrt_I(2*n+1)/Sqrt_I(n**2-m**2)
-         Coef2         = Sqrt_I(2*n-1)
-         Coef3         = Sqrt_I((n-1)**2-m**2)/Sqrt_I(2*n-3)
-         p_II(n+1,m+1) = Coef1*(Coef2*CosTheta*p_II(n,m+1)-  &
-              Coef3*p_II(n-1,m+1))
+         Coef1 = Sqrt_I(2*n+1)/Sqrt_I(n**2-m**2)
+         Coef2 = Sqrt_I(2*n-1)
+         Coef3 = Sqrt_I((n-1)**2-m**2)/Sqrt_I(2*n-3)
+
+         p_II(n+1,m+1) = Coef1*(Coef2*CosTheta*p_II(n,m+1)  &
+              - Coef3*p_II(n-1,m+1))
          
          ! Eq.(32) from Altschuler et al. 1976::
-         Dp_II(n+1,m+1) = Coef1*(Coef2*(CosTheta*Dp_II(n,m+1)-&
-              SinTheta*p_II(n,m+1))-Coef3*Dp_II(n-1,m+1))
+         Dp_II(n+1,m+1) = Coef1*(Coef2*(CosTheta*Dp_II(n,m+1) &
+              - SinTheta*p_II(n,m+1)) - Coef3*Dp_II(n-1,m+1))
       enddo; enddo
       
       ! Apply Schmidt normalization
@@ -632,19 +638,34 @@ contains
 
       integer:: m
       real:: RoRs, RoR, rRs
+
+      integer:: nOrderOld = -10
+      real::    rOld = -10.0
       !------------------------------------------------------------------------
-         
+
+      if(nOrderOld == nOrder .and. rOld == r) RETURN
+
+      if(nOrderOld /= nOrder .and. allocated(rRsPower_I)) &
+           deallocate(rRsPower_I, RoRsPower_I, RoRPower_I)
+
+      nOrderOld = nOrder; rOld = r
+      
+      if(.not.allocated(rRsPower_I)) allocate( &
+           rRsPower_I(-1:nOrder+2), &
+           RoRsPower_I(0:nOrder+2), &
+           RoRPower_I(0:nOrder+2))
 
       RoRs = Ro_PFSSM/Rs_PFSSM
       RoR  = Ro_PFSSM/r
       rRs  = r/Rs_PFSSM
 
-      ! Zero and -1 power
+      ! Zero and -1 powers
       rRsPower_I(-1) = 1.0/rRs
       rRsPower_I(0)  = 1.0
       RoRsPower_I(0) = 1.0
       RoRPower_I(0)  = 1.0
 
+      ! Recursive: x^m = x^m-1 * x
       do m = 1, nOrder+2
          RoRsPower_I(m) = RoRsPower_I(m-1) * RoRs
          RoRPower_I(m)  = RoRPower_I(m-1)  * RoR
@@ -653,6 +674,40 @@ contains
 
     end subroutine calc_radial_functions
     !==========================================================================
+    subroutine calc_azimuthal_functions(Phi, nOrder)
+
+      ! Calculate azimuthal harmonics for given Phi
+
+      real,    intent(in):: Phi
+      integer, intent(in):: nOrder
+      
+      integer:: m
+      real   :: SinPhi, CosPhi
+      
+      integer:: nOrderOld = -10
+      real   :: PhiOld    = -10.0
+      !------------------------------------------------------------------------
+      if(nOrderOld == nOrder .and. Phiold == Phi) RETURN
+
+      if(nOrderOld /= nOrder .and. allocated(SinPhi_I)) &
+           deallocate(SinPhi_I, CosPhi_I)
+
+      if(.not.allocated(SinPhi_I)) &
+           allocate(SinPhi_I(0:nOrder), CosPhi_I(0:nOrder))
+
+      SinPhi_I(0) = 0.0
+      CosPhi_I(0) = 1.0
+      SinPhi = sin(Phi)
+      CosPhi = Cos(Phi)
+
+      ! Recursive: sin(a+b) = sin(a)*cos(b) + cos(a)*sin(b)
+      !            cos(a+b) = cos(a)*cos(b) - sin(a)*sin(b)
+      do m = 1, nOrder
+         SinPhi_I(m) = SinPhi*CosPhi_I(m-1) + CosPhi*SinPhi_I(m-1)
+         CosPhi_I(m) = CosPhi*CosPhi_I(m-1) - SinPhi*SinPhi_I(m-1)
+      end do
+
+    end subroutine calc_azimuthal_functions
   end subroutine get_pfss_field
   !============================================================================
   subroutine write_Br_plot
@@ -739,7 +794,7 @@ contains
     real,intent(out)::BMap_D(nDim)
     integer::Node_D(nDim)
     real::Res_D(nDim)
-    integer::iDim,i,j,k
+    integer::iDim
     real::Weight_III(0:1,0:1,0:1)
     logical::DoCorrection
     real::ReductionCoeff,BRAvr
@@ -838,7 +893,7 @@ contains
     ! Set the source surface radius::
     ! The inner boundary in the simulations starts at a height
     ! H_PFSSM above that of the magnetic field measurements!
-    R_PFSSM =min(Rin_PFSSM+H_PFSSM, Rs_PFSSM)
+    R_PFSSM = min(Rin_PFSSM + H_PFSSM, Rs_PFSSM)
 
     ! Transform Phi_PFSSM from the component's frame to the magnetogram's frame
     ! PhiOffset is the longitudinal shift from the original map +
