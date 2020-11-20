@@ -3,19 +3,31 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModMagnetogram
 
-  use ModNumConst
-  use ModMpi
-  use ModIoUnit,   ONLY: io_unit_new
-  use CON_axes,    ONLY: dLongitudeHgrDeg
-  use ModUtilities, ONLY: CON_stop
-  use ModTiming, ONLY: timing_cpu
+  use ModNumConst,       ONLY: cPi, cTwoPi, cRadToDeg, cDegToRad
+  use ModIoUnit,         ONLY: io_unit_new
+  use CON_axes,          ONLY: dLongitudeHgrDeg
+  use ModUtilities,      ONLY: CON_stop
+  use ModCoordTransform, ONLY: rot_xyz_sph, rot_matrix_z, xyz_to_rlonlat
+  use ModLookupTable, ONLY: &
+       i_lookup_table, make_lookup_table_3d, get_lookup_table, &
+       interpolate_lookup_table
 
   implicit none
   save
 
   private
 
-  public:: get_pfss_field
+  logical, public :: UseMagnetogram=.false., UseNewMagnetogram = .false.
+
+  integer, public:: iTableB0 = -1 ! index of B0 lookup table
+  
+  public :: read_magnetogram_param ! read parameters
+
+  public:: init_magnetogram_lookup_table ! initialize lookup table
+  
+  public:: get_magnetogram_field ! field from lookup table at a given point
+
+  public:: interpolate_field ! good old legacy left handed coordinates
   
   ! Rs - radius of outer source surface where field is taken to be radial
   ! Ro - radius of inner boundary for the potential field
@@ -36,33 +48,14 @@ module ModMagnetogram
   integer, public :: nThetaPerProc, nRExt=2
   integer, public :: nR=29, nPhi=72, nTheta=29
 
-  ! public available procedures
   public :: read_magnetogram_file, read_new_magnetogram_file
 
-  public :: set_parameters_magnetogram
-
-  public :: get_hlcmm
   ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
   ! the M(ap) from the file header. Assign PhiOffset=HLCMM-180
+  public :: get_hlcmm
 
-  public :: get_magnetogram_field
-
-  ! Gives the interpolated values of the Cartesian components of
-  ! the macnetic vector in HGR system, input parameters
-  ! being the cartesian coordinates in the HGR system
-
-  public :: sin_latitude, r_latitude, colatitude,&
-       correct_angles, interpolate_field, PhiOffset
-
-  ! read the potential field source surface solution
-  public :: update_magnetogram
-
-  ! Local variables -------------
-
-  ! private variables for MPI
-  integer :: iProc, nProc, iComm
-  
-  ! PFSSM related control parameters
+  ! Inefficient functions instead of arrays
+  public :: sin_latitude, r_latitude, colatitude, correct_angles
 
   ! Rotation angle around z-axis, in degrees,
   ! from the coordinate system of the component
@@ -72,7 +65,13 @@ module ModMagnetogram
   ! H(eliographic) L(ongitude) of C(entral) M(eridian)
   ! of the M(ap) minus 180 Deg, if in the input file
   ! PhiOffset is negative.
-  real :: PhiOffset=-1.0, NewPhiShift = -1.0
+  real, public :: PhiOffset=-1.0
+
+  ! Local variables -------------
+
+  real:: NewPhiShift = -1.0
+
+  ! PFSSM related control parameters
 
   ! Maximum order of spherical harmonics
   integer, parameter:: nHarmonicsMax=180 ! 90
@@ -94,12 +93,168 @@ module ModMagnetogram
   integer, parameter:: MaxInt=100000
   real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
 
-  real, allocatable:: B_DN(:,:,:,:), Bnew_DN(:,:,:,:)
-
   ! write prefix for magnetogram processing
   character(len=*), parameter :: prefix=''
 
+  ! Lookup table related variables
+  real:: rMinB0=1.0, rMaxB0=30.0, dLonB0=0.0, FactorB0=1.0, RotB0_DD(3,3)
+  real:: LonMinB0 = 0.0
+
+  interface get_magnetogram_field
+     module procedure get_magnetogram_field11, get_magnetogram_field31
+  end interface get_magnetogram_field
+
 contains
+  !===========================================================================
+  subroutine init_magnetogram_lookup_table(iComm)
+
+    use ModNumConst, ONLY: cDegToRad
+
+    integer, intent(in):: iComm
+    
+    integer:: nParam
+    real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
+    logical:: IsLogIndex_I(3)
+    !------------------------------------------------------------------------
+
+    ! Read or create lookup table and get the longitude shift.
+    ! Create the rotation matrix based on the shift
+    iTableB0 = i_lookup_table('B0')
+    if(iTableB0 <= 0) RETURN
+    
+    ! If lookup table is not loaded, make it (and save it)
+    call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
+
+    ! Get coordinate limits
+    call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
+         IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, &
+         IsLogIndex_I=IsLogIndex_I)
+
+    if(IsLogIndex_I(1))then
+       rMinB0 = 10**IndexMin_I(1); rMaxB0 = 10**IndexMax_I(1)
+    else
+       rMinB0 = IndexMin_I(1); rMaxB0 = IndexMax_I(1)
+    end if
+    LonMinB0 = IndexMin_I(2)*cDegToRad
+    if(nParam > 2) then
+       dLonB0 = (Param_I(3) - dLongitudeHgrDeg)*cDegToRad
+       RotB0_DD = rot_matrix_z(dLonB0)
+    end if
+
+  end subroutine init_magnetogram_lookup_table
+  !============================================================================
+  subroutine calc_b0_table(iTable, Arg1, Arg2, Arg3, b_D)
+
+    ! Calculate B0 at the location
+
+    integer, intent(in):: iTable
+    real, intent(in)   :: Arg1, Arg2, Arg3
+    real, intent(out)  :: b_D(:)
+
+    real:: r, Theta, Phi, Bsph_D(3), XyzSph_DD(3,3)
+
+    character(len=*), parameter:: NameSub = 'calc_b0_table'
+    !--------------------------------------------------------------------------
+    r     = Arg1
+    Phi   = Arg2*cDegToRad
+    Theta = (90-Arg3)*cDegToRad
+
+    call get_pfss_field(r, Theta, Phi, Bsph_D)
+
+    ! Convert to Cartesian
+    XyzSph_DD = rot_xyz_sph(Theta, Phi)
+
+    b_D = matmul(XyzSph_DD, Bsph_D)
+
+  end subroutine calc_b0_table
+  !============================================================================
+  subroutine get_magnetogram_field31(x, y, z, B0_D)
+    
+    real, intent(in) ::  x, y, z
+    real, intent(out):: B0_D(3)
+    !-------------------------------------------------------------------------
+    call  get_magnetogram_field11([ x, y, z ], B0_D)
+
+  end subroutine get_magnetogram_field31
+  !============================================================================
+  subroutine get_magnetogram_field11(Xyz_D, B0_D)
+
+    ! Return B0_D [Tesla] field at position Xyz_D [Rs]
+    
+    real, intent(in) :: Xyz_D(3)
+    real, intent(out):: B0_D(3)
+
+    real:: rLonLat_D(3), r
+    !-------------------------------------------------------------------------
+    ! Converting to rlonlat (radians)
+    call xyz_to_rlonlat(Xyz_D, rLonLat_D)
+
+    ! Include the shift in Phi coordinate and make sure that it is
+    ! in the range provided by the lookup table
+    if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
+         modulo(rLonLat_D(2) - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
+
+    ! Lookup table uses degrees
+    rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
+
+    ! Extrapolate for r < rMinB0
+    r = rLonLat_D(1)
+       
+    call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
+         DoExtrapolate=(r<rMinB0) )
+
+    ! Rotate Bx, By based on shifted coordinates
+    if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
+
+    ! Scale with r^2 for r > rMaxB0
+    if(r > rMaxB0) B0_D = (rMaxB0/r)**2 * B0_D
+
+    ! Multiply with B0 factor and convert from Gauss to Tesla
+    B0_D = B0_D*FactorB0*1e-4
+
+  end subroutine get_magnetogram_field11
+  !============================================================================
+  subroutine interpolate_field(rPhiTheta_D, Brphitheta_D)
+
+    ! A great example of left-handed coordinates
+    ! Get the field at this location
+
+    real, intent(in) :: rPhiTheta_D(3)
+    real, intent(out):: Brphitheta_D(3)
+
+    real:: r, Phi, Theta, Lon, Lat, Bxyz_D(3), Bsph_D(3), XyzSph_DD(3,3)
+    !-------------------------------------------------------------------------
+    r     = rPhiTheta_D(1)
+    Phi   = rPhiTheta_D(2)
+    Theta = rPhiTheta_D(3)
+
+    ! Include the shift in Phi coordinate and make sure that it is
+    ! in the range provided by the lookup table and convert to degrees
+    if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) &
+         Phi = modulo(Phi - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
+    Lon = cRadToDeg*Phi
+
+    ! Convert to latitude in degrees
+    Lat = 90 - cRadToDeg*Theta
+
+    ! Get Bxyz
+    call interpolate_lookup_table(iTableB0, [r,Lon,Lat], Bxyz_D, &
+         DoExtrapolate=(r<rMinB0) )
+
+    ! Scale with r^2 for r > rMaxB0
+    if(r > rMaxB0) Bxyz_D = (rMaxB0/r)**2 * Bxyz_D
+
+    ! Multiply with B0 factor and convert from Gauss to Tesla
+    Bxyz_D = Bxyz_D*FactorB0*1e-4
+
+    ! Convert to spherical coordinates
+    XyzSph_DD = rot_xyz_sph(Theta, Phi)    
+    Bsph_D = matmul(Bxyz_D, XyzSph_DD)
+
+    ! Convert to left-handed spherical coordinates
+    Brphitheta_D = [ Bsph_D(1), Bsph_D(3), Bsph_D(2) ]
+    
+  end subroutine interpolate_field
   !============================================================================
   real function sin_latitude(iTheta)
     ! Uniform in sin(latitude) grid enumerated by index iTheta
@@ -121,11 +276,13 @@ contains
     !--------------------------------------------------------------------------
     colatitude=0.5*cPi-r_latitude(iTheta)
   end function colatitude
+  
   !============================================================================
-  ! SUBROUTINE get_hlcmm
-  ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
-  ! the M(ap) from the header line. Assign PhiOffset=HLCMM-180
   subroutine get_hlcmm(Head_PFSSM,Shift)
+
+    ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
+    ! the M(ap) from the header line. Assign PhiOffset=HLCMM-180
+
     character (LEN=80),intent(inout):: Head_PFSSM
     real,intent(inout)::Shift
     real::HLCMM     ! Heliographic Longitude of the central meridian of map
@@ -134,7 +291,7 @@ contains
 
     !--------------------------------------------------------------------------
     iPosition=index(Head_PFSSM,'Centered')
-    if (iPosition>0.and.Shift<0.0)then
+    if (iPosition>0 .and. Shift<0.0)then
        Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
             Head_PFSSM(iPosition+1:len(Head_PFSSM))
        iPosition=index(Head_PFSSM,':')
@@ -148,12 +305,13 @@ contains
             'Cannot find HLCMM, '//File_PFSSM//&
             ' is not a true WSO magnetogram')
        ! Rotates based on magnetogram central meridian + HGR system
-       Shift=modulo(iHLCMM-180-dLongitudeHgrDeg, 360.0)
-       if(iProc==0)write(*,*) prefix, ' PhiOffset = ',Shift
+       Shift = modulo(iHLCMM-180-dLongitudeHgrDeg, 360.0)
+
        RETURN
     end if
+
     iPosition=index(Head_PFSSM,'Central')
-    if(iPosition>0.and.Shift<0.0)then
+    if(iPosition>0 .and. Shift<0.0)then
        Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
             Head_PFSSM(iPosition+1:len(Head_PFSSM))
        iPosition=index(Head_PFSSM,':')
@@ -165,68 +323,66 @@ contains
             ' is not a true MDI magnetogram')
        ! Rotates based on magnetogram central meridian + HGR system
        Shift=modulo(HLCMM-180-dLongitudeHgrDeg, 360.0)
-       if(iProc==0)write(*,*) prefix, ' PhiOffset = ',Shift
+
        RETURN
     end if
 
     ! Rotation of HGR system is applied
-    if (Shift == 0.)then
-       Shift = modulo(Shift-dLongitudeHgrDeg, 360.0)
-       if(iProc==0)write(*,*) prefix, ' PhiOffset = ',Shift
-       RETURN
-    end if
+    if (Shift == 0.) &
+       Shift = modulo(-dLongitudeHgrDeg, 360.0)
+
   end subroutine get_hlcmm
   !============================================================================
 
-  subroutine set_parameters_magnetogram(NameCommand)
+  subroutine read_magnetogram_param(NameCommand)
 
     use ModReadParam, ONLY: read_var
 
     character(len=*), intent(in) :: NameCommand
 
-    character(len=*), parameter:: NameSub = 'set_parameters_magnetogram'
+    character(len=*), parameter:: NameSub = 'read_magnetogram_param'
     !--------------------------------------------------------------------------
-
     select case(NameCommand)
+    case("#FACTORB0")
+       call read_var("FactorB0", FactorB0)
+
     case("#MAGNETOGRAM")
-       call read_var('rMagnetogram',        Ro_PFSSM)
-       call read_var('rSourceSurface',      Rs_PFSSM)
-       call read_var('HeightInnerBc',       H_PFSSM)
-       call read_var('NameMagnetogramFile', File_PFSSM)
-       call read_var('nHeaderLine',         iHead_PFSSM)
-       call read_var('PhiShift',            PhiOffset)
-       call read_var('UnitB',               UnitB)
+       call read_var('UseMagnetogram', UseMagnetogram)
+       if(UseMagnetogram)then
+          call read_var('rMagnetogram',        Ro_PFSSM)
+          call read_var('rSourceSurface',      Rs_PFSSM)
+          call read_var('HeightInnerBc',       H_PFSSM)
+          call read_var('NameMagnetogramFile', File_PFSSM)
+          call read_var('nHeaderLine',         iHead_PFSSM)
+          call read_var('PhiShift',            PhiOffset)
+          call read_var('UnitB',               UnitB)
+       end if
 
     case("#NEWMAGNETOGRAM")
-       call read_var('rMagnetogram',        Ro_PFSSM)
-       call read_var('rSourceSurface',      Rs_PFSSM)
-       call read_var('HeightInnerBc',       H_PFSSM)
-       call read_var('NameNewFile',         NameNewFile)
-       call read_var('nHeaderLine',         iHead_PFSSM)
-       call read_var('NewPhiShift',         NewPhiShift)
-       call read_var('UnitB',               UnitB)
-
-    case("#B0GRID")
-       call read_var('nR', nR)
+       call read_var('UseNewMagnetogram',   UseNewMagnetogram)
+       if(UseNewMagnetogram)then
+          call read_var('rMagnetogram',     Ro_PFSSM)
+          call read_var('rSourceSurface',   Rs_PFSSM)
+          call read_var('HeightInnerBc',    H_PFSSM)
+          call read_var('NameNewFile',      NameNewFile)
+          call read_var('nHeaderLine',      iHead_PFSSM)
+          call read_var('NewPhiShift',      NewPhiShift)
+          call read_var('UnitB',            UnitB)
+       end if
 
     case default
        call CON_stop(NameSub//' invalid NameCommand='//NameCommand)
     end select
 
-  end subroutine set_parameters_magnetogram
+  end subroutine read_magnetogram_param
   !============================================================================
 
   subroutine read_magnetogram_file(NamePlotDir, iProcIn, nProcIn, iCommIn)
     character(len=*),intent(in) :: NamePlotDir
     integer,intent(in)          :: iProcIn, nProcIn, iCommIn
 
-    real:: timing0
     !--------------------------------------------------------------------------
-    iComm = iCommIn
-    nProc = nProcIn
-    iProc = iProcIn
-
-    if (iProc==0) then
+    if (iProcIn==0) then
        write(*,*) prefix, 'nOrder = ',N_PFSSM
        write(*,*) prefix, 'Coefficient file name : ',File_PFSSM
        write(*,*) prefix, 'Number of header lines: ',iHead_PFSSM
@@ -237,15 +393,11 @@ contains
 
     call read_harmonics
     call set_sqrt_arrays(N_PFSSM)
-    
-    timing0 = timing_cpu()
-    call set_magnetogram
-    if(iProc==0) &
-         write(*,*) prefix, 'CPU timing:', timing_cpu() - timing0
 
   end subroutine read_magnetogram_file
   !============================================================================
   subroutine read_new_magnetogram_file(NamePlotDir, iProcIn, nProcIn, iCommIn)
+
     character(len=*),intent(in) :: NamePlotDir
     integer, intent(in):: iProcIn, nProcIn, iCommIn
     character(LEN=32):: NameOldFile
@@ -261,11 +413,6 @@ contains
          nProcIn=nProcIn               ,&
          iCommIn=iCommIn)
 
-    ! Allocate the magnetic field array, at the spherical grid.
-    if(allocated(BNew_DN))deallocate(BNew_DN)
-    allocate(BNew_DN(R_:Theta_,-nRExt:nR,0:nPhi,0:nTheta))
-
-    BNew_DN = B_DN
 
     PhiOffset = OldPhiShift
     File_PFSSM = NameOldFile
@@ -274,6 +421,7 @@ contains
   !============================================================================
 
   subroutine read_harmonics
+
     integer :: iUnit,nOrderIn,iPosition,iPosition1,n,m,i,iError
     character (LEN=80):: Head_PFSSM=''
     real::gtemp,htemp,Coef1,Coef
@@ -295,12 +443,8 @@ contains
              read(Head_PFSSM(iPosition+4+iPosition1:len(Head_PFSSM)),&
                   '(i3)',iostat=iError)nOrderIn
              if(iError>0)call CON_stop('Cannot figure out nOrder')
-             if(nOrderIn<N_PFSSM)then
-                if(iProc==0)then
-                   write(*,*) prefix, 'Reset N_PFSSM=',nOrderIn
-                end if
-                N_PFSSM=nOrderIn
-             end if
+             if(nOrderIn<N_PFSSM) N_PFSSM=nOrderIn
+
           end if
           call get_hlcmm(Head_PFSSM,PhiOffset)
        enddo
@@ -311,10 +455,7 @@ contains
     nPhi=max(nPhi,N_PFSSM)
     nTheta=max(nTheta,N_PFSSM)
     nRExt=min(10,1+floor(real(nR)*(0.1*Ro_PFSSM)/(Rs_PFSSM-Ro_PFSSM)))
-    if(iProc==0)then
-       write(*,*) prefix, &
-            'Magnetogram is extended by ',nRExt,' nodes towards the Sun'
-    end if
+
     ! Initialize all coefficient arrays::
     g_II = 0.0; h_II = 0.0
     ! Read file with coefficients, g_II and h_II::
@@ -341,121 +482,6 @@ contains
     g_II(1,1) = 0.0
 
   end subroutine read_harmonics
-  !============================================================================
-  subroutine set_magnetogram
-
-    ! Reads the file of magnetic field harmonics
-    ! and recovers the spatial distribution of the
-    ! potential mganetic field at the spherical grid
-    ! nR*nPhi*nTheta
-
-    ! This subroutine computes PFSS (Potential Field Source Surface)
-    ! field model components in spherical coordinates at user-specified
-    ! r (solar radii units, r>1) and theta, phi (both radians).
-    ! The subroutine requires a file containing the spherical
-    ! harmonic coefficients g(n,m) & h(n.m) obtained from a separate analysis
-    ! of a photospheric synoptic map, in a standard ("radial")
-    ! format and normalization used by Stanford.
-    !
-    ! The PFSS field model assumes no currents in the corona and
-    ! a pure radial field at the source surface, here R=2.5 Rsun
-    !
-    ! Get solar coefficients from Todd Hoeksema's files:
-    !    1. Go to http://solar.stanford.edu/~wso/forms/prgs.html
-    !    2. Fill in name and email as required
-    !    3. Chose Carrington rotation (leave default 180 center longitude)
-    ! For most requests of integer CRs with order < 20, result will come back
-    ! immediately on the web.
-    !    4. Count header lines before 1st (0,0) coefficient -this will be asked!
-
-    ! Notes:
-
-    !
-    ! The source surface surface radius has been set at Rs=2.5*Ro in
-    ! the subroutine. PFSS fields at R>Rs are radial.(br,bthet,bphi)
-    ! are the resulting components. Note the units of the B fields
-    ! will differ with observatory used for the coefficients. The
-    ! computation of the B fields is taken mainly from Altschuler,
-    ! Levine, Stix, and Harvey, "High Resolutin Mapping of the
-    ! Magnetic Field of the Solar Corona," Solar Physics 51 (1977)
-    ! pp. 345-375. It uses Schmidt normalized Legendre polynomials and
-    ! the normalization is explained in the paper. The field expansion
-    ! in terms of the Schmidt normalized Pnm and dPnm's is best taken
-    ! from Todd Hoeksema's notes which can be downloaded from the Web
-    ! http://quake.stanford.edu/~wso/Description.ps The expansions
-    ! used to get include radial factors to make the field become
-    ! purely radial at the source surface. The expans. in Altschuler
-    ! et al assumed that the the coefficient g(n,m) and h(n,m) were
-    ! the LOS coefficients -- but the g(n,m) and h(n,m) now available
-    ! are radial (according to Janet Luhman).  Therefore, she performs
-    ! an initial correction to the g(n,m) and h(n,m) to make them
-    ! consistent with the the expansion. There is no reference for
-    ! this correction.
-
-    integer:: iTheta, iPhi, iR
-    real:: Theta,Phi,R_PFSSM
-
-    integer::iBcast, iStart, nSize, iError
-
-    ! True spherical components of the magnetic field and the potential
-    real:: Bsph_D(3)
-    !--------------------------------------------------------------------------
-    ! Introduce a spherical grid with the resolution, depending on the
-    ! magnetogram resolution (N_PFSSM)
-
-    dR        = (Rs_PFSSM-Ro_PFSSM)/real(nR)
-    dPhi      = cTwoPi/real(nPhi)
-    dSinTheta = 2.0/real(nTheta+1)
-
-    dInv_D=1.0/[dR,dPhi,dSinTheta]
-
-    ! Allocate the magnetic field array, at the spherical grid.
-    if(allocated(B_DN))deallocate(B_DN)
-    allocate(B_DN(R_:Theta_,-nRExt:nR,0:nPhi,0:nTheta))
-
-    B_DN=0.0
-
-    ! Parallel computation of the magnetic field on the grid
-    nThetaPerProc = nTheta/nProc + 1
-
-    ! Loop by theta, each processor treats a separate part of the grid
-    do iTheta=iProc*nThetaPerProc, (iProc+1)*nThetaPerProc-1
-
-       if(iTheta>nTheta)EXIT ! Some processors may have less amount of work
-       Theta = colatitude(iTheta)
-
-       ! Start loop by Phi
-       do iPhi=0,nPhi
-          Phi=real(iPhi)*dPhi
-
-          ! Loop by radius
-          do iR = -nRExt, nR
-             R_PFSSM = Ro_PFSSM + dR*iR
-
-             call get_pfss_field(R_PFSSM, Theta, Phi, Bsph_D)
-
-             ! Left handed coordinate system...
-             B_DN(R_,iR,iPhi,iTheta)     = Bsph_D(1)
-             B_DN(Phi_,iR,iPhi,iTheta)   = Bsph_D(3)
-             B_DN(Theta_,iR,iPhi,iTheta) = Bsph_D(2)
-          end do
-       end do
-    end do
-
-    if(nProc>1)then
-       ! this should be an mpi_allreduce with in-place
-       do iBcast=0,nProc-1
-          iStart=iBcast*nThetaPerProc
-          if(iStart>nTheta)EXIT
-          nSize=min(nThetaPerProc,nTheta+1-iStart)*(nPhi+1)*&
-               (nR+1+nRExt)*3
-          call MPI_bcast(B_DN(1,-nRExt,0,iStart),nSize,MPI_REAL,iBcast,iComm,iError)
-       end do
-    end if
-
-    if(iProc==0) call write_Br_plot
-
-  end subroutine set_magnetogram
 
   !==========================================================================
   subroutine set_sqrt_arrays(nOrder)
@@ -708,70 +734,12 @@ contains
     end subroutine calc_azimuthal_functions
   end subroutine get_pfss_field
   !============================================================================
-  subroutine write_Br_plot
 
-    use ModPlotFile, ONLY: save_plot_file
-
-    integer :: iError,iPhi,iTheta,iUnit
-    real,dimension(2,0:nPhi,0:nTheta):: Coord_DII,State_VII
-    character(len=32)                :: FileNameDat
-    character(len=32)                :: FileNameOut
-
-    !--------------------------------------------------------------------------
-    FileNameDat = trim(NameOutDir)//'PFSSM_Br.dat'
-    FileNameOut = trim(NameOutDir)//'PFSSM_Br.out'
-
-    write(*,*) prefix, 'Writing PFSSM_Br output file, named'
-    write(*,*) prefix, FileNameDat
-    iUnit = io_unit_new()
-    open ( unit = iUnit, &
-         file = FileNameDat, &
-         form = 'formatted', &
-         access = 'sequential', &
-         status = 'replace', iostat = iError )
-
-    if ( iError /= 0 ) then
-       write (*,*) prefix, ' '
-       write (*,*) prefix, 'TECPLOT_WRITE_OPEN - Fatal error!'
-       write (*,*) prefix, '  Could not open the PFSSM_Br output file.'
-       call CON_stop('')
-    end if
-
-    write ( iUnit, '(a)' ) 'Title = "'     // trim ('PFSSM_Br') // '"'
-    write ( iUnit, '(a)' ) &
-         'Variables = ' // trim (&
-         '"Longitude [Deg]", "Latitude [Deg]", "Br_0 [G]","Br_SS [G]"')
-    write ( iUnit, '(a)' ) ' '
-    write ( iUnit, '(a,i6,a,i6,a)' ) 'Zone I = ', nPhi+1, ', J=', nTheta+1,&
-         ', F=point'
-
-    do iTheta=0,nTheta
-       do iPhi=0,nPhi
-          Coord_DII(1,iPhi,iTheta) = real(iPhi)*dPhi/cDegToRad
-          Coord_DII(2,iPhi,iTheta) = r_latitude(iTheta)/cDegToRad
-
-          State_VII(1,iPhi,iTheta) = UnitB*B_DN(R_,0,iPhi,iTheta)
-          State_VII(2,iPhi,iTheta) = UnitB*B_DN(R_,nR,iPhi,iTheta)
-
-          write ( iUnit, '(4f10.3)' )Coord_DII(:,iPhi,iTheta),&
-               State_VII(:,iPhi,iTheta)
-       end do
-    end do
-    close(iUnit)
-    call save_plot_file(FileNameOut, &
-         StringHeaderIn='Longitude, Latitude [Deg]; Br, BrSS [G]',&
-         NameVarIn='Longitude Latitude Br BrSS', &
-         CoordIn_DII=Coord_DII, &
-         VarIn_VII=State_VII)
-
-  end subroutine Write_Br_plot
-  !============================================================================
-
-  ! This subroutine corrects the angles Phi and Theta after every
-  ! step of the field-alligned integration
   subroutine correct_angles(TR_D)
-    real,dimension(nDim),intent(inout) :: TR_D
+    ! This subroutine corrects the angles Phi and Theta after every
+    ! step of the field-alligned integration
 
+    real,dimension(nDim),intent(inout) :: TR_D
     !--------------------------------------------------------------------------
     if(TR_D(Theta_) < 0.0)then
        TR_D(Theta_) = -TR_D(Theta_)
@@ -784,165 +752,6 @@ contains
     TR_D(Phi_)=modulo(TR_D(Phi_),cTwoPi)
 
   end subroutine correct_angles
-  !============================================================================
-  ! Calculate B_R, B_Phi, B_Theta in Gauss for given
-  ! R, Phi, Theta, Theta being the colatitude.
-  subroutine interpolate_field(R_D,BMap_D)
-    real,intent(in)::R_D(nDim)
-    real,intent(out)::BMap_D(nDim)
-    integer::Node_D(nDim)
-    real::Res_D(nDim)
-    integer::iDim
-    real::Weight_III(0:1,0:1,0:1)
-    logical::DoCorrection
-    real::ReductionCoeff,BRAvr
-    !--------------------------------------------------------------------------
-    Res_D=R_D
-    ! Limit a value of R:
-    Res_D(R_)=max(min(Res_D(R_),Rs_PFSSM-cTiny),Ro_PFSSM-nRExt*dR+cTiny)
-
-    Res_D(R_)=Res_D(R_)-Ro_PFSSM
-
-    call correct_angles(Res_D)
-    DoCorrection=Res_D(Theta_)/=R_D(Theta_)
-    Res_D(Theta_)=cos(Res_D(Theta_)) & ! This is sin(latitude)
-         -sin_latitude(0)             ! This is sin(latitude) for iTheta=0
-    Res_D=Res_D*dInv_D
-    Node_D=floor(Res_D)
-    if(Node_D(R_)==nR)Node_D(R_)=Node_D(R_)-1
-    Res_D=Res_D-real(Node_D)
-    ReductionCoeff=1.0
-    BRAvr=0.0
-    ! Near poles reduce the Phi and Theta components of the field and
-    ! take a weithed average for the R component from using the  value in
-    ! the last grid node and that averaged over longitude
-    !(iTheta=0 or iTheta=nTheta)
-    if(Node_D(Theta_)==nTheta)then
-       Node_D(Theta_)=Node_D(Theta_)-1
-       ReductionCoeff=sqrt(max(1.0-2.0*Res_D(Theta_),0.0))
-       Res_D(Theta_)=1.0
-       BRAvr=sum(&
-            (1.0-Res_D(R_))*B_DN(R_,Node_D(R_)  ,:,nTheta)&
-            +Res_D(R_) *B_DN(R_,Node_D(R_)+1,:,nTheta))/(nPhi+1)
-    elseif(Node_D(Theta_)==-1)then
-       Node_D(Theta_)= Node_D(Theta_)+1
-       ReductionCoeff=sqrt(max(0.0,2.0*Res_D(Theta_)-1.0))
-       Res_D(Theta_) = 0.0
-       BRAvr=sum(&
-            (1.0-Res_D(R_))*B_DN(R_,Node_D(R_)  ,:,     0)&
-            +Res_D(R_) *B_DN(R_,Node_D(R_)+1,:,     0))/(nPhi+1)
-    end if
-
-    if(Node_D(Phi_)==nPhi)Node_D(Phi_)=0
-
-    Weight_III(0,:,:)=1.0-Res_D(R_)
-    Weight_III(1,:,:)=Res_D(R_)
-    Weight_III(:,0,:)=Weight_III(:,0,:)*(1.0-Res_D(Phi_))
-    Weight_III(:,1,:)=Weight_III(:,1,:)*Res_D(Phi_)
-    Weight_III(:,:,0)=Weight_III(:,:,0)*(1.0-Res_D(Theta_))
-    Weight_III(:,:,1)=Weight_III(:,:,1)*Res_D(Theta_)
-    do iDim=1,nDim
-       BMap_D(iDim)=&
-            sum(Weight_III*B_DN(iDim,&
-            Node_D(R_):Node_D(R_)+1,&
-            Node_D(Phi_):Node_D(Phi_)+1,&
-            Node_D(Theta_):Node_D(Theta_)+1))
-    end do
-    if(DoCorrection)then
-       BMap_D(Phi_:Theta_)=-ReductionCoeff*BMap_D(Phi_:Theta_)
-    else
-       BMap_D(Phi_:Theta_)=ReductionCoeff*BMap_D(Phi_:Theta_)
-    end if
-    BMap_D(R_)=ReductionCoeff*BMap_D(R_)+(1.0-ReductionCoeff)*BRAvr
-  end subroutine interpolate_field
-  !============================================================================
-  subroutine get_magnetogram_field(xInput,yInput,zInput,B0_D)
-
-    ! For Cartesian xInput,yInput,zInput, all normalized per the
-    ! solar radius, calculate the magnetic field vector
-    ! in Cartesian components, in SI units.
-
-    real, intent(in):: xInput,yInput,zInput
-    real, intent(out), dimension(3):: B0_D
-
-    real:: Rin_PFSSM,Theta_PFSSM,Phi_PFSSM
-    real:: BMap_D(nDim)
-    real:: SinPhi,CosPhi,XY,R_PFSSM
-    real:: CosTheta,SinTheta
-
-    ! Variables to obtain FDIPS field below Ro_PFSSM
-    real :: BMapo_D(nDim), BMapi_D(nDim), Ri_PFSSM
-    !--------------------------------------------------------------------------
-    ! Calculate cell-centered spherical coordinates::
-    Rin_PFSSM   = sqrt(xInput**2+yInput**2+zInput**2)
-    ! Avoid calculating B0 inside a critical radius = 0.9*Rsun
-    if(nRExt/=0 .and. Rin_PFSSM < max(Ro_PFSSM-dR*nRExt,0.9*Ro_PFSSM) &
-         .or. nRExt==0 .and. Rin_PFSSM < 0.9*Ro_PFSSM)then
-       B0_D= 0.0
-       RETURN
-    end if
-    Theta_PFSSM = acos(zInput/Rin_PFSSM)
-    Xy          = sqrt(xInput**2+yInput**2+cTiny**2)
-    Phi_PFSSM   = atan2(yInput,xInput)
-    SinTheta    = Xy/Rin_PFSSM
-    CosTheta    = zInput/Rin_PFSSM
-    SinPhi      = yInput/Xy
-    CosPhi      = xInput/Xy
-    ! Set the source surface radius::
-    ! The inner boundary in the simulations starts at a height
-    ! H_PFSSM above that of the magnetic field measurements!
-    R_PFSSM = min(Rin_PFSSM + H_PFSSM, Rs_PFSSM)
-
-    ! Transform Phi_PFSSM from the component's frame to the magnetogram's frame
-    ! PhiOffset is the longitudinal shift from the original map +
-    ! shift to the cell center.
-    Phi_PFSSM = Phi_PFSSM - PhiOffset*cDegToRad
-
-    if(nRExt == 0 .and. R_PFSSM < Ro_PFSSM)then
-       ! linearly extrapolate FDIPS field for locations below Ro_PFSSM
-       Ri_PFSSM = 2.0*Ro_PFSSM - R_PFSSM
-
-       call interpolate_field([Ri_PFSSM,Phi_PFSSM,Theta_PFSSM],BMapi_D)
-       call interpolate_field([Ro_PFSSM,Phi_PFSSM,Theta_PFSSM],BMapo_D)
-
-       BMap_D = 2.0*BMapo_D - BMapi_D
-    else
-       call interpolate_field([R_PFSSM,Phi_PFSSM,Theta_PFSSM],BMap_D)
-    end if
-    ! Magnetic field components in global Cartesian coordinates::
-    ! Set B0x::
-    B0_D(1) = BMap_D(R_)*SinTheta*CosPhi+    &
-         BMap_D(Theta_)*CosTheta*CosPhi-&
-         BMap_D(Phi_)*SinPhi
-    ! Set B0y::
-    B0_D(2) =  BMap_D(R_)*SinTheta*SinPhi+    &
-         BMap_D(Theta_)*CosTheta*SinPhi+&
-         BMap_D(Phi_)*CosPhi
-    ! Set B0z::
-    B0_D(3) = BMap_D(R_)*CosTheta-           &
-         BMap_D(Theta_)*SinTheta
-    ! Apply field strength normalization::
-    ! UnitB contains the units of the CR file relative to 1 Gauss
-    ! and a possible correction factor (e.g. 1.8 or 1.7).
-    B0_D=B0_D*UnitB
-
-    if (Rin_PFSSM > Rs_PFSSM) &
-         B0_D  =  B0_D*(Rs_PFSSM/Rin_PFSSM)**2
-
-    ! Transform from Gauss to Tesla
-    B0_D = B0_D*1.0E-4
-  end subroutine get_magnetogram_field
-  !============================================================================
-  subroutine update_magnetogram(tNow, tMax, tLastUpdate)
-    real, intent(in):: tNow, tMax
-    real, intent(inout):: tLastUpdate
-
-    !--------------------------------------------------------------------------
-    if(tLastUpdate>=tMax)RETURN
-    B_DN = ( (tMax - tNow     )/(tMax - tLastUpdate) )*B_DN + &
-         ( (tNow - tLastUpdate)/(tMax - tLastUpdate) )*BNew_DN
-    tLastUpdate = tNow
-  end subroutine update_magnetogram
   !============================================================================
 end module ModMagnetogram
 !==============================================================================
