@@ -9,8 +9,8 @@ module ModMagnetogram
   use ModUtilities,      ONLY: CON_stop
   use ModCoordTransform, ONLY: rot_xyz_sph, rot_matrix_z, xyz_to_rlonlat
   use ModLookupTable, ONLY: &
-       i_lookup_table, make_lookup_table_3d, get_lookup_table, &
-       interpolate_lookup_table
+       i_lookup_table, init_lookup_table, make_lookup_table_3d, &
+       get_lookup_table, interpolate_lookup_table
 
   implicit none
   save
@@ -115,13 +115,29 @@ contains
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
+    integer:: nR, nLon, nLat
     !------------------------------------------------------------------------
 
     ! Read or create lookup table and get the longitude shift.
     ! Create the rotation matrix based on the shift
     iTableB0 = i_lookup_table('B0')
-    if(iTableB0 <= 0) RETURN
-    
+    if(iTableB0 <= 0)then
+       if(.not.UseMagnetogram) RETURN
+       ! Set up a default B0 lookup table
+       nR = max(30, N_PFSSM); nLon = max(72, N_PFSSM); nLat=max(30, N_PFSSM)
+       call init_lookup_table( &
+            NameTable   = 'B0',                    &
+            NameCommand = 'use',                   &
+            NameVar     = 'r lon lat bx by bz',    &
+            NameFile    = 'harmonics_bxyz.out',    &
+            TypeFile    = 'real4',                 &
+            nIndex_I    = [nR+1, nLon+1, nLat+1],  &
+            IndexMin_I  = [ 1.0,   0.0, -90.0],    &
+            IndexMax_I  = [ 2.5, 360.0,  90.0],    &
+            StringDescription = 'Created from '//trim(File_PFSSM) )
+       iTableB0 = i_lookup_table('B0')
+    end if
+
     ! If lookup table is not loaded, make it (and save it)
     call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
