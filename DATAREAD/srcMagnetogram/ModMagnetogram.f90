@@ -3,7 +3,7 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModMagnetogram
 
-  use ModNumConst,       ONLY: cPi, cTwoPi, cRadToDeg, cDegToRad
+  use ModNumConst,       ONLY: cTwoPi, cRadToDeg, cDegToRad
   use ModIoUnit,         ONLY: io_unit_new
   use CON_axes,          ONLY: dLongitudeHgrDeg
   use ModUtilities,      ONLY: CON_stop
@@ -20,42 +20,26 @@ module ModMagnetogram
   logical, public :: UseMagnetogram=.false., UseNewMagnetogram = .false.
 
   integer, public:: iTableB0 = -1 ! index of B0 lookup table
-  
+
   public :: read_magnetogram_param ! read parameters
 
   public:: init_magnetogram_lookup_table ! initialize lookup table
-  
+
   public:: get_magnetogram_field ! field from lookup table at a given point
 
   public:: interpolate_field ! good old legacy left handed coordinates
-  
-  ! Rs - radius of outer source surface where field is taken to be radial
-  ! Ro - radius of inner boundary for the potential field
-  ! H  - height above measurements
-  
-  real, public :: Rs_PFSSM=2.5, Ro_PFSSM=1.0, H_PFSSM=0.0
+
+  real:: rSourceSurface=2.5, rMagnetogram=1.0, Height=0.0
 
   ! Units of the magnetic field in the file including corrections
-  ! relative to the magnetic units in the SC (Gauss)
+  ! relative to the magnetic units in the SC [Gauss]
   real, public :: UnitB=1.0, UnitBNew=1.0
-
-  ! Global arrays at the magnetogram grid
-  integer, parameter, public :: nDim=3, R_=1, Phi_=2, Theta_=3
-
-  ! Time to which the field in B_DN corresponds
-
-  real, public :: dR=1.0, dPhi=1.0, dSinTheta=1.0, dInv_D(nDim)=1.0
-  integer, public :: nThetaPerProc, nRExt=2
-  integer, public :: nR=29, nPhi=72, nTheta=29
 
   public :: read_magnetogram_file, read_new_magnetogram_file
 
   ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
-  ! the M(ap) from the file header. Assign PhiOffset=HLCMM-180
+  ! the M(ap) from the file header. Assign PhiOffset = LonCentral-180
   public :: get_hlcmm
-
-  ! Inefficient functions instead of arrays
-  public :: sin_latitude, r_latitude, colatitude, correct_angles
 
   ! Rotation angle around z-axis, in degrees,
   ! from the coordinate system of the component
@@ -71,7 +55,7 @@ module ModMagnetogram
 
   real:: NewPhiShift = -1.0
 
-  ! PFSSM related control parameters
+  ! spherical harmonics related control parameters
 
   ! Maximum order of spherical harmonics
   integer, parameter:: nHarmonicsMax=180 ! 90
@@ -79,22 +63,16 @@ module ModMagnetogram
   ! Weights of the spherical harmonics
   real, dimension(nHarmonicsMax+1,nHarmonicsMax+1):: g_II, h_II
 
-  integer:: N_PFSSM=nHarmonicsMax
+  integer:: nOrder = nHarmonicsMax
 
   ! Number of header lines in the file
-  integer:: iHead_PFSSM=12
+  integer:: nHeadLine=12
 
   ! Name of the input file
-  character (LEN=32):: File_PFSSM='mf.dat', NameNewFile = 'newmf.dat'
-
-  ! Name of output directory
-  character(len=32):: NameOutDir
+  character (LEN=32):: NameMagnetogram='mf.dat', NameMagnetogram2 = 'newmf.dat'
 
   integer, parameter:: MaxInt=100000
   real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
-
-  ! write prefix for magnetogram processing
-  character(len=*), parameter :: prefix=''
 
   ! Lookup table related variables
   real:: rMinB0=1.0, rMaxB0=30.0, dLonB0=0.0, FactorB0=1.0, RotB0_DD(3,3)
@@ -105,18 +83,18 @@ module ModMagnetogram
   end interface get_magnetogram_field
 
 contains
-  !===========================================================================
+  !============================================================================
   subroutine init_magnetogram_lookup_table(iComm)
 
     use ModNumConst, ONLY: cDegToRad
 
     integer, intent(in):: iComm
-    
+
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
     integer:: nR, nLon, nLat
-    !------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
 
     ! Read or create lookup table and get the longitude shift.
     ! Create the rotation matrix based on the shift
@@ -124,7 +102,7 @@ contains
     if(iTableB0 <= 0)then
        if(.not.UseMagnetogram) RETURN
        ! Set up a default B0 lookup table
-       nR = max(30, N_PFSSM); nLon = max(72, N_PFSSM); nLat=max(30, N_PFSSM)
+       nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
        call init_lookup_table( &
             NameTable   = 'B0',                    &
             NameCommand = 'use',                   &
@@ -134,7 +112,7 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],  &
             IndexMin_I  = [ 1.0,   0.0, -90.0],    &
             IndexMax_I  = [ 2.5, 360.0,  90.0],    &
-            StringDescription = 'Created from '//trim(File_PFSSM) )
+            StringDescription = 'Created from '//trim(NameMagnetogram) )
        iTableB0 = i_lookup_table('B0')
     end if
 
@@ -175,7 +153,7 @@ contains
     Phi   = Arg2*cDegToRad
     Theta = (90-Arg3)*cDegToRad
 
-    call get_pfss_field(r, Theta, Phi, Bsph_D)
+    call get_harmonics_field(r, Theta, Phi, Bsph_D)
 
     ! Convert to Cartesian
     XyzSph_DD = rot_xyz_sph(Theta, Phi)
@@ -185,10 +163,11 @@ contains
   end subroutine calc_b0_table
   !============================================================================
   subroutine get_magnetogram_field31(x, y, z, B0_D)
-    
+
     real, intent(in) ::  x, y, z
     real, intent(out):: B0_D(3)
-    !-------------------------------------------------------------------------
+
+    !--------------------------------------------------------------------------
     call  get_magnetogram_field11([ x, y, z ], B0_D)
 
   end subroutine get_magnetogram_field31
@@ -196,12 +175,12 @@ contains
   subroutine get_magnetogram_field11(Xyz_D, B0_D)
 
     ! Return B0_D [Tesla] field at position Xyz_D [Rs]
-    
+
     real, intent(in) :: Xyz_D(3)
     real, intent(out):: B0_D(3)
 
     real:: rLonLat_D(3), r
-    !-------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     ! Converting to rlonlat (radians)
     call xyz_to_rlonlat(Xyz_D, rLonLat_D)
 
@@ -215,7 +194,7 @@ contains
 
     ! Extrapolate for r < rMinB0
     r = rLonLat_D(1)
-       
+
     call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
          DoExtrapolate=(r<rMinB0) )
 
@@ -239,7 +218,7 @@ contains
     real, intent(out):: Brphitheta_D(3)
 
     real:: r, Phi, Theta, Lon, Lat, Bxyz_D(3), Bsph_D(3), XyzSph_DD(3,3)
-    !-------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     r     = rPhiTheta_D(1)
     Phi   = rPhiTheta_D(2)
     Theta = rPhiTheta_D(3)
@@ -264,81 +243,61 @@ contains
     Bxyz_D = Bxyz_D*FactorB0*1e-4
 
     ! Convert to spherical coordinates
-    XyzSph_DD = rot_xyz_sph(Theta, Phi)    
+    XyzSph_DD = rot_xyz_sph(Theta, Phi)
     Bsph_D = matmul(Bxyz_D, XyzSph_DD)
 
     ! Convert to left-handed spherical coordinates
     Brphitheta_D = [ Bsph_D(1), Bsph_D(3), Bsph_D(2) ]
-    
+
   end subroutine interpolate_field
   !============================================================================
-  real function sin_latitude(iTheta)
-    ! Uniform in sin(latitude) grid enumerated by index iTheta
-    ! iTheta varies from 0 to nTheta
-    ! dSinTheta = 2.0/(nTheta+1)
-    integer,intent(in)::iTheta
-    !--------------------------------------------------------------------------
-    sin_latitude=(real(iTheta)+0.5)*dSinTheta-1.0
-  end function sin_latitude
-  !============================================================================
-  real function r_latitude(iTheta)
-    integer,intent(in)::iTheta
-    !--------------------------------------------------------------------------
-    r_latitude=asin(sin_latitude(iTheta))
-  end function r_latitude
-  !============================================================================
-  real function colatitude(iTheta)
-    integer,intent(in)::iTheta
-    !--------------------------------------------------------------------------
-    colatitude=0.5*cPi-r_latitude(iTheta)
-  end function colatitude
-  
-  !============================================================================
-  subroutine get_hlcmm(Head_PFSSM,Shift)
+
+  subroutine get_hlcmm(StringHead, Shift)
 
     ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
     ! the M(ap) from the header line. Assign PhiOffset=HLCMM-180
 
-    character (LEN=80),intent(inout):: Head_PFSSM
-    real,intent(inout)::Shift
-    real::HLCMM     ! Heliographic Longitude of the central meridian of map
-    integer::iHLCMM ! The same, but HLCMM is integer at WSO magnetograms
-    integer::iErrorRead,iPosition
+    character (LEN=80),intent(inout):: StringHead
+    real, intent(inout):: Shift
+
+    real:: LonCentral     ! Heliographic Longitude of the central meridian
+    integer:: iLonCentral ! LonCentral is integer in WSO magnetograms
+    integer:: iErrorRead, iPosition
 
     !--------------------------------------------------------------------------
-    iPosition=index(Head_PFSSM,'Centered')
+    iPosition=index(StringHead,'Centered')
     if (iPosition>0 .and. Shift<0.0)then
-       Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
-            Head_PFSSM(iPosition+1:len(Head_PFSSM))
-       iPosition=index(Head_PFSSM,':')
-       Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
-            Head_PFSSM(iPosition+1:len(Head_PFSSM))
-       iPosition=index(Head_PFSSM,':')
-       Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
-            Head_PFSSM(iPosition+1:len(Head_PFSSM))
-       read(Head_PFSSM,'(i3)',iostat=iErrorRead)iHLCMM
+       StringHead(1:len(StringHead)-iPosition)=&
+            StringHead(iPosition+1:len(StringHead))
+       iPosition=index(StringHead,':')
+       StringHead(1:len(StringHead)-iPosition)=&
+            StringHead(iPosition+1:len(StringHead))
+       iPosition=index(StringHead,':')
+       StringHead(1:len(StringHead)-iPosition)=&
+            StringHead(iPosition+1:len(StringHead))
+       read(StringHead,'(i3)',iostat=iErrorRead)iLonCentral
        if(iErrorRead>0)call Con_stop(&
-            'Cannot find HLCMM, '//File_PFSSM//&
+            'Cannot find LonCentral, '//NameMagnetogram//&
             ' is not a true WSO magnetogram')
        ! Rotates based on magnetogram central meridian + HGR system
-       Shift = modulo(iHLCMM-180-dLongitudeHgrDeg, 360.0)
+       Shift = modulo(iLonCentral-180-dLongitudeHgrDeg, 360.0)
 
        RETURN
     end if
 
-    iPosition=index(Head_PFSSM,'Central')
+    iPosition=index(StringHead,'Central')
     if(iPosition>0 .and. Shift<0.0)then
-       Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
-            Head_PFSSM(iPosition+1:len(Head_PFSSM))
-       iPosition=index(Head_PFSSM,':')
-       Head_PFSSM(1:len(Head_PFSSM)-iPosition)=&
-            Head_PFSSM(iPosition+1:len(Head_PFSSM))
-       read(Head_PFSSM,*,iostat=iErrorRead)HLCMM
+       StringHead(1:len(StringHead)-iPosition)=&
+            StringHead(iPosition+1:len(StringHead))
+       iPosition=index(StringHead,':')
+       StringHead(1:len(StringHead)-iPosition)=&
+            StringHead(iPosition+1:len(StringHead))
+       read(StringHead,*,iostat=iErrorRead)LonCentral
        if(iErrorRead>0)call CON_stop(&
-            'Cannot find HLCMM, '//File_PFSSM//&
+            'Cannot find LonCentral, '//NameMagnetogram//&
             ' is not a true MDI magnetogram')
        ! Rotates based on magnetogram central meridian + HGR system
-       Shift=modulo(HLCMM-180-dLongitudeHgrDeg, 360.0)
+       Shift=modulo(LonCentral-180-dLongitudeHgrDeg, 360.0)
 
        RETURN
     end if
@@ -365,11 +324,11 @@ contains
     case("#MAGNETOGRAM")
        call read_var('UseMagnetogram', UseMagnetogram)
        if(UseMagnetogram)then
-          call read_var('rMagnetogram',        Ro_PFSSM)
-          call read_var('rSourceSurface',      Rs_PFSSM)
-          call read_var('HeightInnerBc',       H_PFSSM)
-          call read_var('NameMagnetogramFile', File_PFSSM)
-          call read_var('nHeaderLine',         iHead_PFSSM)
+          call read_var('rMagnetogram',        rMagnetogram)
+          call read_var('rSourceSurface',      rSourceSurface)
+          call read_var('HeightInnerBc',       Height)
+          call read_var('NameMagnetogramFile', NameMagnetogram)
+          call read_var('nHeaderLine',         nHeadLine)
           call read_var('PhiShift',            PhiOffset)
           call read_var('UnitB',               UnitB)
        end if
@@ -377,11 +336,11 @@ contains
     case("#NEWMAGNETOGRAM")
        call read_var('UseNewMagnetogram',   UseNewMagnetogram)
        if(UseNewMagnetogram)then
-          call read_var('rMagnetogram',     Ro_PFSSM)
-          call read_var('rSourceSurface',   Rs_PFSSM)
-          call read_var('HeightInnerBc',    H_PFSSM)
-          call read_var('NameNewFile',      NameNewFile)
-          call read_var('nHeaderLine',      iHead_PFSSM)
+          call read_var('rMagnetogram',     rMagnetogram)
+          call read_var('rSourceSurface',   rSourceSurface)
+          call read_var('HeightInnerBc',    Height)
+          call read_var('NameMagnetogram2',      NameMagnetogram2)
+          call read_var('nHeaderLine',      nHeadLine)
           call read_var('NewPhiShift',      NewPhiShift)
           call read_var('UnitB',            UnitB)
        end if
@@ -393,104 +352,86 @@ contains
   end subroutine read_magnetogram_param
   !============================================================================
 
-  subroutine read_magnetogram_file(NamePlotDir, iProcIn, nProcIn, iCommIn)
-    character(len=*),intent(in) :: NamePlotDir
-    integer,intent(in)          :: iProcIn, nProcIn, iCommIn
-
+  subroutine read_magnetogram_file
     !--------------------------------------------------------------------------
-    if (iProcIn==0) then
-       write(*,*) prefix, 'nOrder = ',N_PFSSM
-       write(*,*) prefix, 'Coefficient file name : ',File_PFSSM
-       write(*,*) prefix, 'Number of header lines: ',iHead_PFSSM
-    endif
     ! Initialize once g(n+1,m+1) & h(n+1,m+1) by reading a file
     ! created from Web data::
-    NameOutDir = NamePlotDir
 
     call read_harmonics
-    call set_sqrt_arrays(N_PFSSM)
+    call set_sqrt_arrays
 
   end subroutine read_magnetogram_file
   !============================================================================
-  subroutine read_new_magnetogram_file(NamePlotDir, iProcIn, nProcIn, iCommIn)
+  subroutine read_new_magnetogram_file
 
-    character(len=*),intent(in) :: NamePlotDir
-    integer, intent(in):: iProcIn, nProcIn, iCommIn
     character(LEN=32):: NameOldFile
     real:: OldPhiShift
+
     !--------------------------------------------------------------------------
-    NameOldFile = File_PFSSM
-    File_PFSSM = NameNewFile
+    NameOldFile = NameMagnetogram
+    NameMagnetogram = NameMagnetogram2
     OldPhiShift = PhiOffset
     PhiOffset = NewPhiShift
-    call read_magnetogram_file(&
-         NamePlotDir=NamePlotDir//'New',&
-         iProcIn=iProcIn               ,&
-         nProcIn=nProcIn               ,&
-         iCommIn=iCommIn)
-
+    call read_magnetogram_file
 
     PhiOffset = OldPhiShift
-    File_PFSSM = NameOldFile
+    NameMagnetogram = NameOldFile
 
   end subroutine read_new_magnetogram_file
   !============================================================================
 
   subroutine read_harmonics
 
-    integer :: iUnit,nOrderIn,iPosition,iPosition1,n,m,i,iError
-    character (LEN=80):: Head_PFSSM=''
-    real::gtemp,htemp,Coef1,Coef
-    ! Formats adjusted for wso CR rad coeffs::
+    ! Formats adjusted for wso CR rad coeffs
+
+    integer :: iUnit, nOrderIn, iPosition, iPosition1, n, m, i, iError
+    character (LEN=80):: StringHead=''
+    real:: gTemp, hTemp, Coef1, Coef
     !--------------------------------------------------------------------------
     iUnit = io_unit_new()
-    open(iUnit,file=File_PFSSM,status='old',iostat=iError)
-    if(iError>0)call CON_stop('Cannot open '//File_PFSSM)
-    if (iHead_PFSSM /= 0) then
-       do i=1,iHead_PFSSM
-          read(iUnit,'(a)') Head_PFSSM
-          iPosition=index(Head_PFSSM,'rder')
+    open(iUnit,file=NameMagnetogram,status='old',iostat=iError)
+    if(iError>0)call CON_stop('Cannot open '//NameMagnetogram)
+    if (nHeadLine /= 0) then
+       do i=1,nHeadLine
+          read(iUnit,'(a)') StringHead
+          iPosition=index(StringHead,'rder')
           iPosition1=0
           if(iPosition>0)&
                iPosition1=max(&
-               index(Head_PFSSM(iPosition+4:iPosition+9),'='),&
-               index(Head_PFSSM(iPosition+4:iPosition+9),':'))
+               index(StringHead(iPosition+4:iPosition+9),'='),&
+               index(StringHead(iPosition+4:iPosition+9),':'))
           if(iPosition1>0)then
-             read(Head_PFSSM(iPosition+4+iPosition1:len(Head_PFSSM)),&
-                  '(i3)',iostat=iError)nOrderIn
+             read(StringHead(iPosition+4+iPosition1:len(StringHead)),&
+                  '(i3)',iostat=iError) nOrderIn
              if(iError>0)call CON_stop('Cannot figure out nOrder')
-             if(nOrderIn<N_PFSSM) N_PFSSM=nOrderIn
+             if(nOrderIn<nOrder) nOrder=nOrderIn
 
           end if
-          call get_hlcmm(Head_PFSSM,PhiOffset)
+          call get_hlcmm(StringHead, PhiOffset)
        enddo
        if(PhiOffset<0.0)call CON_stop(&
             'Did not find central meridian longitude')
     endif
-    nR=max(nR,N_PFSSM)
-    nPhi=max(nPhi,N_PFSSM)
-    nTheta=max(nTheta,N_PFSSM)
-    nRExt=min(10,1+floor(real(nR)*(0.1*Ro_PFSSM)/(Rs_PFSSM-Ro_PFSSM)))
 
     ! Initialize all coefficient arrays::
     g_II = 0.0; h_II = 0.0
     ! Read file with coefficients, g_II and h_II::
     do
-       read(iUnit,*,iostat=iError) n,m,gtemp,htemp
+       read(iUnit,*,iostat=iError) n, m, gTemp, hTemp
        if (iError /= 0) EXIT
-       if (n > N_PFSSM .or. m > N_PFSSM) CYCLE
-       g_II(n+1,m+1) = gtemp
-       h_II(n+1,m+1) = htemp
+       if (n > nOrder .or. m > nOrder) CYCLE
+       g_II(n+1,m+1) = gTemp
+       h_II(n+1,m+1) = hTemp
     enddo
     close(iUnit)
     ! Add correction factor for radial, not LOS, coefficients::
     ! Note old "coefficients" file are LOS, all new coeffs and
     ! files are radial)
-    Coef=Rs_PFSSM
-    do n=0,N_PFSSM
-       Coef=Coef/Rs_PFSSM**2
+    Coef=rSourceSurface
+    do n=0,nOrder
+       Coef=Coef/rSourceSurface**2
        Coef1 = 1.0/(real(n+1)+real(n)*Coef)
-       !       Coef1 = 1.0/real(n+1+(n/(Rs_PFSSM**(2*n+1))))
+       !       Coef1 = 1.0/real(n+1+(n/(rSourceSurface**(2*n+1))))
        g_II(n+1,1:n+1) = g_II(n+1,1:n+1)*Coef1
        h_II(n+1,1:n+1) = h_II(n+1,1:n+1)*Coef1
     enddo
@@ -498,25 +439,23 @@ contains
     g_II(1,1) = 0.0
 
   end subroutine read_harmonics
+  !============================================================================
 
-  !==========================================================================
-  subroutine set_sqrt_arrays(nOrder)
+  subroutine set_sqrt_arrays
 
-    integer, intent(in):: nOrder
-    
     ! Calculate square roots and their ratios used in the spherical harmonics
     ! functions up to order nOrder for speeding up the calculations
 
     integer:: m
-    !------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     if(allocated(Sqrt_I)) RETURN
-    
+
     allocate(Sqrt_I(MaxInt), SqrtRatio_I(nOrder+1))
 
     do m = 1, MaxInt
        Sqrt_I(m) = sqrt(real(m))
     end do
-    
+
     ! Calculate the ratio sqrt(2m!)/(2^m*m!) recursively
     SqrtRatio_I(1) = 1.0
     do m = 1, nOrder
@@ -524,15 +463,15 @@ contains
     enddo
 
   end subroutine set_sqrt_arrays
-
   !============================================================================
-  subroutine get_pfss_field(r, Theta, Phi, Bsph_D)
-    
+
+  subroutine get_harmonics_field(r, Theta, Phi, Bsph_D)
+
     ! Calculate the harmonics based potential field Bsph_D at r, Theta, Phi
 
     real, intent(in):: r, Theta, Phi ! r in Rs, Theta and Phi in radians
     real, intent(out):: Bsph_D(3)    ! Bsph_D with r, Theta, Phi components
-    
+
     integer:: n, m
     real:: CosTheta, SinTheta
 
@@ -549,23 +488,23 @@ contains
     real, save, allocatable:: rRsPower_I(:), RoRsPower_I(:), RoRPower_I(:)
 
     real:: Coef1, Coef2, Coef3, Coef4
-    !--------------------------------------------------------------------
+    !--------------------------------------------------------------------------
 
     ! Calculate the radial part of spherical functions
-    call calc_radial_functions(r, N_PFSSM)
+    call calc_radial_functions(r)
 
     ! Calculate the set of Legendre polynoms for given Theta
     CosTheta = cos(Theta)
     SinTheta = max(sin(Theta), 1E-10)
-    call calc_legendre_polynomial(SinTheta, CosTheta, N_PFSSM)
+    call calc_legendre_polynomial(SinTheta, CosTheta)
 
-    call calc_azimuthal_functions(Phi, N_PFSSM)
+    call calc_azimuthal_functions(Phi)
 
     ! Initialize the values for the sums
     SumR = 0.0; SumT = 0.0; SumP = 0.0
 
     ! Calculate B from spherical harmonics
-    do m = 0, N_PFSSM; do n = m, N_PFSSM
+    do m = 0, nOrder; do n = m, nOrder
 
        Coef1 = (n+1)*RoRPower_I(n+2) + RoRsPower_I(n+2)*n*rRsPower_I(n-1)
        Coef3 =       RoRPower_I(n+2) - RoRsPower_I(n+2)*rRsPower_I(n-1)
@@ -591,21 +530,21 @@ contains
   contains
     !==========================================================================
 
-    subroutine calc_legendre_polynomial(SinTheta, CosTheta, nOrder)
+    subroutine calc_legendre_polynomial(SinTheta, CosTheta)
 
       ! Calculate Legendre polynomials p_II and its derivative Dp_II
       ! with appropriate normalization for Theta
 
       real, intent(in):: SinTheta, CosTheta
-      integer, intent(in):: nOrder
 
       real:: SinThetaM, SinThetaM1  ! sin(Theta)^m, sin(Theta)^(m-1)
       integer:: m
 
       integer:: nOrderOld = -10
       real:: SinThetaOld = -10.0, CosThetaOld = -10.0
-      !------------------------------------------------------------------------
+
       ! Cache previous values
+      !------------------------------------------------------------------------
       if(nOrder == nOrderOld .and. SinTheta == SinThetaOld &
            .and. CosTheta == CosThetaOld) RETURN
 
@@ -618,7 +557,7 @@ contains
       SinThetaM1 = 1.0
       p_II  = 0.0
       Dp_II = 0.0
-      
+
       do m = 0, nOrder
          if (m == 0) then
             Coef1 = Sqrt_I(2*m+1)
@@ -651,12 +590,12 @@ contains
 
          p_II(n+1,m+1) = Coef1*(Coef2*CosTheta*p_II(n,m+1)  &
               - Coef3*p_II(n-1,m+1))
-         
+
          ! Eq.(32) from Altschuler et al. 1976::
          Dp_II(n+1,m+1) = Coef1*(Coef2*(CosTheta*Dp_II(n,m+1) &
               - SinTheta*p_II(n,m+1)) - Coef3*Dp_II(n-1,m+1))
       enddo; enddo
-      
+
       ! Apply Schmidt normalization
       do m = 0, nOrder; do n = m, nOrder
          ! Eq.(33) from Altschuler et al. 1976::
@@ -667,12 +606,11 @@ contains
       enddo; enddo
 
     end subroutine calc_legendre_polynomial
-
     !==========================================================================
-    subroutine calc_radial_functions(r, nOrder)
+
+    subroutine calc_radial_functions(r)
 
       real,    intent(in):: r
-      integer, intent(in):: nOrder
 
       ! Calculate powers of the ratios of radii up to nOrder
 
@@ -681,23 +619,23 @@ contains
 
       integer:: nOrderOld = -10
       real::    rOld = -10.0
-      !------------------------------------------------------------------------
 
+      !------------------------------------------------------------------------
       if(nOrderOld == nOrder .and. rOld == r) RETURN
 
       if(nOrderOld /= nOrder .and. allocated(rRsPower_I)) &
            deallocate(rRsPower_I, RoRsPower_I, RoRPower_I)
 
       nOrderOld = nOrder; rOld = r
-      
+
       if(.not.allocated(rRsPower_I)) allocate( &
            rRsPower_I(-1:nOrder+2), &
            RoRsPower_I(0:nOrder+2), &
            RoRPower_I(0:nOrder+2))
 
-      RoRs = Ro_PFSSM/Rs_PFSSM
-      RoR  = Ro_PFSSM/r
-      rRs  = r/Rs_PFSSM
+      RoRs = rMagnetogram/rSourceSurface
+      RoR  = rMagnetogram/r
+      rRs  = r/rSourceSurface
 
       ! Zero and -1 powers
       rRsPower_I(-1) = 1.0/rRs
@@ -714,18 +652,18 @@ contains
 
     end subroutine calc_radial_functions
     !==========================================================================
-    subroutine calc_azimuthal_functions(Phi, nOrder)
+    subroutine calc_azimuthal_functions(Phi)
 
       ! Calculate azimuthal harmonics for given Phi
 
       real,    intent(in):: Phi
-      integer, intent(in):: nOrder
-      
+
       integer:: m
       real   :: SinPhi, CosPhi
-      
+
       integer:: nOrderOld = -10
       real   :: PhiOld    = -10.0
+
       !------------------------------------------------------------------------
       if(nOrderOld == nOrder .and. Phiold == Phi) RETURN
 
@@ -748,26 +686,9 @@ contains
       end do
 
     end subroutine calc_azimuthal_functions
-  end subroutine get_pfss_field
+    !==========================================================================
+  end subroutine get_harmonics_field
   !============================================================================
 
-  subroutine correct_angles(TR_D)
-    ! This subroutine corrects the angles Phi and Theta after every
-    ! step of the field-alligned integration
-
-    real,dimension(nDim),intent(inout) :: TR_D
-    !--------------------------------------------------------------------------
-    if(TR_D(Theta_) < 0.0)then
-       TR_D(Theta_) = -TR_D(Theta_)
-       TR_D(Phi_)=TR_D(Phi_)+cPi
-    end if
-    if(TR_D(Theta_) > cPi)then
-       TR_D(Theta_)=cTwoPi-TR_D(Theta_)
-       TR_D(Phi_)=TR_D(Phi_)+cPi
-    end if
-    TR_D(Phi_)=modulo(TR_D(Phi_),cTwoPi)
-
-  end subroutine correct_angles
-  !============================================================================
 end module ModMagnetogram
 !==============================================================================
