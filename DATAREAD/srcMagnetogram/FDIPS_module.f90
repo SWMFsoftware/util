@@ -647,7 +647,7 @@ contains
                StringHeaderIn = &
                'Radius [Rs] Longitude [Deg] Latitude [Deg] B [G]', &
                nameVarIn = 'Radius Longitude Latitude Br Blon Blat' &
-               //' Ro_PFSSM Rs_PFSSM LongCR CR', &
+               //' rMin rMax LongCR CR', &
                ParamIn_I = [ rMin, rMax, LongCR, CarRot ], &
                nDimIn=3, VarIn_VIII=bAll_DG, &
                Coord1In_I=RadiusNode_I, &
@@ -766,7 +766,7 @@ contains
     if(DoSaveTecplot)then
        open(unit = UnitTmp_, file=NameFileTecplot, status='replace')
 
-       write (UnitTmp_, '(a)') 'Title = "'     // 'PFSSM' // '"'
+       write (UnitTmp_, '(a)') 'Title = "'     // 'FDIPS' // '"'
        write (UnitTmp_, '(a)') &
             'Variables = ' // trim ('"X [Rs]", "Y [Rs]", "Z [Rs]","Bx [G]",'// &
             ' "By [G]", "Bz [G]"')
