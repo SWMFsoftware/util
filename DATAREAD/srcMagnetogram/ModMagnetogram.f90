@@ -19,7 +19,8 @@ module ModMagnetogram
 
   logical, public :: UseMagnetogram=.false., UseNewMagnetogram = .false.
 
-  integer, public:: iTableB0 = -1 ! index of B0 lookup table
+  integer, public:: iTableB0    = -1 ! index of B0 lookup table
+  integer, public:: iTableB0New = -1 ! index of new B0 lookup table
 
   public :: read_magnetogram_param ! read parameters
 
@@ -37,9 +38,8 @@ module ModMagnetogram
 
   public :: read_magnetogram_file, read_new_magnetogram_file
 
-  ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
-  ! the M(ap) from the file header. Assign PhiOffset = LonCentral-180
-  public :: get_hlcmm
+  ! Local variables -------------
+
 
   ! Rotation angle around z-axis, in degrees,
   ! from the coordinate system of the component
@@ -49,34 +49,46 @@ module ModMagnetogram
   ! H(eliographic) L(ongitude) of C(entral) M(eridian)
   ! of the M(ap) minus 180 Deg, if in the input file
   ! PhiOffset is negative.
-  real, public :: PhiOffset=-1.0
-
-  ! Local variables -------------
+  real :: PhiOffset=-1.0
 
   real:: NewPhiShift = -1.0
 
-  ! spherical harmonics related control parameters
+  ! spherical harmonics related variables
 
   ! Maximum order of spherical harmonics
-  integer, parameter:: nHarmonicsMax=180 ! 90
+  integer:: nOrder = 30
 
   ! Weights of the spherical harmonics
-  real, dimension(nHarmonicsMax+1,nHarmonicsMax+1):: g_II, h_II
+  real, allocatable:: g_II(:,:), h_II(:,:)
 
-  integer:: nOrder = nHarmonicsMax
+  ! Powers of radius ratios
+  real, allocatable:: rRsPower_I(:), RoRsPower_I(:), RoRPower_I(:)
 
+  ! Legendre polynomials and its derivative
+  real, allocatable:: p_II(:,:), Dp_II(:,:)
+  
+  ! Azimuthal functions sin(m*phi) and cos(m*phi)
+  real, allocatable:: SinPhi_I(:), CosPhi_I(:)
+
+  ! Square roots of integers in spherical harmonics
+  real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
+
+  ! Harmonics files
+  
   ! Number of header lines in the file
   integer:: nHeadLine=12
 
   ! Name of the input file
-  character (LEN=32):: NameMagnetogram='mf.dat', NameMagnetogram2 = 'newmf.dat'
-
-  integer, parameter:: MaxInt=100000
-  real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
+  character(len=100):: &
+       NameMagnetogram    = '???', &
+       NameMagnetogramNew = '???'
 
   ! Lookup table related variables
-  real:: rMinB0=1.0, rMaxB0=30.0, dLonB0=0.0, FactorB0=1.0, RotB0_DD(3,3)
-  real:: LonMinB0 = 0.0
+  real:: rMinB0=1.0, rMaxB0=30.0 ! radial limits of table
+  real:: LonMinB0 = 0.0 ! starting longitude in the table
+  real:: dLonB0=0.0     ! longitude shift
+  real:: RotB0_DD(3,3)  ! rotation matrix due to longitude shift
+  real:: FactorB0=1.0   ! multiplier for the magnetic field
 
   interface get_magnetogram_field
      module procedure get_magnetogram_field11, get_magnetogram_field31
@@ -110,12 +122,27 @@ contains
             NameFile    = 'harmonics_bxyz.out',    &
             TypeFile    = 'real4',                 &
             nIndex_I    = [nR+1, nLon+1, nLat+1],  &
-            IndexMin_I  = [ 1.0,   0.0, -90.0],    &
-            IndexMax_I  = [ 2.5, 360.0,  90.0],    &
+            IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
+            IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
             StringDescription = 'Created from '//trim(NameMagnetogram) )
        iTableB0 = i_lookup_table('B0')
     end if
 
+    if(iTableB0New <= 0 .and. UseNewMagnetogram)then
+       nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
+       call init_lookup_table( &
+            NameTable   = 'B0New',                 &
+            NameCommand = 'use',                   &
+            NameVar     = 'r lon lat bx by bz',    &
+            NameFile    = 'harmonics_new_bxyz.out',&
+            TypeFile    = 'real4',                 &
+            nIndex_I    = [nR+1, nLon+1, nLat+1],  &
+            IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
+            IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
+            StringDescription = 'Created from '//trim(NameMagnetogramNew) )
+       iTableB0 = i_lookup_table('B0')
+    end if
+    
     ! If lookup table is not loaded, make it (and save it)
     call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
@@ -339,7 +366,7 @@ contains
           call read_var('rMagnetogram',     rMagnetogram)
           call read_var('rSourceSurface',   rSourceSurface)
           call read_var('HeightInnerBc',    Height)
-          call read_var('NameMagnetogram2',      NameMagnetogram2)
+          call read_var('NameMagnetogramNew', NameMagnetogramNew)
           call read_var('nHeaderLine',      nHeadLine)
           call read_var('NewPhiShift',      NewPhiShift)
           call read_var('UnitB',            UnitB)
@@ -358,7 +385,6 @@ contains
     ! created from Web data::
 
     call read_harmonics
-    call set_sqrt_arrays
 
   end subroutine read_magnetogram_file
   !============================================================================
@@ -369,7 +395,7 @@ contains
 
     !--------------------------------------------------------------------------
     NameOldFile = NameMagnetogram
-    NameMagnetogram = NameMagnetogram2
+    NameMagnetogram = NameMagnetogramNew
     OldPhiShift = PhiOffset
     PhiOffset = NewPhiShift
     call read_magnetogram_file
@@ -391,6 +417,10 @@ contains
     iUnit = io_unit_new()
     open(iUnit,file=NameMagnetogram,status='old',iostat=iError)
     if(iError>0)call CON_stop('Cannot open '//NameMagnetogram)
+
+    write(*,*)'!!! nHeadLine=', nHeadLine
+
+    ! Get nOrder
     if (nHeadLine /= 0) then
        do i=1,nHeadLine
           read(iUnit,'(a)') StringHead
@@ -413,8 +443,10 @@ contains
             'Did not find central meridian longitude')
     endif
 
-    ! Initialize all coefficient arrays::
-    g_II = 0.0; h_II = 0.0
+    write(*,*)'!!! nOrder=', nOrder
+    
+    call allocate_harmonics_arrays
+    
     ! Read file with coefficients, g_II and h_II::
     do
        read(iUnit,*,iostat=iError) n, m, gTemp, hTemp
@@ -441,15 +473,30 @@ contains
   end subroutine read_harmonics
   !============================================================================
 
-  subroutine set_sqrt_arrays
+  subroutine allocate_harmonics_arrays
 
     ! Calculate square roots and their ratios used in the spherical harmonics
     ! functions up to order nOrder for speeding up the calculations
 
-    integer:: m
+    integer:: m, MaxInt
     !--------------------------------------------------------------------------
-    if(allocated(Sqrt_I)) RETURN
+    if(allocated(g_II)) RETURN
 
+    ! Spherical harmonics coefficients
+    allocate(g_II(nOrder+1,nOrder+1), h_II(nOrder+1,nOrder+1))
+    g_II = 0.0; h_II = 0.0
+
+    ! radial functions
+    allocate(rRsPower_I(-1:nOrder+2), &
+         RoRsPower_I(0:nOrder+2), RoRPower_I(0:nOrder+2))
+
+    ! Legendre polynomlials
+    allocate(p_II(nOrder+1,nOrder+1), Dp_II(nOrder+1,nOrder+1))
+
+    ! Azimuthal functions
+    allocate(SinPhi_I(0:nOrder), CosPhi_I(0:nOrder))
+
+    MaxInt = max(nOrder**2, 5*nOrder, 10)
     allocate(Sqrt_I(MaxInt), SqrtRatio_I(nOrder+1))
 
     do m = 1, MaxInt
@@ -462,9 +509,19 @@ contains
        SqrtRatio_I(m+1) = SqrtRatio_I(m)*Sqrt_I(2*m-1)/Sqrt_I(2*m)
     enddo
 
-  end subroutine set_sqrt_arrays
+  end subroutine allocate_harmonics_arrays
   !============================================================================
+  subroutine deallocate_harmonics_arrays
+    if(.not.allocated(g_II)) RETURN
 
+    deallocate(g_II, h_II, Sqrt_I, SqrtRatio_I, &
+         rRsPower_I, RoRsPower_I, RoRPower_I, &
+         SinPhi_I, CosPhi_I)
+
+
+    
+  end subroutine deallocate_harmonics_arrays
+  !============================================================================
   subroutine get_harmonics_field(r, Theta, Phi, Bsph_D)
 
     ! Calculate the harmonics based potential field Bsph_D at r, Theta, Phi
@@ -475,17 +532,8 @@ contains
     integer:: n, m
     real:: CosTheta, SinTheta
 
-    ! Azimuthal functions sin(m*phi) and cos(m*phi)
-    real, allocatable, save:: SinPhi_I(:), CosPhi_I(:)
-
     ! The spherical components of the magnetic field
     real:: SumR, SumT, SumP
-
-    ! Legendre polynomials and its derivative
-    real, save, allocatable:: p_II(:,:), Dp_II(:,:)
-
-    ! Powers of radius ratios
-    real, save, allocatable:: rRsPower_I(:), RoRsPower_I(:), RoRPower_I(:)
 
     real:: Coef1, Coef2, Coef3, Coef4
     !--------------------------------------------------------------------------
@@ -549,7 +597,6 @@ contains
            .and. CosTheta == CosThetaOld) RETURN
 
       if(.not.allocated(p_II)) &
-           allocate(p_II(nOrder+1,nOrder+1), Dp_II(nOrder+1,nOrder+1))
 
       nOrderOld = nOrder; SinThetaOld = SinTheta; CosThetaOld = CosTheta
 
@@ -623,15 +670,7 @@ contains
       !------------------------------------------------------------------------
       if(nOrderOld == nOrder .and. rOld == r) RETURN
 
-      if(nOrderOld /= nOrder .and. allocated(rRsPower_I)) &
-           deallocate(rRsPower_I, RoRsPower_I, RoRPower_I)
-
       nOrderOld = nOrder; rOld = r
-
-      if(.not.allocated(rRsPower_I)) allocate( &
-           rRsPower_I(-1:nOrder+2), &
-           RoRsPower_I(0:nOrder+2), &
-           RoRPower_I(0:nOrder+2))
 
       RoRs = rMagnetogram/rSourceSurface
       RoR  = rMagnetogram/r
@@ -666,12 +705,6 @@ contains
 
       !------------------------------------------------------------------------
       if(nOrderOld == nOrder .and. Phiold == Phi) RETURN
-
-      if(nOrderOld /= nOrder .and. allocated(SinPhi_I)) &
-           deallocate(SinPhi_I, CosPhi_I)
-
-      if(.not.allocated(SinPhi_I)) &
-           allocate(SinPhi_I(0:nOrder), CosPhi_I(0:nOrder))
 
       SinPhi_I(0) = 0.0
       CosPhi_I(0) = 1.0
