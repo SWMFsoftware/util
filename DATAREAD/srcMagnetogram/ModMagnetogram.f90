@@ -16,12 +16,10 @@ module ModMagnetogram
 
   private
 
-  logical, public :: UseMagnetogram=.false., UseNewMagnetogram = .false.
-
   integer, public:: iTableB0    = -1 ! index of B0 lookup table
   integer, public:: iTableB0New = -1 ! index of new B0 lookup table
 
-  public :: read_magnetogram_param ! read parameters
+  public:: read_magnetogram_param ! read parameters
 
   public:: init_magnetogram_lookup_table ! initialize lookup table
 
@@ -29,31 +27,19 @@ module ModMagnetogram
 
   public:: interpolate_field ! good old legacy left handed coordinates
 
-  real:: rSourceSurface=2.5, rMagnetogram=1.0, Height=0.0
-
-  ! Units of the magnetic field in the file including corrections
-  ! relative to the magnetic units in the SC [Gauss]
-  real, public :: UnitB=1.0, UnitBNew=1.0
-
-  public :: read_magnetogram_file, read_new_magnetogram_file
-
   ! Local variables -------------
 
-  real:: CarringtonRot
+  ! Carrington rotation of the magnetogram(s) for temporal interpolation
+  real:: CarringtonRot, CarringtonRotNew
 
-  ! Rotation angle around z-axis, in degrees,
-  ! from the coordinate system of the component
-  ! towards the coordinate system of the magnetic
-  ! map in the positive direction - hence, is positive.
-  ! Is set automatically to be equal to the
-  ! H(eliographic) L(ongitude) of C(entral) M(eridian)
-  ! of the M(ap) minus 180 Deg, if in the input file
-  ! PhiOffset is negative.
-  real :: PhiOffset=-1.0
+  ! radius of magnetogram and source surface for spatial extrapolation
+  real:: rMagnetogram=1.0, rSourceSurface=2.5 
 
-  real:: NewPhiShift = -1.0
+  ! True if new harmonics coefficients are to be read
+  logical:: DoReadHarmonics = .false., DoReadHarmonicsNew = .false.
 
-  ! spherical harmonics related variables
+  ! Name of the harmonics files
+  character(len=100):: NameHarmonicsFile = '???', NameHarmonicsFileNew = '???'
 
   ! Maximum order of spherical harmonics
   integer:: nOrder = 30
@@ -72,16 +58,6 @@ module ModMagnetogram
 
   ! Square roots of integers in spherical harmonics
   real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
-
-  ! Harmonics files
-
-  ! Number of header lines in the file
-  integer:: nHeadLine=12
-
-  ! Name of the input file
-  character(len=100):: &
-       NameMagnetogram    = '???', &
-       NameMagnetogramNew = '???'
 
   ! Lookup table related variables
   real:: rMinB0=1.0, rMaxB0=30.0 ! radial limits of table
@@ -107,44 +83,39 @@ contains
     logical:: IsLogIndex_I(3)
     integer:: nR, nLon, nLat
     !--------------------------------------------------------------------------
+    ! Make sure these are set
+    iTableB0    = i_lookup_table('B0')
+    iTableB0New = i_lookup_table('B0NEW')
 
-    ! Read or create lookup table and get the longitude shift.
-    ! Create the rotation matrix based on the shift
-    iTableB0 = i_lookup_table('B0')
-    if(iTableB0 <= 0)then
-       if(.not.UseMagnetogram) RETURN
-       ! Set up a default B0 lookup table
-       nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
-       call init_lookup_table( &
-            NameTable   = 'B0',                    &
-            NameCommand = 'use',                   &
-            NameVar     = 'r lon lat bx by bz',    &
-            NameFile    = 'harmonics_bxyz.out',    &
-            TypeFile    = 'real4',                 &
-            nIndex_I    = [nR+1, nLon+1, nLat+1],  &
-            IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
-            IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
-            StringDescription = 'Created from '//trim(NameMagnetogram) )
-       iTableB0 = i_lookup_table('B0')
+    ! Nothing to do if there is no B0 table
+    if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
+    
+    if(DoReadHarmonics)then
+       ! Read harmonics coefficient, nOrder and set carrington rotation info
+       call read_harmonics_file(NameHarmonicsFile, CarringtonRot)
+       DoReadHarmonics = .false.
+
+       ! Create default size lookup table if not specified in PARAM.in
+       if(iTableB0 <= 0)then
+
+          ! Set up a default B0 lookup table
+          nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
+          call init_lookup_table( &
+               NameTable   = 'B0',                    &
+               NameCommand = 'use',                   &
+               NameVar     = 'r lon lat bx by bz',    &
+               NameFile    = 'harmonics_bxyz.out',    &
+               TypeFile    = 'real4',                 &
+               nIndex_I    = [nR+1, nLon+1, nLat+1],  &
+               IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
+               IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
+               StringDescription = 'Created from '//trim(NameHarmonicsFile) )
+          iTableB0 = i_lookup_table('B0')
+       end if
+       ! If lookup table is not loaded, make it and save it
+       call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
+
     end if
-
-    if(iTableB0New <= 0 .and. UseNewMagnetogram)then
-       nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
-       call init_lookup_table( &
-            NameTable   = 'B0New',                 &
-            NameCommand = 'use',                   &
-            NameVar     = 'r lon lat bx by bz',    &
-            NameFile    = 'harmonics_new_bxyz.out',&
-            TypeFile    = 'real4',                 &
-            nIndex_I    = [nR+1, nLon+1, nLat+1],  &
-            IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
-            IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
-            StringDescription = 'Created from '//trim(NameMagnetogramNew) )
-       iTableB0New = i_lookup_table('B0')
-    end if
-
-    ! If lookup table is not loaded, make it (and save it)
-    call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
     ! Get coordinate limits
     call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
@@ -157,9 +128,37 @@ contains
        rMinB0 = IndexMin_I(1); rMaxB0 = IndexMax_I(1)
     end if
     LonMinB0 = IndexMin_I(2)*cDegToRad
+
+    ! Rotation matrix for longitude shift if needed
     if(nParam > 2) then
        dLonB0 = (Param_I(3) - dLongitudeHgrDeg)*cDegToRad
        RotB0_DD = rot_matrix_z(dLonB0)
+    end if
+
+    ! Second lookup table
+
+    if(DoReadHarmonicsNew)then
+       ! Read harmonics coefficients and set Carrington rotation info
+       call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew)
+       DoReadHarmonicsNew = .false.
+
+       ! Set up default sized lookup table if not defeined in PARAM.in
+       if(iTableB0New < 0)then
+          nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
+          call init_lookup_table( &
+               NameTable   = 'B0New',                 &
+               NameCommand = 'use',                   &
+               NameVar     = 'r lon lat bx by bz',    &
+               NameFile    = 'harmonics_new_bxyz.out',&
+               TypeFile    = 'real4',                 &
+               nIndex_I    = [nR+1, nLon+1, nLat+1],  &
+               IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
+               IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
+               StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
+          iTableB0New = i_lookup_table('B0')
+       end if
+       ! Make second lookup table
+       call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
     end if
 
   end subroutine init_magnetogram_lookup_table
@@ -279,63 +278,6 @@ contains
   end subroutine interpolate_field
   !============================================================================
 
-  subroutine get_hlcmm(StringHead, Shift)
-
-    ! Read H(eliographic) L(ongitude) of the C(entral) M(eridian) of
-    ! the M(ap) from the header line. Assign PhiOffset=HLCMM-180
-
-    character (LEN=80),intent(inout):: StringHead
-    real, intent(inout):: Shift
-
-    real:: LonCentral     ! Heliographic Longitude of the central meridian
-    integer:: iLonCentral ! LonCentral is integer in WSO magnetograms
-    integer:: iErrorRead, iPosition
-
-    !--------------------------------------------------------------------------
-    iPosition=index(StringHead,'Centered')
-    if (iPosition>0 .and. Shift<0.0)then
-       StringHead(1:len(StringHead)-iPosition)=&
-            StringHead(iPosition+1:len(StringHead))
-       iPosition=index(StringHead,':')
-       StringHead(1:len(StringHead)-iPosition)=&
-            StringHead(iPosition+1:len(StringHead))
-       iPosition=index(StringHead,':')
-       StringHead(1:len(StringHead)-iPosition)=&
-            StringHead(iPosition+1:len(StringHead))
-       read(StringHead,'(i3)',iostat=iErrorRead)iLonCentral
-       if(iErrorRead>0)call Con_stop(&
-            'Cannot find LonCentral, '//NameMagnetogram//&
-            ' is not a true WSO magnetogram')
-       ! Rotates based on magnetogram central meridian + HGR system
-       Shift = modulo(iLonCentral-180-dLongitudeHgrDeg, 360.0)
-
-       RETURN
-    end if
-
-    iPosition=index(StringHead,'Central')
-    if(iPosition>0 .and. Shift<0.0)then
-       StringHead(1:len(StringHead)-iPosition)=&
-            StringHead(iPosition+1:len(StringHead))
-       iPosition=index(StringHead,':')
-       StringHead(1:len(StringHead)-iPosition)=&
-            StringHead(iPosition+1:len(StringHead))
-       read(StringHead,*,iostat=iErrorRead)LonCentral
-       if(iErrorRead>0)call CON_stop(&
-            'Cannot find LonCentral, '//NameMagnetogram//&
-            ' is not a true MDI magnetogram')
-       ! Rotates based on magnetogram central meridian + HGR system
-       Shift=modulo(LonCentral-180-dLongitudeHgrDeg, 360.0)
-
-       RETURN
-    end if
-
-    ! Rotation of HGR system is applied
-    if (Shift == 0.) &
-       Shift = modulo(-dLongitudeHgrDeg, 360.0)
-
-  end subroutine get_hlcmm
-  !============================================================================
-
   subroutine read_magnetogram_param(NameCommand)
 
     use ModReadParam, ONLY: read_var
@@ -343,33 +285,31 @@ contains
     character(len=*), intent(in) :: NameCommand
 
     character(len=*), parameter:: NameSub = 'read_magnetogram_param'
+
+    real:: Height ! pointless variable
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#FACTORB0")
        call read_var("FactorB0", FactorB0)
 
-    case("#MAGNETOGRAM")
-       call read_var('UseMagnetogram', UseMagnetogram)
-       if(UseMagnetogram)then
+    case("#HARMONICSFILE")
+       DoReadHarmonics = .true.
+       call read_var('NameHarmonicsFile', NameHarmonicsFile)
+       call read_var('rMagnetogram',      rMagnetogram)
+       call read_var('rSourceSurface',    rSourceSurface)
+
+    case("#NEWHARMONICSFILE")
+       DoReadHarmonicsNew = .true.
+       call read_var('NameHarmonicsFileNew', NameHarmonicsFileNew)
+
+       
+    case("#MAGNETOGRAM") ! Kept For backward compatibility only
+       call read_var('UseMagnetogram', DoReadHarmonics)
+       if(DoReadHarmonics)then
           call read_var('rMagnetogram',        rMagnetogram)
           call read_var('rSourceSurface',      rSourceSurface)
           call read_var('HeightInnerBc',       Height)
-          call read_var('NameMagnetogramFile', NameMagnetogram)
-          call read_var('nHeaderLine',         nHeadLine)
-          call read_var('PhiShift',            PhiOffset)
-          call read_var('UnitB',               UnitB)
-       end if
-
-    case("#NEWMAGNETOGRAM")
-       call read_var('UseNewMagnetogram',   UseNewMagnetogram)
-       if(UseNewMagnetogram)then
-          call read_var('rMagnetogram',     rMagnetogram)
-          call read_var('rSourceSurface',   rSourceSurface)
-          call read_var('HeightInnerBc',    Height)
-          call read_var('NameMagnetogramNew', NameMagnetogramNew)
-          call read_var('nHeaderLine',      nHeadLine)
-          call read_var('NewPhiShift',      NewPhiShift)
-          call read_var('UnitB',            UnitB)
+          call read_var('NameMagnetogramFile', NameHarmonicsFile)
        end if
 
     case default
@@ -379,34 +319,19 @@ contains
   end subroutine read_magnetogram_param
   !============================================================================
 
-  subroutine read_magnetogram_file
-
-    !--------------------------------------------------------------------------
-    call read_harmonics_file(NameMagnetogram)
-
-  end subroutine read_magnetogram_file
-  !============================================================================
-
-  subroutine read_new_magnetogram_file
-
-    !--------------------------------------------------------------------------
-    call read_harmonics_file(NameMagnetogramNew)
-
-  end subroutine read_new_magnetogram_file
-  !============================================================================
-
-  subroutine read_harmonics_file(NameFile)
+  subroutine read_harmonics_file(NameFile, Carrington)
 
     use ModPlotFile, ONLY: read_plot_file
 
-    character(len=*), intent(in):: NameFile
+    character(len=*), intent(in) :: NameFile
+    real,             intent(out):: Carrington ! carrington rotation from file
 
     ! read properly formatted harmonics coefficient file
 
     integer:: nHarmonic ! number of harmonics = (nOrder+1)*(nOrder+2)/2
     integer:: nParam, nOrderIn, i, n, m
 
-    real:: Param_I(3), Coef, Coef1
+    real:: Param_I(3), Coef, Coef1, PhiOffset
     real, allocatable:: Var_VI(:,:), Coord_DII(:,:,:)
 
     character(len=*), parameter:: NameSub = 'read_harmonics_file'
@@ -418,10 +343,10 @@ contains
     if(nParam < 3) call CON_stop(NameSub// &
          ': not enough parameters in '//trim(NameFile))
 
-    nOrderIn      = nint(Param_I(1))
-    nOrder        = min(nOrder,nOrderIn)
-    CarringtonRot = Param_I(2)
-    PhiOffset     = Param_I(3)
+    nOrderIn   = nint(Param_I(1))
+    nOrder     = min(nOrder,nOrderIn)
+    Carrington = Param_I(2)
+    PhiOffset  = Param_I(3)
 
     if(nHarmonic /= (nOrderIn+1)*(nOrderIn+2)/2) call CON_stop(NameSub// &
          ': inconsistent n and nOrder in '//trim(NameFile))
