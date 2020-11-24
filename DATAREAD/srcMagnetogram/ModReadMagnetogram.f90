@@ -16,7 +16,7 @@ module ModReadMagnetogram
 
   real,    public, allocatable:: Br0_II(:,:) ! Final Magnetic field
   integer, public:: nThetaAll, nPhiAll    ! Size of remeshed grid for FDIPS
-  integer, public:: nTheta0, nPhi0        ! theta and phi passed to harmonics & fdips
+  integer, public:: nTheta0, nPhi0        ! size passed to harmonics & fdips
   integer, public:: nThetaorig, nPhiorig  ! original magnetogram theta and phi
   logical, public:: UseCosTheta = .true.  ! To check the latitude grid
   real,    public:: dPhi=1.0, dTheta=1.0, dSinTheta=1.0
@@ -28,7 +28,7 @@ module ModReadMagnetogram
   ! Carrington longitude of the left margin of the map
   ! ("leading longitude")
   real, public:: LongShift = 0.
-  real, public, allocatable:: Phi0_I(:), Lat0_I(:) ! Phi and Lat passed to Fdips
+  real, public, allocatable:: Phi0_I(:), Lat0_I(:) ! Phi, Lat passed to FDIPS
   ! Header
   character(len=500), public :: StringMagHeader
 
@@ -52,6 +52,7 @@ module ModReadMagnetogram
   logical :: IsFdips = .false.
 
 contains
+  !============================================================================
 
   subroutine read_magnetogram_param(NameCommand)
 
@@ -59,7 +60,7 @@ contains
 
     character(len=*), intent(in):: NameCommand
     character(len=*), parameter:: NameSub = 'read_magnetogram_param'
-    !-------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#MAGNETOGRAMFILE")
        call read_var('NameFileIn', NameFileIn)
@@ -67,7 +68,7 @@ contains
     case("#CHANGEPOLARFIELD")
        DoChangePolarField = .true.
        call read_var('PolarFactor',   PolarFactor)
-       call read_var('PolarExponent', PolarExponent) 
+       call read_var('PolarExponent', PolarExponent)
     case("#CHANGEWEAKFIELD")
        DoChangeWeakfield = .true.
        call read_var('BrFactor', BrFactor)
@@ -79,39 +80,40 @@ contains
     end select
 
   end subroutine read_magnetogram_param
-
   !============================================================================
-  subroutine read_orig_magnetogram(IsPhiThetaOrder, UseWedge, DoRemoveMonopole, &
-       nThetaCoarse, nPhiCoarse)
+
+  subroutine read_orig_magnetogram(&
+       IsPhiThetaOrder, UseWedge, DoRemoveMonopole, nThetaCoarse, nPhiCoarse)
 
     use ModPlotFile, ONLY: read_plot_file, save_plot_file
     use ModNumConst, ONLY: cDegToRad
 
-    logical, optional,  intent(in):: IsPhiThetaOrder 
+    logical, optional,  intent(in):: IsPhiThetaOrder
     logical, optional,  intent(in):: UseWedge
     logical, optional,  intent(in):: DoRemoveMonopole
     integer, optional,  intent(in):: nThetaCoarse, nPhiCoarse
 
     real:: Param_I(2)
-    real:: BrAverage, weight
+    real:: BrAverage
     real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:)
 
     integer:: iError, nParam, iTheta, iPhi, nThetaRatio, nPhiRatio
-    integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi, kPhi
+    integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi
 
     logical :: IsInputLatReverse = .false.
     logical :: IsRemoveMonopole = .true.
     character(len=200) :: NameVarOut
 
     character(len=*), parameter:: NameSub = 'read_orig_magnetogram'
-    !------------------------------------------------------------------------
-    call read_plot_file(NameFileIn, StringHeaderOut = StringMagHeader, n1Out = nPhi0, n2Out = nTheta0, &
+    !--------------------------------------------------------------------------
+    call read_plot_file(NameFileIn, StringHeaderOut=StringMagHeader, &
+         n1Out = nPhi0, n2Out = nTheta0, &
          ParamOut_I=Param_I, iErrorOut=iError, nParamOut=nParam)
 
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read header from file '//trim(NameFileIn))
 
-    ! Reading the original shift in Phi and 
+    ! Reading the original shift in Phi and
     ! Central Meridian Longitude from the Map
     if(nParam>0)LongShift = Param_I(1)
     if(nParam>1)CarringtonRotation = Param_I(2)
@@ -120,7 +122,7 @@ contains
          nPhi0, LongShift, CarringtonRotation
 
     ! Saves the original Magnetogram grid
-    allocate(Phi0_I(nPhi0), Lat0_I(nTheta0)) 
+    allocate(Phi0_I(nPhi0), Lat0_I(nTheta0))
     allocate(Br0_II(nPhi0,nTheta0))
 
     call read_plot_file(NameFileIn, &
@@ -305,7 +307,7 @@ contains
     endif
 
   end subroutine read_orig_magnetogram
-  !========================================================================== 
+  !============================================================================
   subroutine uniform_theta_transform
 
     ! The magnetogram is remeshed onto a uniform in theta (co-latitude) grid.
@@ -316,11 +318,12 @@ contains
     ! The number of points in the theta direction of the remeshed grid
     ! is always an odd number.
 
-    integer :: nThetaIn, nThetaOut, iw, iu, iTheta, iPhi
+    integer :: nThetaIn, nThetaOut, iW, iU, iTheta, iPhi
     integer :: iLower, iUpper
     real    :: dThetaChebyshev, dThetaInterpolate, BrSouthPole, BrNorthPole
     real, allocatable :: ThetaIn_I(:), ThetaOut_I(:), NewBr_II(:,:), &
          ChebyshevWeightEu_I(:), Br_II(:,:)
+
     !--------------------------------------------------------------------------
     write(*,*) ' Remeshing to Uniform Theta'
 
@@ -338,7 +341,7 @@ contains
 
     write(*,*)'nTheta0,nThetaIn,nThetaOut',nTheta0,nThetaIn,nThetaOut
 
-    !Notice the number of point in theta direction is an odd number
+    ! Notice the number of point in theta direction is an odd number
     if (mod(nThetaOut,2) == 0) then
        nThetaOut=nThetaOut+1
     else
@@ -350,7 +353,7 @@ contains
 
     ! Note that the indices start from 0
     ! for both FDIPS & Harmonics
-    ! Lat grid to Theta grid 
+    ! Lat grid to Theta grid
     allocate(NewBr_II(0:nPhi0-1,0:nThetaOut-1))
     allocate(ThetaIn_I(0:nThetaIn-1))
     allocate(ThetaOut_I(0:nThetaOut-1))
@@ -374,7 +377,7 @@ contains
     iUpper = -1
     NewBr_II = 0
 
-    ! Allocate a new Magnetic field variable which has 
+    ! Allocate a new Magnetic field variable which has
     ! first index as 0
     ! common for both FDIPS & Harmonics
     allocate(Br_II(0:nPhi0-1,0:nTheta0-1))
@@ -389,7 +392,7 @@ contains
     do iPhi=0,nPhi0-1
        do iTheta=0, nThetaOut-1
           ! A search is needed in case the sin(latitude) grid is not uniform
-          !do iTheta_search=0,nThetaIn-2
+          ! do iTheta_search=0,nThetaIn-2
           !   if(ThetaOut_I(iTheta) <= ThetaIn_I(iTheta_search) .and. &
           !      ThetaOut_I(iTheta) >= ThetaIn_I(iTheta_search+1)) then
           !      iLower=iTheta_search+1
@@ -399,7 +402,7 @@ contains
           !      iLower=-1
           !      iUpper=-1
           !   end if
-          !end do
+          ! end do
           iUpper = &
                floor((cos(ThetaOut_I(iTheta)) - cos(ThetaIn_I(0)))/dSinTheta)
           iLower = iUpper+1
@@ -412,7 +415,7 @@ contains
           else
              if (iUpper == nThetaIn-1) then
                 dThetaInterpolate=ThetaIn_I(nThetaIn-1)
-                NewBr_II(iPhi,iTheta) = BrNorthPole & 
+                NewBr_II(iPhi,iTheta) = BrNorthPole &
                      *(ThetaIn_I(nThetaIn-1)-ThetaOut_I(iTheta)) &
                      /dThetaInterpolate &
                      + Br_II(iPhi,nThetaIn-1) &
@@ -453,11 +456,11 @@ contains
     ChebyshevWeightEu_I(0) = 0.5
     ChebyshevWeightEu_I((nThetaOut-1)/2) = 0.5
 
-    do iw=0,nThetaOut-1
-       do iu=0,(nThetaOut-1)/2
-          ChebyshevWeightW_I(iw) = ChebyshevWeightW_I(iw) + &
-               ChebyshevWeightEu_I(iu)*(-2.0)/(4*(iu)**2-1)* & 
-               cos(iw*iu*cPi/((nThetaOut-1)/2))
+    do iW = 0, nThetaOut-1
+       do iU = 0, (nThetaOut-1)/2
+          ChebyshevWeightW_I(iW) = ChebyshevWeightW_I(iW) + &
+               ChebyshevWeightEu_I(iU)*(-2.0)/(4*(iU)**2-1)* &
+               cos(iW*iu*cPi/((nThetaOut-1)/2))
        end do
     end do
     ChebyshevWeightW_I = ChebyshevWeightW_I/(nThetaOut-1)
@@ -465,5 +468,7 @@ contains
     deallocate(NewBr_II, ThetaIn_I, ThetaOut_I, ChebyshevWeightEu_I)
 
   end subroutine uniform_theta_transform
+  !============================================================================
 
 end module ModReadMagnetogram
+!==============================================================================
