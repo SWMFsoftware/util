@@ -4,7 +4,6 @@
 module ModMagnetogram
 
   use ModNumConst,       ONLY: cTwoPi, cRadToDeg, cDegToRad
-  use ModIoUnit,         ONLY: io_unit_new
   use CON_axes,          ONLY: dLongitudeHgrDeg
   use ModUtilities,      ONLY: CON_stop
   use ModCoordTransform, ONLY: rot_xyz_sph, rot_matrix_z, xyz_to_rlonlat
@@ -40,6 +39,7 @@ module ModMagnetogram
 
   ! Local variables -------------
 
+  real:: CarringtonRot
 
   ! Rotation angle around z-axis, in degrees,
   ! from the coordinate system of the component
@@ -66,7 +66,7 @@ module ModMagnetogram
 
   ! Legendre polynomials and its derivative
   real, allocatable:: p_II(:,:), Dp_II(:,:)
-  
+
   ! Azimuthal functions sin(m*phi) and cos(m*phi)
   real, allocatable:: SinPhi_I(:), CosPhi_I(:)
 
@@ -74,7 +74,7 @@ module ModMagnetogram
   real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
 
   ! Harmonics files
-  
+
   ! Number of header lines in the file
   integer:: nHeadLine=12
 
@@ -140,9 +140,9 @@ contains
             IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
             IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
             StringDescription = 'Created from '//trim(NameMagnetogramNew) )
-       iTableB0 = i_lookup_table('B0')
+       iTableB0New = i_lookup_table('B0')
     end if
-    
+
     ! If lookup table is not loaded, make it (and save it)
     call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
@@ -380,97 +380,79 @@ contains
   !============================================================================
 
   subroutine read_magnetogram_file
-    !--------------------------------------------------------------------------
-    ! Initialize once g(n+1,m+1) & h(n+1,m+1) by reading a file
-    ! created from Web data::
 
-    call read_harmonics
+    !--------------------------------------------------------------------------
+    call read_harmonics_file(NameMagnetogram)
 
   end subroutine read_magnetogram_file
   !============================================================================
+
   subroutine read_new_magnetogram_file
 
-    character(LEN=32):: NameOldFile
-    real:: OldPhiShift
-
     !--------------------------------------------------------------------------
-    NameOldFile = NameMagnetogram
-    NameMagnetogram = NameMagnetogramNew
-    OldPhiShift = PhiOffset
-    PhiOffset = NewPhiShift
-    call read_magnetogram_file
-
-    PhiOffset = OldPhiShift
-    NameMagnetogram = NameOldFile
+    call read_harmonics_file(NameMagnetogramNew)
 
   end subroutine read_new_magnetogram_file
   !============================================================================
 
-  subroutine read_harmonics
+  subroutine read_harmonics_file(NameFile)
 
-    ! Formats adjusted for wso CR rad coeffs
+    use ModPlotFile, ONLY: read_plot_file
 
-    integer :: iUnit, nOrderIn, iPosition, iPosition1, n, m, i, iError
-    character (LEN=80):: StringHead=''
-    real:: gTemp, hTemp, Coef1, Coef
+    character(len=*), intent(in):: NameFile
+
+    ! read properly formatted harmonics coefficient file
+
+    integer:: nHarmonic ! number of harmonics = (nOrder+1)*(nOrder+2)/2
+    integer:: nParam, nOrderIn, i, n, m
+
+    real:: Param_I(3), Coef, Coef1
+    real, allocatable:: Var_VI(:,:), Coord_DII(:,:,:)
+
+    character(len=*), parameter:: NameSub = 'read_harmonics_file'
     !--------------------------------------------------------------------------
-    iUnit = io_unit_new()
-    open(iUnit,file=NameMagnetogram,status='old',iostat=iError)
-    if(iError>0)call CON_stop('Cannot open '//NameMagnetogram)
 
-    write(*,*)'!!! nHeadLine=', nHeadLine
+    call read_plot_file(NameFile, &
+         nParamOut=nParam, ParamOut_I=Param_I, n1Out=nHarmonic)
 
-    ! Get nOrder
-    if (nHeadLine /= 0) then
-       do i=1,nHeadLine
-          read(iUnit,'(a)') StringHead
-          iPosition=index(StringHead,'rder')
-          iPosition1=0
-          if(iPosition>0)&
-               iPosition1=max(&
-               index(StringHead(iPosition+4:iPosition+9),'='),&
-               index(StringHead(iPosition+4:iPosition+9),':'))
-          if(iPosition1>0)then
-             read(StringHead(iPosition+4+iPosition1:len(StringHead)),&
-                  '(i3)',iostat=iError) nOrderIn
-             if(iError>0)call CON_stop('Cannot figure out nOrder')
-             if(nOrderIn<nOrder) nOrder=nOrderIn
+    if(nParam < 3) call CON_stop(NameSub// &
+         ': not enough parameters in '//trim(NameFile))
 
-          end if
-          call get_hlcmm(StringHead, PhiOffset)
-       enddo
-       if(PhiOffset<0.0)call CON_stop(&
-            'Did not find central meridian longitude')
-    endif
+    nOrderIn      = nint(Param_I(1))
+    nOrder        = min(nOrder,nOrderIn)
+    CarringtonRot = Param_I(2)
+    PhiOffset     = Param_I(3)
 
-    write(*,*)'!!! nOrder=', nOrder
-    
+    if(nHarmonic /= (nOrderIn+1)*(nOrderIn+2)/2) call CON_stop(NameSub// &
+         ': inconsistent n and nOrder in '//trim(NameFile))
+
     call allocate_harmonics_arrays
-    
-    ! Read file with coefficients, g_II and h_II::
-    do
-       read(iUnit,*,iostat=iError) n, m, gTemp, hTemp
-       if (iError /= 0) EXIT
+
+    allocate(Var_VI(2,nHarmonic), Coord_DII(2,nHarmonic,1))
+    call read_plot_file(NameFile, VarOut_VI=Var_VI, CoordOut_DII=Coord_DII)
+
+    do i = 1, nHarmonic
+       n = Coord_DII(1,i,1)
+       m = Coord_DII(2,i,1)
        if (n > nOrder .or. m > nOrder) CYCLE
-       g_II(n+1,m+1) = gTemp
-       h_II(n+1,m+1) = hTemp
-    enddo
-    close(iUnit)
-    ! Add correction factor for radial, not LOS, coefficients::
-    ! Note old "coefficients" file are LOS, all new coeffs and
-    ! files are radial)
-    Coef=rSourceSurface
-    do n=0,nOrder
-       Coef=Coef/rSourceSurface**2
-       Coef1 = 1.0/(real(n+1)+real(n)*Coef)
-       !       Coef1 = 1.0/real(n+1+(n/(rSourceSurface**(2*n+1))))
+       g_II(n+1,m+1) = Var_VI(1,i)
+       h_II(n+1,m+1) = Var_VI(2,i)
+    end do
+
+    deallocate(Var_VI, Coord_DII)
+
+    ! Normalize coefficients
+    Coef = rSourceSurface
+    do n = 0, nOrder
+       Coef  = Coef/rSourceSurface**2
+       Coef1 = 1.0/(n+1 + n*Coef)
        g_II(n+1,1:n+1) = g_II(n+1,1:n+1)*Coef1
        h_II(n+1,1:n+1) = h_II(n+1,1:n+1)*Coef1
     enddo
     ! Leave out monopole (n=0) term::
     g_II(1,1) = 0.0
 
-  end subroutine read_harmonics
+  end subroutine read_harmonics_file
   !============================================================================
 
   subroutine allocate_harmonics_arrays
@@ -512,14 +494,13 @@ contains
   end subroutine allocate_harmonics_arrays
   !============================================================================
   subroutine deallocate_harmonics_arrays
+    !--------------------------------------------------------------------------
     if(.not.allocated(g_II)) RETURN
 
     deallocate(g_II, h_II, Sqrt_I, SqrtRatio_I, &
          rRsPower_I, RoRsPower_I, RoRPower_I, &
          SinPhi_I, CosPhi_I)
 
-
-    
   end subroutine deallocate_harmonics_arrays
   !============================================================================
   subroutine get_harmonics_field(r, Theta, Phi, Bsph_D)
@@ -592,6 +573,7 @@ contains
       real:: SinThetaOld = -10.0, CosThetaOld = -10.0
 
       ! Cache previous values
+
       !------------------------------------------------------------------------
       if(nOrder == nOrderOld .and. SinTheta == SinThetaOld &
            .and. CosTheta == CosThetaOld) RETURN
