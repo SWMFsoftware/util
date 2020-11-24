@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModMagHarmonics
 
@@ -7,22 +7,22 @@ module ModMagHarmonics
   use ModUtilities, ONLY: CON_stop
   use ModReadMagnetogram, ONLY: dPhi, dTheta, dSinTheta
 
-  implicit none  
+  implicit none
 
   ! **********************Choice of this parameter**********************
   ! *Sin(Latitude): WSO : http://wso.stanford.edu                      *
-  ! *   MDI: see http://soi.stanford.edu/magnetic/index6.html          * 
+  ! *   MDI: see http://soi.stanford.edu/magnetic/index6.html          *
   ! *   SOLIS:http://solis.nso.edu/vsm/map_info.html                   *
   ! *   GONG: http://gong.nso.edu/data/magmap/index.html               *
   ! ********************************************************************
 
   ! This Module reads a raw (RADIAL, not LOS!!!) magnetogram data file and
   ! generates a magnetogram file in the form of spherical
-  ! harmonics to be used by the SWMF. 
+  ! harmonics to be used by the SWMF.
 
   ! ************************ Data Links ********************************
   ! * MDI:   http://soi.stanford.edu/magnetic/index6.html              *
-  ! * WSO:   http://wso.stanford.edu/forms/prgs.html                   *  
+  ! * WSO:   http://wso.stanford.edu/forms/prgs.html                   *
   ! * GONG:  http://gong.nso.edu/data/magmap/QR/mqs/                   *
   ! * SOLIS: ftp://solis.nso.edu/synoptic/level3/vsm/merged/carr-rot   *
   ! * MWO:   ftp://howard.astro.ucla.edu/pub/obs/synoptic_charts       *
@@ -31,12 +31,11 @@ module ModMagHarmonics
   ! * Field in microTesla(0.01Gs): WSO, MWO                            *
   ! ********************************************************************
 
-
   ! Name of output file
   character (len=100):: NameFileOut='harmonics.dat'
 
   integer, public:: i,n,m,iTheta,iPhi,iR,mm,nn
-  real, allocatable, dimension(:,:):: g_nm, h_nm, Br_II
+  real, allocatable:: Br_II(:,:)
   real:: dR=1.0
   integer:: nPhi=72, nTheta=29
 
@@ -56,7 +55,7 @@ module ModMagHarmonics
   real, allocatable, dimension(:,:)   :: p_nm, CosMPhi_II,SinMPhi_II
   real, allocatable, dimension(:,:,:) :: PNMTheta_III
 
-  real:: SinThetaM, SinThetaM1 
+  real:: SinThetaM, SinThetaM1
   integer:: delta_m0
   real, allocatable:: FactRatio1(:)
   integer, parameter:: MaxInt=100000
@@ -65,6 +64,7 @@ module ModMagHarmonics
   real, allocatable, dimension(:) :: ChebyshevWeightE_I, ChebyshevWeightW_I
 
 contains
+  !============================================================================
 
   subroutine read_harmonics_param
 
@@ -75,7 +75,7 @@ contains
     character(len=lStringLine) :: NameCommand
 
     character(len=*), parameter:: NameSub = 'read_harmonics_param'
-    !-----------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     call read_file('HARMONICS.in', iCommIn = MPI_COMM_SELF)
     call read_init
     call read_echo_set(.true.)
@@ -96,14 +96,14 @@ contains
     end do
 
   end subroutine read_harmonics_param
-  !=================================================================
+  !============================================================================
   subroutine read_modified_magnetogram
 
     use ModReadMagnetogram, ONLY: read_orig_magnetogram, nTheta0, nPhi0, &
          nThetaorig, nPhiorig
 
     character(len=*), parameter:: NameSub = 'read_modified_magnetogram'
-    !----------------------------------------------------------------
+    !--------------------------------------------------------------------------
     call read_orig_magnetogram
 
     nTheta = nTheta0
@@ -111,7 +111,7 @@ contains
     write(*,*)NameSub,': Original nTheta, nPhi =', nThetaorig, nPhiorig
     write(*,*)NameSub,': Remeshed nTheta, nPhi =', nTheta0, nPhi0
 
-    ! Setting the order on harmonics to be equal to the 
+    ! Setting the order on harmonics to be equal to the
     ! latitudinal resolution.
     if(nHarmonicsIn > 0 .and. nHarmonicsIn < MaxHarmonics)then
        nHarmonics = nHarmonicsIn
@@ -123,30 +123,28 @@ contains
     ! Allocate the harmonic coefficients arrays
     allocate( &
          p_nm(nHarmonics+1,nHarmonics+1), &
-         g_nm(nHarmonics+1,nHarmonics+1), &
-         h_nm(nHarmonics+1,nHarmonics+1), &
          FactRatio1(nHarmonics+1))
 
     p_nm = 0.0
-    g_nm = 0.0
-    h_nm = 0.0
 
   end subroutine read_modified_magnetogram
-  !=================================================================
+  !============================================================================
   subroutine calc_harmonics
 
     ! This subroutine calculates the spherical harmonics from the
     !  modified - remesed magnetogram data
 
+    use ModPlotFile, ONLY: save_plot_file
     use ModReadMagnetogram, ONLY: Br0_II, nTheta0, nPhi0, UseChebyshevNode, &
          CarringtonRotation, LongShift, UseCosTheta, nThetaorig, nPhiorig, &
-         ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta, StringMagHeader
+         ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta, &
+         StringMagHeader
 
-    integer :: iUnit, iError, iTheta, iPhi, m,inm, nn, mm
+    integer :: iTheta, iPhi, m,inm, nn, mm
     real    :: dThetaChebyshev, LongPhi = 0.0
-    real, allocatable:: Br_II(:,:)
+    real, allocatable:: Br_II(:,:), Coord_DII(:,:,:), Var_VI(:,:)
 
-    !-------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     write(*,*)'Calculating harmonic coefficients'
 
     ! Calculate sqrt(integer) from 1 to 10000::
@@ -160,18 +158,18 @@ contains
        factRatio1(m+1) = factRatio1(m)*Sqrt_I(2*m-1)/Sqrt_I(2*m)
     enddo
 
-    ! If Chebyshev is done then remeshed theta & phi are used, else 
+    ! If Chebyshev is done then remeshed theta & phi are used, else
     ! original values are used.
     if(UseChebyshevNode) then
        nTheta = nTheta0
        nPhi   = nPhi0
-    else 
+    else
        nTheta = nThetaorig
        nPhi   = nPhiorig
     endif
 
-    ! Adding a shift to the cell center in the 
-    ! Phi direction to the original 
+    ! Adding a shift to the cell center in the
+    ! Phi direction to the original
     ! longitude shift.
     LongPhi = LongShift + 180.0/nPhi
 
@@ -206,7 +204,7 @@ contains
     end if
     allocate(CosMPhi_II(0:nPhi-1,0:nHarmonics),&
          SinMPhi_II(0:nPhi-1,0:nHarmonics) )
-    !Save sins-cosins
+    ! Save sins-cosins
 
     do iPhi=0,nPhi-1
        Phi=(iPhi)*dPhi
@@ -245,11 +243,11 @@ contains
        enddo
     end do
 
-    ! Each processor gets part of the array 
+    ! Each processor gets part of the array
     do iNM = 0,SizeOfnm-1
 
        ! The proper normalization factor is (2n+1)/R_n, where R_n=n+1+n(1/Rs)**(2n+1).
-       ! However, in this code the coefficients are normalized only with 2n+1 to reproduce 
+       ! However, in this code the coefficients are normalized only with 2n+1 to reproduce
        ! the coefficients provided by Stanford. The division by R_n is done after
        ! the coefficients are been read in ModMagnetogram.f90.
        ! R_n=(nArray(iNM)+1.0)+nArray(iNM)*(1.0/Rs_PFSSM)**(2*nArray(iNM)+1)
@@ -292,68 +290,38 @@ contains
        hArray(iNM) = NormalizationFactor*hArray(iNM)/SumArea
     end do
 
-    iNM=0
-    do nn=0,nHarmonics
-       iNM=iNM+nn
-       do mm=0,nn
-          g_nm(nn+1,mm+1) = gArray(iNM+mm)
-          h_nm(nn+1,mm+1) = hArray(iNM+mm) 
-       enddo
-    end do
-
-    !\
     ! Leave out monopole (n=0) term::
-    !/
-    g_nm(1,1) = 0.0
+    gArray(1) = 0.0
 
-    write(*,*)'Done Calculating harmonic coefficients' 
+    write(*,*)'Done Calculating harmonic coefficients'
 
-    !\
     ! Writing spherical harmonics file
-    !/
 
     write(*,*)'Writing harmonic coefficients file, named ',NameFileOut
-    iUnit = 9
-    open ( unit = iUnit, &
-         file = NameFileOut, &
-         form = 'formatted', &
-         access = 'sequential', &
-         status = 'replace', iostat = iError )
 
-    if ( iError /= 0 ) then
-       write (*,*)' Could not output file ', NameFileOut
-       stop
-    end if
+    allocate(Coord_DII(2,SizeOfNm,1), Var_VI(2,SizeOfNm))
+    Coord_DII(1,:,1) = nArray
+    Coord_DII(2,:,1) = mArray
+    Var_VI(1,:)      = gArray
+    Var_VI(2,:)      = hArray
 
-    write ( iUnit, '(a19,I3,a10,f10.5,a1,f5.1)' ) &
-         'Coefficients order=',nHarmonics, &
-         ' Central=CT',CarringtonRotation,':',mod(LongPhi+180.,360.)
-    write ( iUnit, * )
-    write ( iUnit, '(a)' ) trim(StringMagHeader)
-    write ( iUnit, '(a45,I3)' ) &
-         'B0 angle & Nmax:        0          ',nHarmonics
-    write ( iUnit, * )
-    write ( iUnit, * )
-    write ( iUnit, * )
-    write ( iUnit, * )
-    write ( iUnit, '(a19,I3,a26)' ) &
-         'Max Harmonic Order:',nHarmonics,' Units: Gauss'
-    write ( iUnit, '(a)' ) ' '
-    write ( iUnit, '(a)' ) '  l   m      g(uT)      h(uT)'
-    write ( iUnit, '(a)' ) ' '
+    call save_plot_file(NameFileOut, &
+         StringHeaderIn=StringMagHeader, &
+         ParamIn_I=[ real(nHarmonics), CarringtonRotation, &
+         mod(LongPhi+180.,360.) ], &
+         IsCartesianIn = .false., &
+         nDimIn = 2, &
+         CoordIn_DII = Coord_DII, &
+         VarIn_VI = Var_VI, &
+         NameVarIn = "n m g h nOrder CR LonCentral", &
+         StringFormatIn = "(2f5.0, 2f20.10)" &
+         )
 
+    deallocate(Coord_DII, Var_VI)
 
-    do nn=0, nHarmonics
-       do mm = 0, nn
-          write(iUnit, '(2I5,2f20.10)') nn,mm,g_nm(nn+1,mm+1),h_nm(nn+1,mm+1)
-       enddo
-    end do
-
-    close(iUnit)
 
   end subroutine calc_harmonics
-
-  !===========================================================================
+  !============================================================================
 
   subroutine calc_legendre_polynoms
 
@@ -362,6 +330,7 @@ contains
     ! Calculate polynomials with appropriate normalization
     ! for Theta_PFSSMa::
 
+    !--------------------------------------------------------------------------
     SinThetaM  = 1.0
     SinThetaM1 = 1.0
     p_nm(:,:)  = 0.0
@@ -372,14 +341,10 @@ contains
        else
           delta_m0 = 0
        endif
-       !\
        ! Eq.(27) from Altschuler et al. 1976::
-       !/
        p_nm(m+1,m+1) = factRatio1(m+1)*Sqrt_I((2-delta_m0)*(2*m+1))* &
             SinThetaM
-       !\
        ! Eq.(28) from Altschuler et al. 1976::
-       !/
        if (m < nHarmonics) p_nm(m+2,m+1) = p_nm(m+1,m+1)*Sqrt_I(2*m+3)* &
             CosTheta
 
@@ -388,9 +353,7 @@ contains
 
     enddo
     do m=0,nHarmonics-2; do n=m+2,nHarmonics
-       !\
        ! Eq.(29) from Altschuler et al. 1976::
-       !/
        stuff1         = Sqrt_I(2*n+1)/Sqrt_I(n**2-m**2)
        stuff2         = Sqrt_I(2*n-1)
        stuff3         = Sqrt_I((n-1)**2-m**2)/Sqrt_I(2*n-3)
@@ -398,20 +361,16 @@ contains
             stuff3*p_nm(n-1,m+1))
 
     enddo; enddo
-    !\
     ! Apply Schmidt normalization::
-    !/
     do m=0,nHarmonics; do n=m,nHarmonics
-       !\
        ! Eq.(33) from Altschuler et al. 1976::
-       !/
        stuff1 = 1.0/Sqrt_I(2*n+1)
-       !\
        ! Eq.(34) from Altschuler et al. 1976::
-       !/
        p_nm(n+1,m+1)  = p_nm(n+1,m+1)*stuff1
     enddo; enddo
 
   end subroutine calc_legendre_polynoms
+  !============================================================================
 
 end module ModMagHarmonics
+!==============================================================================
