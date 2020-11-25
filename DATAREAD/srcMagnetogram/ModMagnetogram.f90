@@ -16,16 +16,11 @@ module ModMagnetogram
 
   private
 
-  integer, public:: iTableB0    = -1 ! index of B0 lookup table
-  integer, public:: iTableB0New = -1 ! index of new B0 lookup table
-
-  public:: read_magnetogram_param ! read parameters
-
+  integer, public:: iTableB0    = -1     ! index of B0 lookup table
+  integer, public:: iTableB0New = -1     ! index of new B0 lookup table
+  public:: read_magnetogram_param        ! read parameters
   public:: init_magnetogram_lookup_table ! initialize lookup table
-
-  public:: get_magnetogram_field ! field from lookup table at a given point
-
-  public:: interpolate_field ! good old legacy left handed coordinates
+  public:: get_magnetogram_field         ! get field at a given point
 
   ! Local variables -------------
 
@@ -48,7 +43,7 @@ module ModMagnetogram
   real, allocatable:: g_II(:,:), h_II(:,:)
 
   ! Powers of radius ratios
-  real, allocatable:: rRsPower_I(:), RoRsPower_I(:), RoRPower_I(:)
+  real, allocatable:: rRsPower_I(:), RmRsPower_I(:), RmRPower_I(:)
 
   ! Legendre polynomials and its derivative
   real, allocatable:: p_II(:,:), Dp_II(:,:)
@@ -87,7 +82,7 @@ contains
     iTableB0    = i_lookup_table('B0')
     iTableB0New = i_lookup_table('B0NEW')
 
-    ! Nothing to do if there is no B0 table
+    ! Nothing to do if there is no B0 table defined or to be made
     if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
     
     if(DoReadHarmonics)then
@@ -135,7 +130,7 @@ contains
        RotB0_DD = rot_matrix_z(dLonB0)
     end if
 
-    ! Second lookup table
+    ! Second lookup table for a different time for temporal interpolation
 
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and set Carrington rotation info
@@ -161,27 +156,28 @@ contains
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
     end if
 
+    call deallocate_harmonics_arrays
+    
   end subroutine init_magnetogram_lookup_table
   !============================================================================
-  subroutine calc_b0_table(iTable, Arg1, Arg2, Arg3, b_D)
+  subroutine calc_b0_table(iTable, r, Lon, Lat, b_D)
 
     ! Calculate B0 at the location
 
     integer, intent(in):: iTable
-    real, intent(in)   :: Arg1, Arg2, Arg3
+    real, intent(in)   :: r, Lon, Lat
     real, intent(out)  :: b_D(:)
 
-    real:: r, Theta, Phi, Bsph_D(3), XyzSph_DD(3,3)
+    real:: Theta, Phi, Bsph_D(3), XyzSph_DD(3,3)
 
     character(len=*), parameter:: NameSub = 'calc_b0_table'
     !--------------------------------------------------------------------------
-    r     = Arg1
-    Phi   = Arg2*cDegToRad
-    Theta = (90-Arg3)*cDegToRad
+    Phi   = cDegToRad*Lon
+    Theta = cDegToRad*(90 - Lat)
 
     call get_harmonics_field(r, Theta, Phi, Bsph_D)
 
-    ! Convert to Cartesian
+    ! Convert to Cartesian components
     XyzSph_DD = rot_xyz_sph(Theta, Phi)
 
     b_D = matmul(XyzSph_DD, Bsph_D)
@@ -235,49 +231,6 @@ contains
 
   end subroutine get_magnetogram_field11
   !============================================================================
-  subroutine interpolate_field(rPhiTheta_D, Brphitheta_D)
-
-    ! A great example of left-handed coordinates
-    ! Get the field at this location
-
-    real, intent(in) :: rPhiTheta_D(3)
-    real, intent(out):: Brphitheta_D(3)
-
-    real:: r, Phi, Theta, Lon, Lat, Bxyz_D(3), Bsph_D(3), XyzSph_DD(3,3)
-    !--------------------------------------------------------------------------
-    r     = rPhiTheta_D(1)
-    Phi   = rPhiTheta_D(2)
-    Theta = rPhiTheta_D(3)
-
-    ! Include the shift in Phi coordinate and make sure that it is
-    ! in the range provided by the lookup table and convert to degrees
-    if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) &
-         Phi = modulo(Phi - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
-    Lon = cRadToDeg*Phi
-
-    ! Convert to latitude in degrees
-    Lat = 90 - cRadToDeg*Theta
-
-    ! Get Bxyz
-    call interpolate_lookup_table(iTableB0, [r,Lon,Lat], Bxyz_D, &
-         DoExtrapolate=(r<rMinB0) )
-
-    ! Scale with r^2 for r > rMaxB0
-    if(r > rMaxB0) Bxyz_D = (rMaxB0/r)**2 * Bxyz_D
-
-    ! Multiply with B0 factor and convert from Gauss to Tesla
-    Bxyz_D = Bxyz_D*FactorB0*1e-4
-
-    ! Convert to spherical coordinates
-    XyzSph_DD = rot_xyz_sph(Theta, Phi)
-    Bsph_D = matmul(Bxyz_D, XyzSph_DD)
-
-    ! Convert to left-handed spherical coordinates
-    Brphitheta_D = [ Bsph_D(1), Bsph_D(3), Bsph_D(2) ]
-
-  end subroutine interpolate_field
-  !============================================================================
-
   subroutine read_magnetogram_param(NameCommand)
 
     use ModReadParam, ONLY: read_var
@@ -357,11 +310,11 @@ contains
     call read_plot_file(NameFile, VarOut_VI=Var_VI, CoordOut_DII=Coord_DII)
 
     do i = 1, nHarmonic
-       n = Coord_DII(1,i,1)
-       m = Coord_DII(2,i,1)
-       if (n > nOrder .or. m > nOrder) CYCLE
-       g_II(n+1,m+1) = Var_VI(1,i)
-       h_II(n+1,m+1) = Var_VI(2,i)
+       n = nint(Coord_DII(1,i,1))
+       if (n > nOrder) EXIT  ! the harmonics are listed in increasing order
+       m = nint(Coord_DII(2,i,1))
+       g_II(n,m) = Var_VI(1,i)
+       h_II(n,m) = Var_VI(2,i)
     end do
 
     deallocate(Var_VI, Coord_DII)
@@ -371,11 +324,11 @@ contains
     do n = 0, nOrder
        Coef  = Coef/rSourceSurface**2
        Coef1 = 1.0/(n+1 + n*Coef)
-       g_II(n+1,1:n+1) = g_II(n+1,1:n+1)*Coef1
-       h_II(n+1,1:n+1) = h_II(n+1,1:n+1)*Coef1
+       g_II(n,0:n) = g_II(n,0:n)*Coef1
+       h_II(n,0:n) = h_II(n,0:n)*Coef1
     enddo
-    ! Leave out monopole (n=0) term::
-    g_II(1,1) = 0.0
+    ! Leave out monopole (n=m=0) term::
+    g_II(0,0) = 0.0
 
   end subroutine read_harmonics_file
   !============================================================================
@@ -390,15 +343,15 @@ contains
     if(allocated(g_II)) RETURN
 
     ! Spherical harmonics coefficients
-    allocate(g_II(nOrder+1,nOrder+1), h_II(nOrder+1,nOrder+1))
+    allocate(g_II(0:nOrder,0:nOrder), h_II(0:nOrder,0:nOrder))
     g_II = 0.0; h_II = 0.0
 
     ! radial functions
     allocate(rRsPower_I(-1:nOrder+2), &
-         RoRsPower_I(0:nOrder+2), RoRPower_I(0:nOrder+2))
+         RmRsPower_I(0:nOrder+2), RmRPower_I(0:nOrder+2))
 
     ! Legendre polynomlials
-    allocate(p_II(nOrder+1,nOrder+1), Dp_II(nOrder+1,nOrder+1))
+    allocate(p_II(0:nOrder,0:nOrder), Dp_II(0:nOrder,0:nOrder))
 
     ! Azimuthal functions
     allocate(SinPhi_I(0:nOrder), CosPhi_I(0:nOrder))
@@ -423,7 +376,7 @@ contains
     if(.not.allocated(g_II)) RETURN
 
     deallocate(g_II, h_II, Sqrt_I, SqrtRatio_I, &
-         rRsPower_I, RoRsPower_I, RoRPower_I, &
+         rRsPower_I, RmRsPower_I, RmRPower_I, &
          SinPhi_I, CosPhi_I)
 
   end subroutine deallocate_harmonics_arrays
@@ -439,7 +392,7 @@ contains
     real:: CosTheta, SinTheta
 
     ! The spherical components of the magnetic field
-    real:: SumR, SumT, SumP
+    real:: Br, Btheta, Bphi
 
     real:: Coef1, Coef2, Coef3, Coef4
     !--------------------------------------------------------------------------
@@ -452,34 +405,35 @@ contains
     SinTheta = max(sin(Theta), 1E-10)
     call calc_legendre_polynomial(SinTheta, CosTheta)
 
+    ! Calculate azimuthal functions for given Phi
     call calc_azimuthal_functions(Phi)
 
-    ! Initialize the values for the sums
-    SumR = 0.0; SumT = 0.0; SumP = 0.0
+    ! Initialize the components
+    Br = 0.0; Btheta = 0.0; Bphi = 0.0
 
     ! Calculate B from spherical harmonics
     do m = 0, nOrder; do n = m, nOrder
 
-       Coef1 = (n+1)*RoRPower_I(n+2) + RoRsPower_I(n+2)*n*rRsPower_I(n-1)
-       Coef3 =       RoRPower_I(n+2) - RoRsPower_I(n+2)*rRsPower_I(n-1)
-       Coef2 = g_II(n+1,m+1)*CosPhi_I(m) + h_II(n+1,m+1)*SinPhi_I(m)
-       Coef4 = g_II(n+1,m+1)*SinPhi_I(m) - h_II(n+1,m+1)*CosPhi_I(m)
+       Coef1 = (n+1)*RmRPower_I(n+2) + RmRsPower_I(n+2)*n*rRsPower_I(n-1)
+       Coef3 =       RmRPower_I(n+2) - RmRsPower_I(n+2)*rRsPower_I(n-1)
+       Coef2 = g_II(n,m)*CosPhi_I(m) + h_II(n,m)*SinPhi_I(m)
+       Coef4 = g_II(n,m)*SinPhi_I(m) - h_II(n,m)*CosPhi_I(m)
 
        ! Br = -d(Psi)/dR
-       SumR  = SumR + p_II(n+1,m+1)*Coef1*Coef2
+       Br  = Br + p_II(n,m)*Coef1*Coef2
 
        ! Bt = -(1/r)*d(Psi)/dTheta
-       SumT  = SumT - Dp_II(n+1,m+1)*Coef2*Coef3
+       Btheta  = Btheta - Dp_II(n,m)*Coef2*Coef3
 
        ! Bp = -(1/r)*d(Psi)/dPhi
-       SumP  = SumP + p_II(n+1,m+1)*m/SinTheta * Coef3*Coef4
+       Bphi  = Bphi + p_II(n,m)*m/SinTheta*Coef3*Coef4
 
        ! Potential
-       ! SumPsi = SumPsi + r*p_II(n+1,m+1)*Coef2*Coef3
+       ! Potential = Potential + r*p_II(n,m)*Coef2*Coef3
 
     enddo; enddo
 
-    Bsph_D = [ SumR, SumT, SumP ]
+    Bsph_D = [ Br, Btheta, Bphi ]
 
   contains
     !==========================================================================
@@ -488,6 +442,7 @@ contains
 
       ! Calculate Legendre polynomials p_II and its derivative Dp_II
       ! with appropriate normalization for Theta
+      ! Equation numbers refer to Altschuler et al. 1976
 
       real, intent(in):: SinTheta, CosTheta
 
@@ -503,8 +458,6 @@ contains
       if(nOrder == nOrderOld .and. SinTheta == SinThetaOld &
            .and. CosTheta == CosThetaOld) RETURN
 
-      if(.not.allocated(p_II)) &
-
       nOrderOld = nOrder; SinThetaOld = SinTheta; CosThetaOld = CosTheta
 
       SinThetaM  = 1.0
@@ -518,18 +471,18 @@ contains
          else
             Coef1 = Sqrt_I(2*(2*m+1))
          endif
-         ! Eq.(27) from Altschuler et al. 1976::
-         p_II(m+1,m+1) = SqrtRatio_I(m+1)*Coef1* SinThetaM
-         ! Eq.(28) from Altschuler et al. 1976::
-         if (m < nOrder) p_II(m+2,m+1) = p_II(m+1,m+1)*Sqrt_I(2*m+3)* &
-              CosTheta
-         ! Eq.(30) from Altschuler et al. 1976::
-         Dp_II(m+1,m+1) = SqrtRatio_I(m+1)*Coef1*m*CosTheta*SinThetaM1
-         ! Eq.(31) from Altschuler et al. 1976::
+         ! Eq.(27)
+         p_II(m,m) = SqrtRatio_I(m+1)*Coef1* SinThetaM
+         ! Eq.(28)
+         if (m < nOrder) p_II(m+1,m) = p_II(m,m)*Sqrt_I(2*m+3)*CosTheta
+         ! Eq.(30)
+         Dp_II(m,m) = SqrtRatio_I(m+1)*Coef1*m*CosTheta*SinThetaM1
+         ! Eq.(31)
          if (m < nOrder) &
-              Dp_II(m+2,m+1) = Sqrt_I(2*m+3)* &
-              (CosTheta*Dp_II(m+1,m+1) - SinTheta*p_II(m+1,m+1))
+              Dp_II(m+1,m) = Sqrt_I(2*m+3)* &
+              (CosTheta*Dp_II(m,m) - SinTheta*p_II(m,m))
 
+         ! Increase the powers
          SinThetaM1 = SinThetaM
          SinThetaM  = SinThetaM*SinTheta
 
@@ -537,26 +490,25 @@ contains
 
       ! Recursive rules
       do m = 0, nOrder-2; do n = m+2, nOrder
-         ! Eq.(29) from Altschuler et al. 1976::
+         ! Eq.(29)
          Coef1 = Sqrt_I(2*n+1)/Sqrt_I(n**2-m**2)
          Coef2 = Sqrt_I(2*n-1)
          Coef3 = Sqrt_I((n-1)**2-m**2)/Sqrt_I(2*n-3)
 
-         p_II(n+1,m+1) = Coef1*(Coef2*CosTheta*p_II(n,m+1)  &
-              - Coef3*p_II(n-1,m+1))
+         p_II(n,m) = Coef1*(Coef2*CosTheta*p_II(n-1,m) - Coef3*p_II(n-2,m))
 
-         ! Eq.(32) from Altschuler et al. 1976::
-         Dp_II(n+1,m+1) = Coef1*(Coef2*(CosTheta*Dp_II(n,m+1) &
-              - SinTheta*p_II(n,m+1)) - Coef3*Dp_II(n-1,m+1))
+         ! Eq.(32)
+         Dp_II(n,m) = Coef1*(Coef2*(CosTheta*Dp_II(n-1,m) &
+              - SinTheta*p_II(n-1,m)) - Coef3*Dp_II(n-2,m))
       enddo; enddo
 
       ! Apply Schmidt normalization
       do m = 0, nOrder; do n = m, nOrder
-         ! Eq.(33) from Altschuler et al. 1976::
+         ! Eq.(33)
          Coef1 = 1.0/Sqrt_I(2*n+1)
-         ! Eq.(34) from Altschuler et al. 1976::
-         p_II(n+1,m+1)  = p_II(n+1,m+1)*Coef1
-         Dp_II(n+1,m+1) = Dp_II(n+1,m+1)*Coef1
+         ! Eq.(34)
+         p_II(n,m)  = p_II(n,m)*Coef1
+         Dp_II(n,m) = Dp_II(n,m)*Coef1
       enddo; enddo
 
     end subroutine calc_legendre_polynomial
@@ -564,12 +516,12 @@ contains
 
     subroutine calc_radial_functions(r)
 
-      real,    intent(in):: r
+      real, intent(in):: r
 
       ! Calculate powers of the ratios of radii up to nOrder
 
       integer:: m
-      real:: RoRs, RoR, rRs
+      real:: RmRs, RmR, rRs
 
       integer:: nOrderOld = -10
       real::    rOld = -10.0
@@ -579,20 +531,20 @@ contains
 
       nOrderOld = nOrder; rOld = r
 
-      RoRs = rMagnetogram/rSourceSurface
-      RoR  = rMagnetogram/r
+      RmRs = rMagnetogram/rSourceSurface
+      RmR  = rMagnetogram/r
       rRs  = r/rSourceSurface
 
       ! Zero and -1 powers
       rRsPower_I(-1) = 1.0/rRs
       rRsPower_I(0)  = 1.0
-      RoRsPower_I(0) = 1.0
-      RoRPower_I(0)  = 1.0
+      RmRsPower_I(0) = 1.0
+      RmRPower_I(0)  = 1.0
 
       ! Recursive: x^m = x^m-1 * x
       do m = 1, nOrder+2
-         RoRsPower_I(m) = RoRsPower_I(m-1) * RoRs
-         RoRPower_I(m)  = RoRPower_I(m-1)  * RoR
+         RmRsPower_I(m) = RmRsPower_I(m-1) * RmRs
+         RmRPower_I(m)  = RmRPower_I(m-1)  * RmR
          rRsPower_I(m)  = rRsPower_I(m-1)  * rRs
       end do
 
