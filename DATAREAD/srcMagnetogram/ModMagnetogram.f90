@@ -24,20 +24,27 @@ module ModMagnetogram
 
   ! Local variables -------------
 
-  ! Carrington rotation of the magnetogram(s) for temporal interpolation
-  real:: CarringtonRot, CarringtonRotNew
-
-  ! radius of magnetogram and source surface for spatial extrapolation
-  real:: rMagnetogram=1.0, rSourceSurface=2.5 
-
-  ! True if new harmonics coefficients are to be read
+  ! True if new harmonics coefficients are to be read from harmonics files
   logical:: DoReadHarmonics = .false., DoReadHarmonicsNew = .false.
 
   ! Name of the harmonics files
   character(len=100):: NameHarmonicsFile = '???', NameHarmonicsFileNew = '???'
 
-  ! Maximum order of spherical harmonics
-  integer:: nOrder = 30
+  ! variable names in the lookup table created from harmonics files
+  character(len=*), parameter:: &
+       NameVarLinear = 'r lon lat bx by bz rMin rMax dLon CR'
+  character(len=100):: NameVar = NameVarLinear
+
+  ! Carrington rotation of the magnetogram(s) for temporal interpolation
+  real:: CarringtonRot = -1.0, CarringtonRotNew = -1.0
+
+  ! radius of magnetogram and source surface for spatial extrapolation
+  real   :: rMagnetogram=1.0, rSourceSurface=2.5 
+  logical:: IsLogRadius = .false.   ! logarithmic grid in radius
+  integer:: nR=30, nLon=72, nLat=30 ! Size of grid created from harmonics
+
+  ! Maximum and actual order of spherical harmonics
+  integer:: MaxOrder = 30, nOrder = 30
 
   ! Weights of the spherical harmonics
   real, allocatable:: g_II(:,:), h_II(:,:)
@@ -57,9 +64,10 @@ module ModMagnetogram
   ! Lookup table related variables
   real:: rMinB0=1.0, rMaxB0=30.0 ! radial limits of table
   real:: LonMinB0 = 0.0 ! starting longitude in the table
-  real:: dLonB0=0.0     ! longitude shift
+  real:: dLonB0   = 0.0   ! longitude shift
   real:: RotB0_DD(3,3)  ! rotation matrix due to longitude shift
-  real:: FactorB0=1.0   ! multiplier for the magnetic field
+
+  real:: FactorB0 = 1.0 ! multiplier for the magnetic field
 
   interface get_magnetogram_field
      module procedure get_magnetogram_field11, get_magnetogram_field31
@@ -77,6 +85,8 @@ contains
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
     integer:: nR, nLon, nLat
+
+    character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
     ! Make sure these are set
     iTableB0    = i_lookup_table('B0')
@@ -86,33 +96,33 @@ contains
     if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
     
     if(DoReadHarmonics)then
-       ! Read harmonics coefficient, nOrder and set carrington rotation info
+       ! Read harmonics coefficient and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFile, CarringtonRot)
        DoReadHarmonics = .false.
 
        ! Create default size lookup table if not specified in PARAM.in
        if(iTableB0 <= 0)then
-
           ! Set up a default B0 lookup table
-          nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
           call init_lookup_table( &
                NameTable   = 'B0',                    &
                NameCommand = 'use',                   &
-               NameVar     = 'r lon lat bx by bz',    &
+               NameVar     = NameVar,                 &
                NameFile    = 'harmonics_bxyz.out',    &
                TypeFile    = 'real4',                 &
                nIndex_I    = [nR+1, nLon+1, nLat+1],  &
-               IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
-               IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
+               IndexMin_I  = [rMagnetogram,     0.0, -90.0],    &
+               IndexMax_I  = [rSourceSurface, 360.0,  90.0],    &
+               Param_I = [rMagnetogram, rSourceSurface, 0.0, CarringtonRot], &
                StringDescription = 'Created from '//trim(NameHarmonicsFile) )
           iTableB0 = i_lookup_table('B0')
        end if
-       ! If lookup table is not loaded, make it and save it
+       ! If lookup table is not loaded from a file, make it and save it
        call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
+       call deallocate_harmonics_arrays
     end if
 
-    ! Get coordinate limits
+    ! Get coordinate limits, Carrington rotation
     call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
          IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, &
          IsLogIndex_I=IsLogIndex_I)
@@ -130,33 +140,47 @@ contains
        RotB0_DD = rot_matrix_z(dLonB0)
     end if
 
+    ! Get Carrington rotation for the central meridian (time of magnetogram)
+    if(nParam > 3) CarringtonRot = Param_I(4)
+    
     ! Second lookup table for a different time for temporal interpolation
 
     if(DoReadHarmonicsNew)then
-       ! Read harmonics coefficients and set Carrington rotation info
+       ! Read harmonics coefficients and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew)
        DoReadHarmonicsNew = .false.
 
-       ! Set up default sized lookup table if not defeined in PARAM.in
+       ! Set up lookup table
        if(iTableB0New < 0)then
-          nR = max(30, nOrder); nLon = max(72, nOrder); nLat=max(30, nOrder)
           call init_lookup_table( &
                NameTable   = 'B0New',                 &
                NameCommand = 'use',                   &
-               NameVar     = 'r lon lat bx by bz',    &
+               NameVar     = NameVar,                 &
                NameFile    = 'harmonics_new_bxyz.out',&
                TypeFile    = 'real4',                 &
                nIndex_I    = [nR+1, nLon+1, nLat+1],  &
                IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
                IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
+               Param_I= [rMagnetogram, rSourceSurface, 0.0, CarringtonRotNew],&
                StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
           iTableB0New = i_lookup_table('B0')
        end if
        ! Make second lookup table
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
-    end if
 
-    call deallocate_harmonics_arrays
+       call deallocate_harmonics_arrays
+    end if
+    
+    if(iTableB0New > 0)then
+       ! Get Carrington rotation (time) for new magnetogram
+       call get_lookup_table(iTableB0New, nParam=nParam, Param_I=Param_I)
+       if(nParam > 3)then
+          CarringtonRotNew = Param_I(4)
+       else
+          call CON_stop(NameSub//': missing Carrington rotation info in '// &
+               trim(NameHarmonicsFileNew))
+       end if
+    end if
     
   end subroutine init_magnetogram_lookup_table
   !============================================================================
@@ -184,24 +208,27 @@ contains
 
   end subroutine calc_b0_table
   !============================================================================
-  subroutine get_magnetogram_field31(x, y, z, B0_D)
+  subroutine get_magnetogram_field31(x, y, z, B0_D, Carrington)
 
     real, intent(in) ::  x, y, z
     real, intent(out):: B0_D(3)
+    real, intent(in), optional :: Carrington
 
     !--------------------------------------------------------------------------
-    call  get_magnetogram_field11([ x, y, z ], B0_D)
+    call  get_magnetogram_field11([ x, y, z ], B0_D, Carrington)
 
   end subroutine get_magnetogram_field31
   !============================================================================
-  subroutine get_magnetogram_field11(Xyz_D, B0_D)
+  subroutine get_magnetogram_field11(Xyz_D, B0_D, Carrington)
 
     ! Return B0_D [Tesla] field at position Xyz_D [Rs]
+    ! Interpolat to time Carrington if present and iTableB0New is defined
 
     real, intent(in) :: Xyz_D(3)
     real, intent(out):: B0_D(3)
+    real, intent(in), optional :: Carrington
 
-    real:: rLonLat_D(3), r
+    real:: rLonLat_D(3), r, B0New_D(3)
     !--------------------------------------------------------------------------
     ! Converting to rlonlat (radians)
     call xyz_to_rlonlat(Xyz_D, rLonLat_D)
@@ -220,6 +247,23 @@ contains
     call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
          DoExtrapolate=(r<rMinB0) )
 
+    if(present(Carrington) .and. iTableB0New > 0)then
+       ! Check if time has passed the original magnetogram time
+       if(Carrington > CarringtonRot)then
+          call interpolate_lookup_table(iTableB0New, rLonLat_D, B0New_D, &
+               DoExtrapolate=(r<rMinB0) )
+          if(Carrington > CarringtonRotNew)then
+             ! Time is beyond new table time, so take that
+             B0_D = B0New_D
+          else
+             ! interpolate in time
+             B0_D = ((Carrington       - CarringtonRot)*B0New_D  &
+                  +  (CarringtonRotNew - Carrington   )*B0_D   ) &
+                  /  (CarringtonRotNew - CarringtonRot)
+          end if
+       end if
+    end if
+    
     ! Rotate Bx, By based on shifted coordinates
     if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
 
@@ -245,17 +289,28 @@ contains
     case("#FACTORB0")
        call read_var("FactorB0", FactorB0)
 
+    case("#HARMONICSGRID")
+       call read_var('rMagnetogram',   rMagnetogram)
+       call read_var('rSourceSurface', rSourceSurface)
+       call read_var('IsLogRadius',    IsLogRadius)
+       call read_var('MaxOrder',       MaxOrder)
+       call read_var('nR',             nR)
+       call read_var('nLon',           nLon)
+       call read_var('nLat',           nLat)
+       if(IsLogRadius)then
+          NameVar = 'log'//NameVarLinear
+       else
+          NameVar = NameVarLinear
+       end if
+
     case("#HARMONICSFILE")
        DoReadHarmonics = .true.
        call read_var('NameHarmonicsFile', NameHarmonicsFile)
-       call read_var('rMagnetogram',      rMagnetogram)
-       call read_var('rSourceSurface',    rSourceSurface)
 
     case("#NEWHARMONICSFILE")
        DoReadHarmonicsNew = .true.
        call read_var('NameHarmonicsFileNew', NameHarmonicsFileNew)
 
-       
     case("#MAGNETOGRAM") ! Kept For backward compatibility only
        call read_var('UseMagnetogram', DoReadHarmonics)
        if(DoReadHarmonics)then
@@ -297,7 +352,7 @@ contains
          ': not enough parameters in '//trim(NameFile))
 
     nOrderIn   = nint(Param_I(1))
-    nOrder     = min(nOrder,nOrderIn)
+    nOrder     = min(MaxOrder, nOrderIn)
     Carrington = Param_I(2)
     PhiOffset  = Param_I(3)
 
