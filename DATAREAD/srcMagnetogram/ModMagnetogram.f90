@@ -84,7 +84,6 @@ contains
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
-    integer:: nR, nLon, nLat
 
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
