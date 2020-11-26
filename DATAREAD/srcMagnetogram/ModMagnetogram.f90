@@ -228,6 +228,8 @@ contains
     real, intent(in), optional :: Carrington
 
     real:: rLonLat_D(3), r, B0New_D(3)
+
+    character(len=*), parameter:: NameSub = 'get_magnetogram_field'
     !--------------------------------------------------------------------------
     ! Converting to rlonlat (radians)
     call xyz_to_rlonlat(Xyz_D, rLonLat_D)
@@ -247,18 +249,39 @@ contains
          DoExtrapolate=(r<rMinB0) )
 
     if(present(Carrington) .and. iTableB0New > 0)then
-       ! Check if time has passed the original magnetogram time
-       if(Carrington > CarringtonRot)then
-          call interpolate_lookup_table(iTableB0New, rLonLat_D, B0New_D, &
-               DoExtrapolate=(r<rMinB0) )
-          if(Carrington > CarringtonRotNew)then
-             ! Time is beyond new table time, so take that
-             B0_D = B0New_D
-          else
-             ! interpolate in time
-             B0_D = ((Carrington       - CarringtonRot)*B0New_D  &
-                  +  (CarringtonRotNew - Carrington   )*B0_D   ) &
-                  /  (CarringtonRotNew - CarringtonRot)
+
+       if(CarringtonRot < 0.0 .or. CarringtonRotNew < 0.0) call CON_stop( &
+            NameSub//': no Carrington time in at least one magnetogram')
+
+       if(CarringtonRot < CarringtonRotNew)then
+          ! Check if time has passed the original magnetogram time
+          if(Carrington > CarringtonRot)then
+             call interpolate_lookup_table(iTableB0New, rLonLat_D, B0New_D, &
+                  DoExtrapolate=(r<rMinB0) )
+             if(Carrington > CarringtonRotNew)then
+                ! Time is beyond new table time, so take that
+                B0_D = B0New_D
+             else
+                ! interpolate in time
+                B0_D = ((Carrington       - CarringtonRot)*B0New_D  &
+                     +  (CarringtonRotNew - Carrington   )*B0_D   ) &
+                     /  (CarringtonRotNew - CarringtonRot)
+             end if
+          end if
+       else
+          ! "new" table has earlier time than original table
+          if(Carrington < CarringtonRot)then
+             call interpolate_lookup_table(iTableB0New, rLonLat_D, B0New_D, &
+                  DoExtrapolate=(r<rMinB0) )
+             if(Carrington <= CarringtonRotNew)then
+                ! Time is before new table time, so take that
+                B0_D = B0New_D
+             else
+                ! interpolate in time
+                B0_D = ((CarringtonRot - Carrington      )*B0New_D  &
+                     +  (Carrington    - CarringtonRotNew)*B0_D   ) &
+                     /  (CarringtonRot - CarringtonRotNew)
+             end if
           end if
        end if
     end if
