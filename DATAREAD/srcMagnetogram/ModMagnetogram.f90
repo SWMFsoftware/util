@@ -85,6 +85,14 @@ contains
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
 
+    ! First time either use existing file or make it and save it.
+    ! This saves time if the code is run with the same table(s)
+    ! multiple times. If the tables get recalculated, the commands
+    ! are changed to "save", so they are recalculated and saved.
+    ! Saving is useful for checking the last magnetogramss used,
+    ! and for restart.
+    character(len=4):: NameCommand = 'use', NameCommandNew = 'use'
+    
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
     ! Make sure these are set
@@ -99,22 +107,21 @@ contains
        call read_harmonics_file(NameHarmonicsFile, CarringtonRot)
        DoReadHarmonics = .false.
 
-       ! Create default size lookup table if not specified in PARAM.in
-       if(iTableB0 <= 0)then
-          ! Set up a default B0 lookup table
-          call init_lookup_table( &
-               NameTable   = 'B0',                    &
-               NameCommand = 'use',                   &
-               NameVar     = NameVar,                 &
-               NameFile    = 'harmonics_bxyz.out',    &
-               TypeFile    = 'real4',                 &
-               nIndex_I    = [nR+1, nLon+1, nLat+1],  &
-               IndexMin_I  = [rMagnetogram,     0.0, -90.0],    &
-               IndexMax_I  = [rSourceSurface, 360.0,  90.0],    &
-               Param_I = [rMagnetogram, rSourceSurface, 0.0, CarringtonRot], &
-               StringDescription = 'Created from '//trim(NameHarmonicsFile) )
-          iTableB0 = i_lookup_table('B0')
-       end if
+       ! Initialize lookup table based on #HARMONICSGRID parameters
+       call init_lookup_table( &
+            NameTable   = 'B0',                    &
+            NameCommand = NameCommand,             &
+            NameVar     = NameVar,                 &
+            NameFile    = 'harmonics_bxyz.out',    &
+            TypeFile    = 'real4',                 &
+            nIndex_I    = [nR+1, nLon+1, nLat+1],  &
+            IndexMin_I  = [rMagnetogram,     0.0, -90.0],    &
+            IndexMax_I  = [rSourceSurface, 360.0,  90.0],    &
+            Param_I = [rMagnetogram, rSourceSurface, 0.0, CarringtonRot], &
+            StringDescription = 'Created from '//trim(NameHarmonicsFile) )
+       iTableB0 = i_lookup_table('B0')
+       NameCommand = "save" ! next time remake the table and save it
+
        ! If lookup table is not loaded from a file, make it and save it
        call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
@@ -143,28 +150,28 @@ contains
     if(nParam > 3) CarringtonRot = Param_I(4)
     
     ! Second lookup table for a different time for temporal interpolation
-
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew)
        DoReadHarmonicsNew = .false.
 
        ! Set up lookup table
-       if(iTableB0New < 0)then
-          call init_lookup_table( &
-               NameTable   = 'B0New',                 &
-               NameCommand = 'use',                   &
-               NameVar     = NameVar,                 &
-               NameFile    = 'harmonics_new_bxyz.out',&
-               TypeFile    = 'real4',                 &
-               nIndex_I    = [nR+1, nLon+1, nLat+1],  &
-               IndexMin_I  = [ rMagnetogram,     0.0, -90.0],    &
-               IndexMax_I  = [ rSourceSurface, 360.0,  90.0],    &
-               Param_I= [rMagnetogram, rSourceSurface, 0.0, CarringtonRotNew],&
-               StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
-          iTableB0New = i_lookup_table('B0')
-       end if
-       ! Make second lookup table
+       call init_lookup_table( &
+            NameTable   = 'B0New',                         &
+            NameCommand = NameCommandNew,                  &
+            NameVar     = NameVar,                         &
+            NameFile    = 'harmonics_new_bxyz.out',        &
+            TypeFile    = 'real4',                         &
+            nIndex_I    = [nR+1, nLon+1, nLat+1],          &
+            IndexMin_I  = [rMagnetogram,     0.0, -90.0],  &
+            IndexMax_I  = [rSourceSurface, 360.0,  90.0],  &
+            Param_I = [rMagnetogram, rSourceSurface, 0.0, CarringtonRotNew], &
+            StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
+
+       iTableB0New = i_lookup_table('B0')
+       NameCommandNew = "save" ! next time remake the table and save it
+       
+       ! Make second lookup table using the just read harmonics coefficients
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
 
        call deallocate_harmonics_arrays
@@ -214,7 +221,7 @@ contains
     real, intent(in), optional :: Carrington
 
     !--------------------------------------------------------------------------
-    call  get_magnetogram_field11([ x, y, z ], B0_D, Carrington)
+    call  get_magnetogram_field11([x, y, z], B0_D, Carrington)
 
   end subroutine get_magnetogram_field31
   !============================================================================
@@ -505,12 +512,12 @@ contains
        ! Bp = -(1/r)*d(Psi)/dPhi
        Bphi  = Bphi + p_II(n,m)*m/SinTheta*Coef3*Coef4
 
-       ! Potential
+       ! Potential could be calculated if it was needed:
        ! Potential = Potential + r*p_II(n,m)*Coef2*Coef3
 
     enddo; enddo
 
-    Bsph_D = [ Br, Btheta, Bphi ]
+    Bsph_D = [Br, Btheta, Bphi]
 
   contains
     !==========================================================================
