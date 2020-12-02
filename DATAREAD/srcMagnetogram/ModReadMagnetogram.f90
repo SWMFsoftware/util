@@ -5,7 +5,7 @@ module ModReadMagnetogram
 
   use ModNumConst
   use ModUtilities, ONLY: CON_stop
-  use ModConst, ONLY: cPi, cTwoPi
+  use ModConst, ONLY: cHalfPi, cPi, cTwoPi
 
   implicit none
 
@@ -324,12 +324,13 @@ contains
     real, allocatable :: ThetaIn_I(:), ThetaOut_I(:), NewBr_II(:,:), &
          ChebyshevWeightEu_I(:), Br_II(:,:)
 
+    character(len=*), parameter:: NameSub = 'uniform_theta_transform'
     !--------------------------------------------------------------------------
     write(*,*) ' Remeshing to Uniform Theta'
 
     if(IsFdips)then
-       nTheta0 = nThetaAll
-       nPhi0 = nPhiAll
+       nTheta0   = nThetaAll
+       nPhi0     = nPhiAll
        dPhi      = cTwoPi/nPhi0
        dTheta    = cPi/nTheta0
        dSinTheta = 2.0/nTheta0
@@ -337,32 +338,26 @@ contains
     endif
 
     nThetaIn = nTheta0
-    nThetaOut = ceiling(nThetaIn * cPi/2)
+    nThetaOut = ceiling(nThetaIn * cHalfPi)
 
-    write(*,*)'nTheta0,nThetaIn,nThetaOut',nTheta0,nThetaIn,nThetaOut
+    ! The number of points in theta direction should be odd
+    if (modulo(nThetaOut,2) == 0) nThetaOut = nThetaOut+1
 
-    ! Notice the number of point in theta direction is an odd number
-    if (mod(nThetaOut,2) == 0) then
-       nThetaOut=nThetaOut+1
-    else
-       nThetaOut=nThetaOut
-    end if
+    write(*,*) 'Original nThetaIn      =', nThetaIn
+    write(*,*) 'nThetaOut=nThetaIn*Pi/2=', nThetaOut
 
-    write(*,*) 'Original nTheta=', nThetaIn
-    write(*,*) 'New nTheta=     ', nThetaOut
-
-    ! Note that the indices start from 0
-    ! for both FDIPS & Harmonics
+    ! Note that the indices start from 0 for both FDIPS & Harmonics
     ! Lat grid to Theta grid
     allocate(NewBr_II(0:nPhi0-1,0:nThetaOut-1))
     allocate(ThetaIn_I(0:nThetaIn-1))
     allocate(ThetaOut_I(0:nThetaOut-1))
 
-    do iTheta=0,nThetaIn-1
+    do iTheta = 0, nThetaIn-1
        if(UseCosTheta)then
-          ThetaIn_I(iTheta) = cPi*0.5 - asin((real(iTheta)+0.5)*dSinTheta-1.0)
+          ThetaIn_I(iTheta) = cHalfPi - asin((iTheta+0.5)*dSinTheta - 1)
        else
-          ThetaIn_I(iTheta) = cPi*0.5 - ((iTheta + 0.50)*dTheta - cPi*0.50)
+          call CON_stop(NameSub//': UseCosTheta=F should not happen here')
+          ThetaIn_I(iTheta) = cHalfPi - ((iTheta + 0.5)*dTheta - cHalfPi)
        end if
     end do
 
@@ -377,9 +372,8 @@ contains
     iUpper = -1
     NewBr_II = 0
 
-    ! Allocate a new Magnetic field variable which has
-    ! first index as 0
-    ! common for both FDIPS & Harmonics
+    ! Allocate a new magnetic field variable which has first index as 0
+    ! common for both FDIPS and Harmonics
     allocate(Br_II(0:nPhi0-1,0:nTheta0-1))
     Br_II = Br0_II
 
@@ -389,45 +383,29 @@ contains
     BrSouthPole = sum(Br_II(:,0))/nPhi0
 
     ! Use linear interpolation to do the data remesh
-    do iPhi=0,nPhi0-1
-       do iTheta=0, nThetaOut-1
-          ! A search is needed in case the sin(latitude) grid is not uniform
-          ! do iTheta_search=0,nThetaIn-2
-          !   if(ThetaOut_I(iTheta) <= ThetaIn_I(iTheta_search) .and. &
-          !      ThetaOut_I(iTheta) >= ThetaIn_I(iTheta_search+1)) then
-          !      iLower=iTheta_search+1
-          !      iUpper=iTheta_search
-          !      exit
-          !   else
-          !      iLower=-1
-          !      iUpper=-1
-          !   end if
-          ! end do
-          iUpper = &
-               floor((cos(ThetaOut_I(iTheta)) - cos(ThetaIn_I(0)))/dSinTheta)
-          iLower = iUpper+1
+    do iTheta=0, nThetaOut-1
+       iUpper = floor((cos(ThetaOut_I(iTheta)) - cos(ThetaIn_I(0)))/dSinTheta)
+       iLower = iUpper+1
+       do iPhi = 0, nPhi0-1
           if (iUpper /= -1 .and. iUpper /= nThetaIn-1 ) then
              dThetaInterpolate = ThetaIn_I(iUpper) - ThetaIn_I(iLower)
              NewBr_II(iPhi,iTheta) = Br_II(iPhi,iLower)* &
                   (ThetaIn_I(iUpper)-ThetaOut_I(iTheta))/dThetaInterpolate &
                   +Br_II(iPhi,iUpper)* &
                   (ThetaOut_I(iTheta)-ThetaIn_I(iLower))/dThetaInterpolate
+          else if (iUpper == nThetaIn-1) then
+             dThetaInterpolate = ThetaIn_I(nThetaIn-1)
+             NewBr_II(iPhi,iTheta) = BrNorthPole &
+                  *(ThetaIn_I(nThetaIn-1)-ThetaOut_I(iTheta)) &
+                  /dThetaInterpolate &
+                  + Br_II(iPhi,nThetaIn-1) &
+                  *(ThetaOut_I(iTheta))/dThetaInterpolate
           else
-             if (iUpper == nThetaIn-1) then
-                dThetaInterpolate=ThetaIn_I(nThetaIn-1)
-                NewBr_II(iPhi,iTheta) = BrNorthPole &
-                     *(ThetaIn_I(nThetaIn-1)-ThetaOut_I(iTheta)) &
-                     /dThetaInterpolate &
-                     + Br_II(iPhi,nThetaIn-1) &
-                     *(ThetaOut_I(iTheta))/dThetaInterpolate
-             end if
-             if (iUpper == -1) then
-                dThetaInterpolate = cPi-ThetaIn_I(0)
-                NewBr_II(iPhi,iTheta) = Br_II(iPhi,0)* &
-                     (cPi - ThetaOut_I(iTheta))/dThetaInterpolate &
-                     +BrSouthPole* &
-                     (ThetaOut_I(iTheta) - ThetaIn_I(0))/dThetaInterpolate
-             end if
+             dThetaInterpolate = cPi - ThetaIn_I(0)
+             NewBr_II(iPhi,iTheta) = Br_II(iPhi,0)* &
+                  (cPi - ThetaOut_I(iTheta))/dThetaInterpolate &
+                  +BrSouthPole* &
+                  (ThetaOut_I(iTheta) - ThetaIn_I(0))/dThetaInterpolate
           end if
        end do
     end do
@@ -436,8 +414,7 @@ contains
     ! Copy the remeshed grid size into nTheta
     nTheta0 = nThetaOut
 
-    ! Copy the remeshed NewBr_II into Br0_II
-    ! Br0_II indices begin from 1
+    ! Copy the remeshed NewBr_II into Br0_II. Br0_II indices begin from 1
     if(allocated(Br0_II)) deallocate(Br0_II)
     allocate(Br0_II(1:nPhi0,1:nTheta0))
     Br0_II = NewBr_II
@@ -459,7 +436,7 @@ contains
     do iW = 0, nThetaOut-1
        do iU = 0, (nThetaOut-1)/2
           ChebyshevWeightW_I(iW) = ChebyshevWeightW_I(iW) + &
-               ChebyshevWeightEu_I(iU)*(-2.0)/(4*(iU)**2-1)* &
+               ChebyshevWeightEu_I(iU)*(-2.0)/(4*(iU)**2 - 1)* &
                cos(iW*iu*cPi/((nThetaOut-1)/2))
        end do
     end do
