@@ -144,13 +144,14 @@ contains
              endif
           endif
        case("#GRID")
-          call read_var('nR    ', nR)
+          call read_var('nR',           nR)
           call read_var('nThetaCoarse', nThetaCoarse)
           call read_var('nPhiCoarse  ', nPhiCoarse)
        case("#PARALLEL")
           call read_var('nProcTheta', nProcTheta)
           call read_var('nProcPhi'  , nProcPhi)
-       case("#MAGNETOGRAMFILE",'#CHANGEPOLARFIELD', '#CHANGEWEAKFIELD', "#CHEBYSHEV")
+       case("#MAGNETOGRAMFILE",'#CHANGEPOLARFIELD', '#CHANGEWEAKFIELD', &
+            "#CHEBYSHEV")
           call read_magnetogram_param(NameCommand)
        case('#REMOVEMONOPOLE')
           call read_var('DoRemoveMonopole', DoRemoveMonopole)
