@@ -36,7 +36,7 @@ T			UseChebyshevNode
 ! Grid for testing only
 #GRID
 20			nR
-32			nTheta
+20			nTheta
 20			nPhi
 
 ! Reasonable grid for a production run
