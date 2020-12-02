@@ -314,7 +314,8 @@ contains
          CoordIn_DII = Coord_DII, &
          VarIn_VI = Var_VI, &
          NameVarIn = "n m g h nOrder CR LonCentral", &
-         StringFormatIn = "(2f5.0, 2f20.10)" &
+         StringFormatIn = "(2f5.0, 2f20.10)", &
+         StringFormatParamIn = "(f5.0, 2f20.10)" &
          )
 
     deallocate(Coord_DII, Var_VI)
