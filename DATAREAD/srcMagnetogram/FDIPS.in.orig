@@ -59,7 +59,7 @@ TESTIJK
 
 ! nProcTheta*nProcPhi should agree with the number of procs FDIPS.exe uses
 ! Default is a reasonably good decomposition, so this command is not needed
-#PARALLEL
+PARALLEL
 2			nProcTheta
 2			nProcPhi
 
