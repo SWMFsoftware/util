@@ -36,7 +36,7 @@ T			UseChebyshevNode
 ! Grid for testing only
 #GRID
 20			nR
-20			nTheta
+32			nTheta
 20			nPhi
 
 ! Reasonable grid for a production run
@@ -89,21 +89,19 @@ T			UseSinglePart
 ! Save up to four files containing the potential or the magnetic field.
 ! The parallel field, bxyz, and potential output can be merged with 
 ! the redistribute.pl script.
-! The solar corona component of the SWMF can read the TypeOutput="field" file
-! in double precision binary format (real8).
-! Note that the new way to import FDIPS results in SWMF is to use "bxyz"
-!   output file type and "#LOOKUPTABLE" "B0" in PARAM.in.
-!   Check ModB0.f90 subroutine get_b0 for details.
+! The solar corona component of the SWMF can import FDIPS results
+! from "bxyz" output file type and "#LOOKUPTABLE" "B0" and "B0NEW"
+! in PARAM.in.
 
 #OUTPUT
 field			TypeOutput    (field, bxyz, potential, or tecplot)
 fdips_field.out		NameFileField
-real8			TypeFileField (ascii, real4 or real8)
+real4			TypeFileField (ascii, real4 or real8)
 
 #OUTPUT
 bxyz			TypeOutput    (field, bxyz, potential, or tecplot)
 fdips_bxyz.out		NameFileField
-real8			TypeFileField (ascii, real4 or real8)
+real4			TypeFileField (ascii, real4 or real8)
 
 ! This output file contains the potential that is used for testing the solver
 OUTPUT
