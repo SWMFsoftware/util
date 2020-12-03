@@ -169,7 +169,7 @@ test_harmonics:
 	make DIPOLE11
 	./DIPOLE11.exe
 	@echo "test_harmonics_run..." >> test_harmonics.diff
-	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/' HARMONICS.in.orig \
+	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/; s/\d+(\s+MaxOrder)/10$$1/' HARMONICS.in.orig \
 		> HARMONICS.in
 	./HARMONICS.exe | tee harmonics.log
 	@echo "test_harmonics_check..." >> test_harmonics.diff
