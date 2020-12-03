@@ -24,7 +24,14 @@ CHANGEWEAKFIELD
 T			UseLogRadius (default is F)
 F			UseWedge
 
-! For Uniform Theta Transform from a sin-lat grid.
+! Chebyshev transform simply interpolates to a uniform (co)latitude grid.
+! If the magnetometer grid is uniform to start with or was converted with
+!    remap_magnetogram.py -grid uniform
+! then this command has no effect. If the magnetogram on a sin-lat grid,
+! then this is strongly recommended. To ensure that the grid resolution
+! nowhere gets degraded, the number of latitude grid points nTheta
+! is increased by a factor of pi/2 = 1.57 relative to the original grid
+! or the coarsened grid requested in the #GRID command.
 ! Default is true so the lookup table is more uniform and accurate.
 
 #CHEBYSHEV
@@ -32,6 +39,7 @@ T			UseChebyshevNode
 
 ! In the Theta and Phi directions coarsening relative to the magnetogram 
 ! resolution by an integer ratio is allowed. Refinement is not possible.
+! nTheta may be increased by the Chebyshev transform (see above).
 
 ! Grid for testing only
 #GRID
@@ -87,29 +95,29 @@ HYPRE
 T			UseSinglePart
 
 ! Save up to four files containing the potential or the magnetic field.
-! The parallel field, bxyz, and potential output can be merged with 
-! the redistribute.pl script.
-! The solar corona component of the SWMF can import FDIPS results
-! from "bxyz" output file type and "#LOOKUPTABLE" "B0" and "B0NEW"
-! in PARAM.in.
+
+! The solar corona component of the SWMF can import FDIPS results from
+! "bxyz" output file type using "#LOOKUPTABLE" "B0" and "B0NEW" in PARAM.in.
 
 #OUTPUT
-field			TypeOutput    (field, bxyz, potential, or tecplot)
-fdips_field.out		NameFileField
+bxyz			TypeOutput    Bx,By,Bz
+fdips_bxyz.out		NameFileField
 real4			TypeFileField (ascii, real4 or real8)
 
+! For plotting saving the spherical components may be useful
+
 #OUTPUT
-bxyz			TypeOutput    (field, bxyz, potential, or tecplot)
-fdips_bxyz.out		NameFileField
+field			TypeOutput    Br,Blon,Blat
+fdips_field.out		NameFileField
 real4			TypeFileField (ascii, real4 or real8)
 
 ! This output file contains the potential that is used for testing the solver
 OUTPUT
-potential		TypeOutput
+potential		TypeOutput    Potential
 fdips_potential.out	NameFilePotential
 real8			TypeFilePotential
 
 ! The tecplot output (that contains Bx, By, Bz) only works in serial mode. 
 OUTPUT
-tecplot			TypeOutput
+tecplot			TypeOutput    Bx,By,Bz in tecplot format
 fdips_field.dat		NameFilePotential
