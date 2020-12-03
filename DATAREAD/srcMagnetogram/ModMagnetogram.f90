@@ -533,16 +533,12 @@ contains
       real:: SinThetaM, SinThetaM1  ! sin(Theta)^m, sin(Theta)^(m-1)
       integer:: m
 
-      integer:: nOrderOld = -10
-      real:: SinThetaOld = -10.0, CosThetaOld = -10.0
-
       ! Cache previous values
-
+      real:: SinThetaOld = -10.0, CosThetaOld = -10.0
       !------------------------------------------------------------------------
-      if(nOrder == nOrderOld .and. SinTheta == SinThetaOld &
-           .and. CosTheta == CosThetaOld) RETURN
+      if(SinTheta == SinThetaOld .and. CosTheta == CosThetaOld) RETURN
 
-      nOrderOld = nOrder; SinThetaOld = SinTheta; CosThetaOld = CosTheta
+      SinThetaOld = SinTheta; CosThetaOld = CosTheta
 
       SinThetaM  = 1.0
       SinThetaM1 = 1.0
@@ -607,13 +603,10 @@ contains
       integer:: m
       real:: RmRs, RmR, rRs
 
-      integer:: nOrderOld = -10
-      real::    rOld = -10.0
-
+      real:: rOld = -10.0
       !------------------------------------------------------------------------
-      if(nOrderOld == nOrder .and. rOld == r) RETURN
-
-      nOrderOld = nOrder; rOld = r
+      if(rOld == r) RETURN
+      rOld = r
 
       RmRs = rMagnetogram/rSourceSurface
       RmR  = rMagnetogram/r
@@ -641,24 +634,20 @@ contains
       real,    intent(in):: Phi
 
       integer:: m
-      real   :: SinPhi, CosPhi
-
-      integer:: nOrderOld = -10
-      real   :: PhiOld    = -10.0
-
+      complex:: z, zM ! Powers of cos(Phi)+i*sin(Phi)
+      
+      real   :: PhiOld = -10.0
       !------------------------------------------------------------------------
-      if(nOrderOld == nOrder .and. Phiold == Phi) RETURN
+      if(Phiold == Phi) RETURN
+      PhiOld = Phi
 
-      SinPhi_I(0) = 0.0
-      CosPhi_I(0) = 1.0
-      SinPhi = sin(Phi)
-      CosPhi = Cos(Phi)
+      z  = exp( (0.0, Phi) )
+      zM = (1.0, 0.0)
 
-      ! Recursive: sin(a+b) = sin(a)*cos(b) + cos(a)*sin(b)
-      !            cos(a+b) = cos(a)*cos(b) - sin(a)*sin(b)
-      do m = 1, nOrder
-         SinPhi_I(m) = SinPhi*CosPhi_I(m-1) + CosPhi*SinPhi_I(m-1)
-         CosPhi_I(m) = CosPhi*CosPhi_I(m-1) - SinPhi*SinPhi_I(m-1)
+      do m = 0, nOrder
+         CosPhi_I(m) = Real(zM)
+         SinPhi_I(m) = Imag(zM)
+         zM = zM*z
       end do
 
     end subroutine calc_azimuthal_functions
