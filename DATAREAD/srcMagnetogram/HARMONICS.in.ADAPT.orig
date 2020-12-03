@@ -1,18 +1,16 @@
 !  For ADAPT MAPS (HMI/GONG/VSM etc.)
 
-! This command reads the new fileformat with coordinates and header
-
-! Name of the input magnetogram ascii file
+! Name of the input magnetogram ascii file. Set maximum for |B| in Gauss.
 #MAGNETOGRAMFILE
 map_1.out			NameFileIn
 3500.0				BrMax
 
-! Default output file name is harmonics.dat
-! Name of the output file
+! Set name of output file. Default name is harmonics.dat
 #OUTPUT
 harmonics_adapt_ref.dat		NameFileOut
 
-! Default is the number of latitudes in the magnetogram but at most
-! MaxHarmonics = 180 (see ModMagHarmonics.f90)
+! The maximum order of spherical harmonics is nOrder = min(nTheta, MaxOrder)
+! where nTheta is the number of latitude grid cells in the magnetogram,
+! while MaxOrder can be set below. Default value for MaxOrder is 180.
 #HARMONICS
-180				nHarmonics
+180				MaxOrder

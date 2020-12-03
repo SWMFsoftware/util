@@ -21,12 +21,15 @@ CHANGEPOLARFIELD
 #OUTPUT
 harmonics11uniform.dat		NameFileOut
 
-! Default is the number of latitudes in the magnetogram but at most
-! MaxHarmonics = 180 (see ModMagHarmonics.f90)
+! The maximum order of spherical harmonics is nOrder = min(nTheta, MaxOrder)
+! where nTheta is the number of latitude grid cells in the magnetogram,
+! while MaxOrder can be set below. Default value for MaxOrder is 180.
 #HARMONICS
-10				nHarmonics
+180				MaxOrder
 
-! Default is true
+! Convert to uniform (co)latitude grid if the magnetogram is on a sin lat grid.
+! This is a requirement for accurate results.
+! Default is true and it should be left that way.
 #CHEBYSHEV
-F				UseChebyshevNode
+T				UseChebyshevNode
 
