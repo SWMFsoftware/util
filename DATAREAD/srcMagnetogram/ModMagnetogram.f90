@@ -646,7 +646,7 @@ contains
 
       do m = 0, nOrder
          CosPhi_I(m) = Real(zM)
-         SinPhi_I(m) = Imag(zM)
+         SinPhi_I(m) = Aimag(zM)
          zM = zM*z
       end do
 
