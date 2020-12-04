@@ -642,12 +642,17 @@ contains
       PhiOld = Phi
 
       z  = exp( cmplx(0.0, Phi) )
-      zM = (1.0, 0.0)
+      zM = z
 
-      do m = 0, nOrder
-         CosPhi_I(m) = Real(zM)
-         SinPhi_I(m) = Aimag(zM)
+      CosPhi_I(0) = 1.0
+      SinPhi_I(0) = 0.0
+      CosPhi_I(1) = real(zM)
+      SinPhi_I(1) = aimag(zM)
+      
+      do m = 2, nOrder
          zM = zM*z
+         CosPhi_I(m) = real(zM)
+         SinPhi_I(m) = aimag(zM)
       end do
 
     end subroutine calc_azimuthal_functions
