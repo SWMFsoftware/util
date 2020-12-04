@@ -641,7 +641,7 @@ contains
       if(Phiold == Phi) RETURN
       PhiOld = Phi
 
-      z  = exp( (0.0, Phi) )
+      z  = exp( cmplx(0.0, Phi) )
       zM = (1.0, 0.0)
 
       do m = 0, nOrder
