@@ -92,5 +92,5 @@ module EEE_ModCommonVariables
   ! Starting time when the dynamic strapping field starts to be applied 
   ! is stored, to calculate the effect of displacement of moving charges
   real    :: StartTime = -1.0
-
+  logical :: DoInit = .true.
 end module EEE_ModCommonVariables

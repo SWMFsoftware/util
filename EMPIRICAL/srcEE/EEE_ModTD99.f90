@@ -353,7 +353,7 @@ contains
           !The line is empty, return
           TypeBStrap = 'none'
           RETURN
-       elseif(len_trim(TypeCharge)==0)then
+       elseif(len_trim(TypeBStrap)==0)then
           !The line is empty, return
           TypeBStrap = 'none'
           RETURN
@@ -460,14 +460,12 @@ contains
     real:: RMinus, RPlus2, Rperp
     real:: Kappa, Kappa2 
     real:: B1qField_D(3)
-    
-    logical:: DoFirstCall=.true.
     !--------------------------------------------------------------------------
     ! Initialize the TD99 model parameters once::
 
-    if (DoFirstCall) then
+    if (DoInit) then
        call init_TD99_parameters
-       DoFirstCall=.false.
+       DoInit=.false.
     endif
    
     !

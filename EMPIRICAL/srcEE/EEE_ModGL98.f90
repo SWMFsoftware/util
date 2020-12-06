@@ -75,7 +75,6 @@ module EEE_ModGL98
   real :: XyzCenterConf_D(3), BConf_D(3)
 
   real, parameter ::    delta = 0.1
-  logical :: DoInit = .true.
 contains
   subroutine init
     use ModCoordTransform, ONLY: rot_matrix_y, rot_matrix_z

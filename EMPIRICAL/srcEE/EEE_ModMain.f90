@@ -105,6 +105,7 @@ contains
        !To avoid repeated scaling in subsequent sessions
        DoNormalizeXyz = .false.
     end if
+    DoInit = .true.
   end subroutine EEE_initialize
 
   !============================================================================
