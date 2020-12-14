@@ -214,10 +214,10 @@ test_fdips:
 	make test_fdips_check
 
 test_fdips_check:
-	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-7 -a=2e-9 \
 		fdips_field.out \
 		fdips_ref.out.gz > test_fdips.diff
-	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-7 -a=2e-9 \
 		fdips_bxyz.out \
 		fdips_bxyz_ref.out.gz >> test_fdips.diff
 	@ls -l test_fdips.diff
