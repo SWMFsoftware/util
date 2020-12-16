@@ -92,7 +92,7 @@ contains
        write(*,*) prefix, &
             '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
-       write(*,*) prefix, 'B0Dim          = '    ,B0Dim    ,'[Gauss]'
+       write(*,*) prefix, 'B0Dim          = ',B0Dim,'[Gauss]'
        write(*,*) prefix, 'Radius         = ',Radius,'[rSun]'
        write(*,*) prefix, 'AStretch       = ',AStretch, '[rSun]'
        write(*,*) prefix, 'rDistance1     = ',rDistance1,'[rSun]'
