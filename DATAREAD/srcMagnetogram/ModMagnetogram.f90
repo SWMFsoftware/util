@@ -81,10 +81,6 @@ contains
 
     integer, intent(in):: iComm
 
-    integer:: nParam
-    real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
-    logical:: IsLogIndex_I(3)
-
     ! First time either use existing file or make it and save it.
     ! This saves time if the code is run with the same table(s)
     ! multiple times. If the tables get recalculated, the commands
@@ -92,7 +88,12 @@ contains
     ! Saving is useful for checking the last magnetogramss used,
     ! and for restart.
     character(len=4):: NameCommand = 'use', NameCommandNew = 'use'
-    
+
+    real:: dLon ! longitude shift
+    integer:: nParam
+    real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
+    logical:: IsLogIndex_I(3)
+
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
     ! Make sure these are set
@@ -104,7 +105,7 @@ contains
     
     if(DoReadHarmonics)then
        ! Read harmonics coefficient and Carrington rotation info
-       call read_harmonics_file(NameHarmonicsFile, CarringtonRot)
+       call read_harmonics_file(NameHarmonicsFile, CarringtonRot, dLon)
        DoReadHarmonics = .false.
 
        ! Initialize lookup table based on #HARMONICSGRID parameters
@@ -117,7 +118,7 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],  &
             IndexMin_I  = [rMagnetogram,     0.0, -90.0],    &
             IndexMax_I  = [rSourceSurface, 360.0,  90.0],    &
-            Param_I = [rMagnetogram, rSourceSurface, 0.0, CarringtonRot], &
+            Param_I = [rMagnetogram, rSourceSurface, dLon, CarringtonRot], &
             StringDescription = 'Created from '//trim(NameHarmonicsFile) )
        iTableB0 = i_lookup_table('B0')
        NameCommand = "save" ! next time remake the table and save it
@@ -152,7 +153,7 @@ contains
     ! Second lookup table for a different time for temporal interpolation
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and Carrington rotation info
-       call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew)
+       call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew, dLon)
        DoReadHarmonicsNew = .false.
 
        ! Set up lookup table
@@ -165,7 +166,7 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],          &
             IndexMin_I  = [rMagnetogram,     0.0, -90.0],  &
             IndexMax_I  = [rSourceSurface, 360.0,  90.0],  &
-            Param_I = [rMagnetogram, rSourceSurface, 0.0, CarringtonRotNew], &
+            Param_I = [rMagnetogram, rSourceSurface, dLon, CarringtonRotNew], &
             StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
 
        iTableB0New = i_lookup_table('B0')
@@ -356,19 +357,20 @@ contains
   end subroutine read_magnetogram_param
   !============================================================================
 
-  subroutine read_harmonics_file(NameFile, Carrington)
+  subroutine read_harmonics_file(NameFile, Carrington, dLon)
 
     use ModPlotFile, ONLY: read_plot_file
 
     character(len=*), intent(in) :: NameFile
-    real,             intent(out):: Carrington ! carrington rotation from file
+    real,             intent(out):: Carrington ! Carrington rotation from file
+    real,             intent(out):: dLon       ! longitude offset from file
 
     ! read properly formatted harmonics coefficient file
 
     integer:: nHarmonic ! number of harmonics = (nOrder+1)*(nOrder+2)/2
     integer:: nParam, nOrderIn, i, n, m
 
-    real:: Param_I(3), Coef, Coef1, PhiOffset
+    real:: Param_I(3), Coef, Coef1
     real, allocatable:: Var_VI(:,:), Coord_DII(:,:,:)
 
     character(len=*), parameter:: NameSub = 'read_harmonics_file'
@@ -383,7 +385,7 @@ contains
     nOrderIn   = nint(Param_I(1))
     nOrder     = min(MaxOrder, nOrderIn)
     Carrington = Param_I(2)
-    PhiOffset  = Param_I(3)
+    dLon  = Param_I(3)
 
     if(nHarmonic /= (nOrderIn+1)*(nOrderIn+2)/2) call CON_stop(NameSub// &
          ': inconsistent n and nOrder in '//trim(NameFile))
