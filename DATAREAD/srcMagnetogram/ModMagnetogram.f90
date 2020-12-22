@@ -385,7 +385,7 @@ contains
     nOrderIn   = nint(Param_I(1))
     nOrder     = min(MaxOrder, nOrderIn)
     Carrington = Param_I(2)
-    dLon       = Param_I(3) - 180.0  ! LonCentral - 180??
+    dLon       = Param_I(3)
 
     if(nHarmonic /= (nOrderIn+1)*(nOrderIn+2)/2) call CON_stop(NameSub// &
          ': inconsistent n and nOrder in '//trim(NameFile))

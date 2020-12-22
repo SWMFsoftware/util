@@ -141,7 +141,7 @@ contains
          StringMagHeader
 
     integer :: iTheta, iPhi, m,inm, nn, mm
-    real    :: dThetaChebyshev, LongPhi = 0.0
+    real    :: dThetaChebyshev, dLon = 0.0
     real, allocatable:: Br_II(:,:), Coord_DII(:,:,:), Var_VI(:,:)
 
     !--------------------------------------------------------------------------
@@ -168,10 +168,10 @@ contains
        nPhi   = nPhiorig
     endif
 
-    ! Adding a shift to the cell center in the
-    ! Phi direction to the original
-    ! longitude shift.
-    LongPhi = LongShift + 180.0/nPhi
+    ! LongShift is the starting Carrington longitude of the magnetogram
+    ! Add the longitude width of a half cell (=180/nPhi) for cell centers
+    ! dLon rotates the longitude into actual HGR/Carrington longitude
+    dLon = LongShift + 180.0/nPhi
 
     allocate(Br_II(0:nPhi-1,0:nTheta-1))
     Br_II=Br0_II
@@ -307,13 +307,12 @@ contains
 
     call save_plot_file(NameFileOut, &
          StringHeaderIn=StringMagHeader, &
-         ParamIn_I=[ real(nHarmonics), CarringtonRotation, &
-         mod(LongPhi+180.,360.) ], &
+         ParamIn_I=[ real(nHarmonics), CarringtonRotation, dLon ], &
          IsCartesianIn = .false., &
          nDimIn = 2, &
          CoordIn_DII = Coord_DII, &
          VarIn_VI = Var_VI, &
-         NameVarIn = "n m g h nOrder CR LonCentral", &
+         NameVarIn = "n m g h nOrder CR dLon", &
          StringFormatIn = "(2f5.0, 2f20.10)", &
          StringFormatParamIn = "(f5.0, 2f20.10)" &
          )
