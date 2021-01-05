@@ -291,7 +291,7 @@ contains
     end do
 
     ! Leave out monopole (n=0) term::
-    gArray(1) = 0.0
+    gArray(0) = 0.0
 
     write(*,*)'Done Calculating harmonic coefficients'
 
