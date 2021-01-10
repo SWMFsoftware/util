@@ -161,7 +161,7 @@ contains
     Rotate_DD = matmul(Rotate_DD,          &
          rot_matrix_z(-LongitudeCme*cDegToRad))
     UnitX_D = matmul([1.0, 0.0, 0.0], Rotate_DD)
-    XyzCenter_D = matmul([0.0, 0.0, 1 - Depth], Rotate_DD)
+    XyzCenter_D = (1 - Depth)*DirCme_D
     if(.not.UseTD14)then
        if(.not.UsePlasmaBeta)then
           !

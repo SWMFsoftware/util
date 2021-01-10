@@ -21,6 +21,7 @@ contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
+    use ModUtilities, ONLY: norm2
     implicit none
 
     real, intent(in)             :: BodyNDim,BodyTDim,gamma
@@ -102,6 +103,7 @@ contains
     if(DoNormalizeXyz)then
        XyzCmeCenterSi_D = XyzCmeCenterSi_D*Io2Si_V(UnitX_)
        XyzCmeApexSi_D   = XyzCmeApexSi_D  *Io2Si_V(UnitX_)
+       rCmeApexInvSi    = 1/norm2(XyzCmeApexSi_D)
        !To avoid repeated scaling in subsequent sessions
        DoNormalizeXyz = .false.
     end if
@@ -170,6 +172,13 @@ contains
           case default
              call CON_stop(NameSub//': invalid value for TypeCme='//TypeCme)
           end select
+       else
+          UseTD        = .false.
+          UseTD14      = .false.
+          UseGL        = .false.
+          UseSpheromak = .false.
+          UseShearFlow = .false.
+          UseArch      = .false.
        end if
 
        ! The remaining commands are preserved for backwards compatibility

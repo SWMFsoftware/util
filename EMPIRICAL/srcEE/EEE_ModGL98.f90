@@ -73,7 +73,10 @@ module EEE_ModGL98
   ! the axis of symmetry
   !
   real :: XyzCenterConf_D(3), BConf_D(3)
-
+  !
+  ! Parameter to control self-similar solution
+  !
+  real :: uCmeSi = 0.0
   real, parameter ::    delta = 0.1
 contains
   subroutine init
@@ -81,27 +84,7 @@ contains
     real :: Rotate_DD(3,3)
     !-------------------------
     DoInit=.false.
-    if(iProc==0)then
-       write(*,*) prefix
-       write(*,*) prefix, &
-            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
-       write(*,*) prefix
-       write(*,*) prefix, &
-            '            Gibson and Low CME is initiated!!!'
-       write(*,*) prefix
-       write(*,*) prefix, &
-            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
-       write(*,*) prefix
-       write(*,*) prefix, 'B0Dim          = ',B0Dim,'[Gauss]'
-       write(*,*) prefix, 'Radius         = ',Radius,'[rSun]'
-       write(*,*) prefix, 'AStretch       = ',AStretch, '[rSun]'
-       write(*,*) prefix, 'rDistance1     = ',rDistance1,'[rSun]'
-       write(*,*) prefix, 'ApexHeight     = ', ApexHeight,'[rSun]'
-       write(*,*) prefix, 'LongitudeCme   = ',LongitudeCme,'[degrees]'
-       write(*,*) prefix, 'LatitudeCme    = ',LatitudeCme,'[degrees]'
-       write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
-       write(*,*) prefix
-    end if
+    
     alpha0 = Alpha0R0/Radius
     Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
     
@@ -121,7 +104,29 @@ contains
     
     ! The costant coefficient,
     ! -4*cPi/(Beta0*Alpha0R0**2) = 13.1687517342067082
-    
+    ! Normalize the self-similar CME speed
+    if(UseSpheromak) uCmeSi = uCmeSi*Io2Si_V(UnitU_)
+    if(iProc==0)then
+       write(*,*) prefix
+       write(*,*) prefix, &
+            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
+       write(*,*) prefix
+       write(*,*) prefix, &
+            '            Gibson and Low CME is initiated!!!'
+       write(*,*) prefix
+       write(*,*) prefix, &
+            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
+       write(*,*) prefix
+       write(*,*) prefix, 'B0Dim          = ',B0*No2Io_V(UnitB_),'[Gauss]'
+       write(*,*) prefix, 'Radius         = ',Radius,'[rSun]'
+       write(*,*) prefix, 'AStretch       = ',AStretch, '[rSun]'
+       write(*,*) prefix, 'rDistance1     = ',rDistance1,'[rSun]'
+       write(*,*) prefix, 'ApexHeight     = ', ApexHeight,'[rSun]'
+       write(*,*) prefix, 'LongitudeCme   = ',LongitudeCme,'[degrees]'
+       write(*,*) prefix, 'LatitudeCme    = ',LatitudeCme,'[degrees]'
+       write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
+       write(*,*) prefix
+    end if
     
     ! Construct the rotational matrix Rotate_DD,
     
@@ -136,7 +141,7 @@ contains
     ! (/0, 0, rDistance1/). Find this vector in the original
     ! coodinate frame.
     
-    XyzCenterConf_D = matmul((/0.0, 0.0, rDistance1/), Rotate_DD)
+    XyzCenterConf_D = rDistance1*DirCme_D
     
     ! The same for the magnetic field of configuration
     
@@ -151,7 +156,7 @@ contains
     character(len=*), parameter:: NameSub = 'set_parameters_GL98'
     !--------------------------------------------------------------------------
     select case(NameCommand)
-    case("#CME")
+    case("#CME","#SPHEROMAK")
        call read_var('BStrength',   B0Dim)         ![Gauss]
        call read_var('Radius',      Radius)        ![rSun]
        call read_var('aStretch',     aStretch)      ![rSun]

@@ -85,6 +85,7 @@ module EEE_ModCommonVariables
   ! Coordinate vectors of the CME center and apex
   logical :: DoNormalizeXyz = .false.
   real :: XyzCmeCenterSi_D(3) = 0.0, XyzCmeApexSi_D(3) = 0.0
+  real :: rCmeApexInvSi = 0.0
   ! The AMBIENT magnetic field at these points
   real :: bAmbientCenterSi_D(3) = 0.0, bAmbientApexSi_D(3) = 0.0
 
