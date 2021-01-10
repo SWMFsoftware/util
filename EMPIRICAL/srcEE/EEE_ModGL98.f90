@@ -132,6 +132,16 @@ contains
                 '[km/s]'
            write(*,*) prefix, 'is reached at R = ',&
                 Si2Io_V(UnitX_)/rCmeApexInvSi,'[rSun]'
+           if(uCmeSi > 0.0 .and. 1 + ApexHeight > 2*Radius)then
+              write(*,'(a,f4.1,a)') prefix//&
+                   'The lowest CME point reaches the heliodistance of 1[rSun] at time=',&
+                   ((2*Radius - ApexHeight)/(1 + ApexHeight -2*Radius)&
+                   /(uCmeSi*rCmeApexInvSi) + StartTime)/3600,'[h]'
+              write(*,'(a,f4.1,a)') prefix//&
+                   'The lowest CME point reaches the heliodistance of 1.15[rSun] at time=',&
+                   ((0.150 + 2*Radius - ApexHeight)/(1 + ApexHeight -2*Radius)&
+                   /(uCmeSi*rCmeApexInvSi) + StartTime)/3600,'[h]'
+           end if
         end if
        Write(*,*) prefix
     end if
