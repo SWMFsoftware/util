@@ -125,7 +125,15 @@ contains
        write(*,*) prefix, 'LongitudeCme   = ',LongitudeCme,'[degrees]'
        write(*,*) prefix, 'LatitudeCme    = ',LatitudeCme,'[degrees]'
        write(*,*) prefix, 'OrientationCme = ',OrientationCme,'[degrees]'
-       write(*,*) prefix
+       if(UseSpheromak)then
+           write(*,*) prefix, '>> Self-similar solution for spheromak <<'
+           write(*,*) prefix, 'Start time     = ',StartTime,'[s]'
+           write(*,*) prefix, 'CME speed      = ',uCmeSi*Si2Io_V(UnitU_),&
+                '[km/s]'
+           write(*,*) prefix, 'is reached at R = ',&
+                Si2Io_V(UnitX_)/rCmeApexInvSi,'[rSun]'
+        end if
+       Write(*,*) prefix
     end if
     
     ! Construct the rotational matrix Rotate_DD,
@@ -159,7 +167,7 @@ contains
     case("#CME","#SPHEROMAK")
        call read_var('BStrength',   B0Dim)         ![Gauss]
        call read_var('Radius',      Radius)        ![rSun]
-       call read_var('aStretch',     aStretch)      ![rSun]
+       call read_var('aStretch',    aStretch)      ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
        rDistance1 = 1 + ApexHeight + aStretch - Radius
        !
@@ -169,6 +177,10 @@ contains
        !...and center:
        XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*Radius
        DoNormalizeXyz = .true.
+       if(UseSpheromak)then
+          StartTime = -1.0
+          call read_var('uCmeSi', uCmeSi)  ![km/s]
+       end if
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
@@ -177,7 +189,7 @@ contains
 
   !============================================================================
 
-  subroutine get_GL98_fluxrope(XyzIn_D,rho_GL98,p_GL98,B_D,U_D)
+  subroutine get_GL98_fluxrope(XyzIn_D, rho_GL98, p_GL98, B_D, U_D, TimeNow)
 
     ! Definition of Parameters used for the initial state
     !   AStretch    = contraction distance as in   r --> r -a
@@ -241,6 +253,8 @@ contains
 
     ! Optional: velocity of self-similar expansion
     real, intent(out),optional :: U_D(3)
+    ! Optional: input time
+    real, optional, intent(in) :: TimeNow
 
     ! Density, pressure
     real, intent(out) :: rho_GL98,p_GL98
@@ -278,12 +292,25 @@ contains
 
     real :: R2CrossB0_D(3)
     real :: Alpha0R2
+
+    !
+    ! Parameters of the self-similar expansion
+    !
+    real :: Phi     ! 1 + Time*(U/R)
+    real :: PhiInv  ! 1/Phi
     !------------------------------------------------------------------------
     if (DoInit) call init
 
     R = sqrt(sum(XyzIn_D**2))
     ! Unit vector of radial direction
     eBoldR_D = XyzIn_D/R
+    if(UseSpheromak)then
+       !Expansion factor for self-similar solution
+       Phi = 1 + (TimeNow - StartTime)*uCmeSi*rCmeApexInvSi
+       PhiInv = 1/Phi
+       !Input argument for the self-similar solution 
+       R = R*PhiInv  
+    end if
 
     ! Stretched CARTESIAN COORDINATES 
     RTransformed = R + AStretch
@@ -352,9 +379,12 @@ contains
        rho_GL98 = rho_GL98*No2Si_V(UnitRho_)
        p_GL98 = p_GL98*No2Si_V(UnitP_)
        B_D = B_D*No2Si_V(UnitB_)
-
+       if(UseSpheromak)U_D = XyzIn_D*PhiInv*&!Inputs for self-similar solution
+            No2Si_V(UnitX_)*                &!Conversion to SI
+            uCmeSi*rCmeApexInvSi            !The uCmeSi is reached at the apex
     else
        B_D = 0; rho_GL98 = 0; p_GL98 = 0
+       if(present(U_D))U_D = 0
     endif
 
   contains

@@ -36,7 +36,10 @@ contains
        iComm = MPI_COMM_WORLD
     end if
     call MPI_COMM_RANK(iComm,iProc,iError)
-    if(present(TimeNow).and.StartTime < 0.0)StartTime = TimeNow
+    if(present(TimeNow).and.StartTime < 0.0)then
+       StartTime = TimeNow
+       if(iProc==0)write(*,*) prefix,' StartTime=',StartTime,'[s]'
+    end if
 
     g = gamma
     inv_g = 1.0/g
@@ -233,7 +236,7 @@ contains
     endif
 
    if(UseSpheromak)then
-       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
        B_D = B_D + B1_D; U_D = U_D + U1_D
     endif
 
@@ -252,7 +255,7 @@ contains
   subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, iteration_number)
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
-         DoAddGL, UseCms, DoAddSpheromak, DoAddTD14
+         DoAddGL, UseCms, DoAddSpheromak, DoAddTD14, StartTime
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModCms,  ONLY: get_cms
@@ -282,7 +285,7 @@ contains
     end if
 
     if(DoAddSpheromak)then
-       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, StartTime)
        Rho = Rho + Rho1; B_D = B_D + B1_D
        p = p + p1; U_D = U_D + U1_D
     end if
