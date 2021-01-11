@@ -1,6 +1,6 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!==============================================================================
 program magnetogram
   use EEE_ModMain
   use EEE_ModCommonVariables
@@ -14,7 +14,6 @@ program magnetogram
 
   implicit none
 
-
   integer,parameter:: nLong = 360, nLat = 180, nR = 70, nD = 40
   integer:: Long0, i, j, k, iError, iLong
   real:: Radius, Longitude, Latitude, dR
@@ -25,11 +24,11 @@ program magnetogram
   character(LEN=3)::TypeLatAxis
   character(LEN=100):: StringLine, NameCommand
   logical:: DoDebug = .false.
-  !--------------------------------------------------------------------------
+  !----------------------------------------------------------------------------
 
   call MPI_init(iError)
 
-  Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1 
+  Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
   No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
 
   read(*,*)Long0
@@ -84,13 +83,13 @@ program magnetogram
      case default
      end select
   end do
- 
-  if (DoDebug)then 
+
+  if (DoDebug)then
      write(*,*)'Radius_I    = ',Radius_I
      write(*,*)'Long_I      =',Long_I
      write(*,*)'Lat_I       =',Lat_I
      write(*,*)'Longitude_I =',Longitude_I
-     write(*,*)'Latitude_I  =',Latitude_I     
+     write(*,*)'Latitude_I  =',Latitude_I
   endif
 
   do k = 1,nD
@@ -112,7 +111,7 @@ program magnetogram
         end do
      enddo
   end do
-  
+
   PlotVar_V(1:3,:,:,:) = B_DC
 
   write(*,*)'Saving 3d Flux Rope output file'
@@ -121,7 +120,7 @@ program magnetogram
        TypeFileIn = 'ascii',          &
        StringHeaderIn = '3D Flux rope magnetic field +/- 20 deg of Flux rope location',&
        nDimIn = 3,                    &
-       ParamIn_I = (/float(Long0)/),         &
+       ParamIn_I = [float(Long0)],         &
        Coord1In_I = Radius_I, &
        Coord2In_I = Longitude_I,       &
        Coord3In_I = Latitude_I,        &
@@ -151,13 +150,13 @@ program magnetogram
          TypeFileIn = 'ascii',          &
          StringHeaderIn = 'Flux rope magnetic field at 1 R_s',&
          nDimIn = 2,                    &
-         ParamIn_I = (/float(Long0)/),         &
+         ParamIn_I = [float(Long0)],         &
          CoordIn_I = Longitude_I,       &
          Coord2In_I= Latitude_I,        &
-         NameVarIn = 'Longitude Latitude Br BLon BLat Long0',& 
+         NameVarIn = 'Longitude Latitude Br BLon BLat Long0',&
          VarIn_VII = BSurface_DC)
 
   call MPI_finalize(iError)
 
 end program magnetogram
-!============================================================================
+!==============================================================================

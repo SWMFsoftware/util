@@ -1,4 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module EEE_ModCommonVariables
 
@@ -9,24 +10,16 @@ module EEE_ModCommonVariables
   implicit none
   save
 
-  !\
   ! Named indices for directions
-  !/
   integer, parameter :: x_=1,y_=2,z_=3
 
-  !\
   ! prefix for writing EEE output
-  !/
   character(len=5), parameter :: prefix='EEE: '
 
-  !\
   ! My processor number
-  !/
   integer :: iProc = 0
 
-  !\
   ! Physics variables global to EEE
-  !/
   real :: g = 5./3., inv_g = 3./5., gm1 = 2./3., inv_gm1 = 3./2.
   real :: Gbody = -cGravitation*mSun*cProtonMass/(cBoltzmann*1.5e6)
 
@@ -54,10 +47,9 @@ module EEE_ModCommonVariables
   real, dimension(nIoUnit) :: &
        Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V
 
-
   ! Switch on CME (boundary and/or initial conditions)
   logical:: UseCme = .false.
-  
+
   ! Use Gibbson-Law, Titov-Demoulin, spheromak flux ropes
   logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false.
   ! Use Titov-Demoulin 2014
@@ -90,8 +82,9 @@ module EEE_ModCommonVariables
   real :: bAmbientCenterSi_D(3) = 0.0, bAmbientApexSi_D(3) = 0.0
 
   !
-  ! Starting time when the dynamic strapping field starts to be applied 
+  ! Starting time when the dynamic strapping field starts to be applied
   ! is stored, to calculate the effect of displacement of moving charges
   real    :: StartTime = -1.0
   logical :: DoInit = .true.
 end module EEE_ModCommonVariables
+!==============================================================================

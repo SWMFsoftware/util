@@ -1,7 +1,7 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!==============================================================================
-Module EEE_ModMain
+module EEE_ModMain
 
   use EEE_ModGetB0, ONLY: EEE_get_B0
   use ModUtilities, ONLY: CON_stop
@@ -22,7 +22,6 @@ contains
   subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
     use ModUtilities, ONLY: norm2
-    implicit none
 
     real, intent(in)             :: BodyNDim,BodyTDim,gamma
     integer, optional, intent(in):: iCommIn
@@ -51,7 +50,6 @@ contains
     No2Si_V(UnitU_)   = sqrt(g*cBoltzmann*BodyTDim/cProtonMass)
     No2Si_V(UnitRho_) = 1000000*cProtonMass*BodyNDim
 
-    !\
     ! Set other normalizing SI variables from the independent ones.
     !
     ! For sake of convenience
@@ -60,7 +58,6 @@ contains
     !  units of T are chosen to satisfy  T  = p/n               (kBoltzmann = 1)
     !
     ! Note that No2Si_V(UnitN_) is NOT EQUAL TO 1/No2Si_V(UnitX_)^3 !!!
-    !/
     No2Si_V(UnitT_)          = No2Si_V(UnitX_)/No2Si_V(UnitU_)         ! s
     No2Si_V(UnitN_)          = No2Si_V(UnitRho_)/cProtonMass           ! #/m^3
     No2Si_V(UnitP_)          = No2Si_V(UnitRho_)*No2Si_V(UnitU_)**2    ! Pa
@@ -72,13 +69,11 @@ contains
     No2Si_V(UnitJ_)          = No2Si_V(UnitB_)/( No2Si_V(UnitX_)*cMu ) ! A/m^2
     No2Si_V(UnitElectric_)   = No2Si_V(UnitU_)*No2Si_V(UnitB_)         ! V/m
     No2Si_V(UnitTemperature_)= No2Si_V(UnitP_) &
-         /( No2Si_V(UnitN_)*cBoltzmann )                               ! K 
+         /( No2Si_V(UnitN_)*cBoltzmann )                               ! K
     No2Si_V(UnitDivB_)       = No2Si_V(UnitB_)/No2Si_V(UnitX_)         ! T/m
     No2Si_V(UnitAngle_)      = 1.0                                     ! radian
 
-    !\
     ! Set inverse conversion SI -> normalized
-    !/
     Si2No_V = 1.0/No2Si_V
 
     ! As a default use SI units, so below only the differences need to be set
@@ -107,12 +102,11 @@ contains
        XyzCmeCenterSi_D = XyzCmeCenterSi_D*Io2Si_V(UnitX_)
        XyzCmeApexSi_D   = XyzCmeApexSi_D  *Io2Si_V(UnitX_)
        rCmeApexInvSi    = 1/norm2(XyzCmeApexSi_D)
-       !To avoid repeated scaling in subsequent sessions
+       ! To avoid repeated scaling in subsequent sessions
        DoNormalizeXyz = .false.
     end if
     DoInit = .true.
   end subroutine EEE_initialize
-
   !============================================================================
 
   subroutine EEE_set_parameters(NameCommand)
@@ -128,13 +122,13 @@ contains
          LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak
     use ModNumConst,      ONLY: cDegToRad
-    use ModCoordTransform,ONLY: lonlat_to_xyz
+    use ModCoordTransform, ONLY: lonlat_to_xyz
 
     character(len=*), intent(in) :: NameCommand
 
     character(len=20):: TypeCme
 
-    character(len=*), parameter:: NameSub = 'EEE_ModMain::EEE_set_parameters'
+    character(len=*), parameter:: NameSub = 'EEE_set_parameters'
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#CME")
@@ -194,12 +188,11 @@ contains
        call set_parameters_shearflow(NameCommand)
     case("#CMS")
        UseCme = .true.
-       UseCms = .true.     
+       UseCms = .true.
        call set_parameters_cms(NameCommand)
     end select
 
   end subroutine EEE_set_parameters
-
   !============================================================================
 
   subroutine EEE_get_state_BC(Xyz_D,Rho,U_D,B_D,p,Time,nStep,Iteration_number)
@@ -249,7 +242,6 @@ contains
     if(UseCms) call get_cms(Xyz_D, B_D)
 
   end subroutine EEE_get_state_BC
-
   !============================================================================
 
   subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, iteration_number)
@@ -292,15 +284,18 @@ contains
     if(UseCms) call get_cms(Xyz_D, B_D)
 
   end subroutine EEE_get_state_init
-  !================================
+  !============================================================================
   subroutine EEE_do_not_add_cme_again
     !
     ! Designed to avoid repeatedly adding CME in subsequent sessions
     !
     use EEE_ModCommonVariables, ONLY: DoAddFluxRope, &
          DoAddTD, DoAddGL, DoAddSpheromak
-    !---------------------
-    DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false. 
+
+    !--------------------------------------------------------------------------
+    DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false.
     DoAddSpheromak = .false.
   end subroutine EEE_do_not_add_cme_again
-end Module EEE_ModMain
+  !============================================================================
+end module EEE_ModMain
+!==============================================================================

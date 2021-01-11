@@ -4,7 +4,7 @@
 module EEE_ModGL98
 
   ! Gibson-Low CME flux rope model
-  
+
   use EEE_ModCommonVariables
 
   implicit none
@@ -17,7 +17,7 @@ module EEE_ModGL98
   public :: get_gl98_fluxrope
 
   ! Local variables
-  
+
   ! Geometric characteristics of the superimposed configuration:
 
   ! contraction distance as in   r --> r -a
