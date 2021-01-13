@@ -21,7 +21,9 @@ contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
-    use ModUtilities, ONLY: norm2
+#ifdef OPENACC
+    use ModUtilities, ONLY: norm2 
+#endif
 
     real, intent(in)             :: BodyNDim,BodyTDim,gamma
     integer, optional, intent(in):: iCommIn

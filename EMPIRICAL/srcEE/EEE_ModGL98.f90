@@ -5,6 +5,9 @@ module EEE_ModGL98
 
   ! Gibson-Low CME flux rope model
 
+#ifdef OPENACC
+  use ModUtilities, ONLY: norm2 
+#endif
   use EEE_ModCommonVariables
 
   implicit none
@@ -310,7 +313,7 @@ contains
     !--------------------------------------------------------------------------
     if (DoInit) call init
 
-    r = sqrt(sum(XyzIn_D**2))
+    r = norm2(XyzIn_D)
     ! Unit vector of radial direction
     eBoldR_D = XyzIn_D/r
     if(UseSpheromak)then
@@ -327,7 +330,7 @@ contains
 
     ! Coordinates relative to CME flux rope center
     XyzConf_D = XyzTransformed_D - XyzCenterConf_D
-    Distance2ConfCenter = sqrt(sum(XyzConf_D**2))
+    Distance2ConfCenter = norm2(XyzConf_D)
 
     if (Distance2ConfCenter <= Delta) then
        XyzConf_D = XyzConf_D*(Delta/Distance2ConfCenter)
@@ -348,7 +351,7 @@ contains
             cross_product(XyzConf_D, R2CrossB0_D)
 
        ! Compute kinetic gas pressure
-       pConf     =  Beta0*(Alpha0**2)*&
+       pConf =  Beta0*(Alpha0**2)*&
             sum(R2CrossB0_D**2)*(spher_bessel1_over_x(Alpha0R2) - Beta0)
 
        ! If we use stretch:

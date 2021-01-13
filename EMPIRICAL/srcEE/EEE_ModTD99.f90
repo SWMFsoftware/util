@@ -2,7 +2,10 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module EEE_ModTD99
-!  use ModUtilities, ONLY: norm2
+
+#ifdef OPENACC
+  use ModUtilities, ONLY: norm2 
+#endif
   use EEE_ModCommonVariables
   use ModHyperGeometric
   implicit none
