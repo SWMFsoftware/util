@@ -197,7 +197,7 @@ contains
     endif
 
     ! Save 2D Br in the original magnetogram grid
-    call save_plot_file('field_2d.out', TypeFileIn='real4',&
+    call save_plot_file('field_2d.out', TypeFileIn='ascii',&
          StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
          NameVarIn='Longitude Latitude Br',&
          VarIn_II=Br0_II, &
@@ -273,7 +273,7 @@ contains
        deallocate(BrTmp_II)
 
        ! Save the 2D field after coarsening
-       call save_plot_file('fdips_2d.out', TypeFileIn='real4',&
+       call save_plot_file('fdips_2d.out', TypeFileIn='ascii',&
             StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
             NameVarIn='Longitude Latitude Br',&
             VarIn_II=Br0_II, &
