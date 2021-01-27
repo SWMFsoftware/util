@@ -6,6 +6,8 @@ include ../../../Makefile.def
 
 include ../../../Makefile.conf
 
+-include Makefile.RULES
+
 help:
 	@echo 'Targets:'
 	@echo ' '
