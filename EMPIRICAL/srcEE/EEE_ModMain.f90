@@ -125,6 +125,7 @@ contains
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak
     use ModNumConst,      ONLY: cDegToRad
     use ModCoordTransform, ONLY: lonlat_to_xyz
+    use CON_axes,          ONLY: dLongitudeHgrDeg
 
     character(len=*), intent(in) :: NameCommand
 
@@ -139,7 +140,8 @@ contains
           call read_var("DoAddFluxRope",  DoAddFluxRope)
           call read_var("LongitudeCme",   LongitudeCme)
           call read_var("LatitudeCme",    LatitudeCme)
-          !
+          ! Correct for Rotation
+          LongitudeCme = LongitudeCme - dLongitudeHgrDeg
           ! Get direction vector for the CME
           call lonlat_to_xyz(LongitudeCme*cDegToRad, &
                LatitudeCme*cDegToRad, DirCme_D)
