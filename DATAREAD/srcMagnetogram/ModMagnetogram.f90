@@ -81,14 +81,6 @@ contains
 
     integer, intent(in):: iComm
 
-    ! First time either use existing file or make it and save it.
-    ! This saves time if the code is run with the same table(s)
-    ! multiple times. If the tables get recalculated, the commands
-    ! are changed to "save", so they are recalculated and saved.
-    ! Saving is useful for checking the last magnetogramss used,
-    ! and for restart.
-    character(len=4):: NameCommand = 'use', NameCommandNew = 'use'
-
     real:: dLon ! longitude shift
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
@@ -111,7 +103,7 @@ contains
        ! Initialize lookup table based on #HARMONICSGRID parameters
        call init_lookup_table( &
             NameTable   = 'B0',                    &
-            NameCommand = NameCommand,             &
+            NameCommand = 'save',                  &
             NameVar     = NameVar,                 &
             NameFile    = 'harmonics_bxyz.out',    &
             TypeFile    = 'real4',                 &
@@ -121,7 +113,6 @@ contains
             Param_I = [rMagnetogram, rSourceSurface, dLon, CarringtonRot], &
             StringDescription = 'Created from '//trim(NameHarmonicsFile) )
        iTableB0 = i_lookup_table('B0')
-       NameCommand = "save" ! next time remake the table and save it
 
        ! If lookup table is not loaded from a file, make it and save it
        call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
@@ -159,7 +150,7 @@ contains
        ! Set up lookup table
        call init_lookup_table( &
             NameTable   = 'B0New',                         &
-            NameCommand = NameCommandNew,                  &
+            NameCommand = 'save',                          &
             NameVar     = NameVar,                         &
             NameFile    = 'harmonics_new_bxyz.out',        &
             TypeFile    = 'real4',                         &
@@ -170,7 +161,6 @@ contains
             StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
 
        iTableB0New = i_lookup_table('B0')
-       NameCommandNew = "save" ! next time remake the table and save it
        
        ! Make second lookup table using the just read harmonics coefficients
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
