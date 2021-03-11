@@ -62,13 +62,14 @@ module ModMagnetogram
   real, allocatable:: Sqrt_I(:), SqrtRatio_I(:)
 
   ! Lookup table related variables
-  real:: rMinB0=1.0, rMaxB0=30.0 ! radial limits of table
+  real:: rMinB0=1.0 ! radial limits of table
+  real, public:: rMaxB0=30.0 ! radial limits of table
   real:: LonMinB0 = 0.0 ! starting longitude in the table
   real:: dLonB0   = 0.0   ! longitude shift
   real:: RotB0_DD(3,3)  ! rotation matrix due to longitude shift
-
+  
   real:: FactorB0 = 1.0 ! multiplier for the magnetic field
-
+  
   interface get_magnetogram_field
      module procedure get_magnetogram_field11, get_magnetogram_field31
   end interface get_magnetogram_field
