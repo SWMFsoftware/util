@@ -11,6 +11,9 @@ import remap_magnetogram as rmag
 import numpy as np
 import argparse
 import GLSETUPAlg as GL
+from swmfpy.web import download_magnetogram_hmi as hmi_map
+import datetime as dt
+
 BMax = 1900.0
 cPi = np.pi
 Rad2Deg = 180/cPi
@@ -127,6 +130,20 @@ if __name__ == '__main__':
    Lat_I        = cc[5]      # in radians
    Br_C         = cc[6]
    grid         = cc[7]      # grid type of output map
+   date         = cc[8]
+
+   if DoHMI:
+      hmi_yymm = date.split("-")
+      hmi_dd = hmi_yymm[2].split("T")
+      hmi_hh = hmi_dd[1].split(":")
+      hmi_yyyy     = int(hmi_yymm[0])
+      hmi_mm       = int(hmi_yymm[1])
+      hmi_dd       = int(hmi_dd[0])
+      hmi_hh       = int(hmi_hh[0])
+      cwd = os.getcwd()
+      time_mag = dt.datetime(hmi_yyyy, hmi_mm, hmi_dd, hmi_hh)
+      hmi_file = hmi_map(mag_time=time_mag, hmi_map='hmi.b_synoptic_small',
+                         download_dir=cwd)
 
    #Info to the idl session is passed via the fitsfile.out file####
    ############END OF PYTHON FIRST SESSION##########
