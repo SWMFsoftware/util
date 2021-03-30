@@ -45,6 +45,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     My MATLAB code remap_mag.m uses the same algorithm but runs much faster.
        by Richard Frazin, July 2014 - Feb 2015
     """
+    mapdate = 0.
     pi = 3.141592653589793
     if ( (out_grid != 'sin(lat)') and (out_grid != 'uniform') and \
              (out_grid != 'unspecified') ):
@@ -335,7 +336,8 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     # in radians
     Lat_I = newlat * (pi/180.) # radians
     # Bmax = 1900
-    return(nlong, nlat, nParam, Param_I, Long_I, Lat_I, newmap, out_grid)
+    return(nlong, nlat, nParam, Param_I, Long_I, Lat_I, newmap, out_grid, 
+           mapdate)
 
 ###############CONSERVATIVE (ON SIN(THETA) UNIFORM GRID########
 def smooth(nLong, nLat, nSmooth, Br_C):
