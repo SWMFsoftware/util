@@ -404,7 +404,8 @@ subroutine timing_stop(name)
 
   ! Write a warning for non-matching name
   if(sa_name(i_last)/=name.and.ntiming<maxtiming)write(*,*) &
-       'WARNING in timing: unexpected STOP requested for ',name
+       'WARNING in timing_stop: name=', name,' is different from last name=', &
+       trim(sa_name(i_last))
 
   i=i_last
   qnow   = timing_cpu()
