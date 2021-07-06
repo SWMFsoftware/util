@@ -228,6 +228,10 @@ test_fdips_check:
 
 test_fdips_hypre:
 	cd ${DIR}; ./Config.pl -hypre
+	rm -f test_fdips_hypre.diff
+	@(if [ -d ${DIR}/util/HYPRE ]; then make test_fdips_hypre_do; fi)
+
+test_fdips_hypre_do:
 	@echo "test_fdips_hypre_compile..." > test_fdips_hypre.diff
 	make FDIPS_HYPRE
 	make DIPOLE11
