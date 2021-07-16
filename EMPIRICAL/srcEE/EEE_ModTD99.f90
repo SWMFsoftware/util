@@ -535,9 +535,10 @@ contains
          ! Compute the vector potential, Ak, of the magnetic field
          ! produced by the ring current Itube and its derivatives
 
-         ! Calculate \tilde{P}^{-1}_{-1/2}(\cosh u)
+         ! Calculate \tilde{P}^{-1}_{-1/2}(\cosh u)/\kappa**3
          Ak     = toroid_P(0, Kappa2In=Kappa2)
-         ! Calculate d\tilde{P}^{-1}_{-1/2}(\cosh u)/du
+         ! Calculate d\tilde{P}^{-1}_{-1/2}(\cosh u)/du/\kappa &
+         !                   /(\kappa^\prime)**2
          dAkDk  = toroid_dpdu(0, Kappa2In=Kappa2)/(1.0 - Kappa2)
 
          BFRope_D = BcTube*(Rtube/sqrt(RPlus2))**3*&
