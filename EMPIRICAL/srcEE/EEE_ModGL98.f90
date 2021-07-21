@@ -5,7 +5,7 @@ module EEE_ModGL98
 
   ! Gibson-Low CME flux rope model
 
-#ifdef OPENACC
+#ifdef _OPENACC
   use ModUtilities, ONLY: norm2 
 #endif
   use EEE_ModCommonVariables

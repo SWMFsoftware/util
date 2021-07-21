@@ -3,7 +3,7 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module EEE_ModTD99
 
-#ifdef OPENACC
+#ifdef _OPENACC
   use ModUtilities, ONLY: norm2 
 #endif
   use EEE_ModCommonVariables
