@@ -4,12 +4,15 @@
 *.out
 *.log
 *.protex
+*.pyc
+*.png
 
 Makefile.DEPEND
 Makefile.RULES
 
 AMREX
 HYPRE
+pyfits
 
 CRASH/doc/EvidenceFile.pdf
 CRASH/doc/GrayDiffusion.pdf
@@ -25,8 +28,10 @@ CRASH/doc/ionization_equilibrium.pdf
 
 DATAREAD/srcMagnetogram/FDIPS.in
 DATAREAD/srcMagnetogram/HARMONICS.in
+DATAREAD/srcMagnetogram/CME.in
 DATAREAD/srcMagnetogram/fitsfile.dat
 DATAREAD/srcMagnetogram/harmonics11uniform.dat
 DATAREAD/srcMagnetogram/potentialfield.dat
 DATAREAD/srcMagnetogram/*.exe
 DATAREAD/srcMagnetogram/adapt*
+DATAREAD/srcMagnetogram/*.fits

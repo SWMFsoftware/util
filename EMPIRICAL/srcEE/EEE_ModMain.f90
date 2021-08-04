@@ -1,7 +1,7 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!==============================================================================
-Module EEE_ModMain
+module EEE_ModMain
 
   use EEE_ModGetB0, ONLY: EEE_get_B0
   use ModUtilities, ONLY: CON_stop
@@ -16,20 +16,31 @@ Module EEE_ModMain
   public :: EEE_get_state_init
   public :: EEE_get_state_BC
   public :: EEE_get_B0
-
+  public :: EEE_do_not_add_cme_again
 contains
   !============================================================================
-  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma)
+  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
-    implicit none
+#ifdef _OPENACC
+    use ModUtilities, ONLY: norm2 
+#endif
 
-    real, intent(in) :: BodyNDim,BodyTDim,gamma
+    real, intent(in)             :: BodyNDim,BodyTDim,gamma
+    integer, optional, intent(in):: iCommIn
+    real, optional, intent(in)   :: TimeNow
 
     integer :: iComm, iError
     !--------------------------------------------------------------------------
-
-    iComm = MPI_COMM_WORLD
+    if(present(iCommIn))then
+       iComm = iCommIn
+    else
+       iComm = MPI_COMM_WORLD
+    end if
     call MPI_COMM_RANK(iComm,iProc,iError)
+    if(present(TimeNow).and.StartTime < 0.0)then
+       StartTime = TimeNow
+       if(iProc==0)write(*,*) prefix,' StartTime=',StartTime,'[s]'
+    end if
 
     g = gamma
     inv_g = 1.0/g
@@ -41,7 +52,6 @@ contains
     No2Si_V(UnitU_)   = sqrt(g*cBoltzmann*BodyTDim/cProtonMass)
     No2Si_V(UnitRho_) = 1000000*cProtonMass*BodyNDim
 
-    !\
     ! Set other normalizing SI variables from the independent ones.
     !
     ! For sake of convenience
@@ -50,7 +60,6 @@ contains
     !  units of T are chosen to satisfy  T  = p/n               (kBoltzmann = 1)
     !
     ! Note that No2Si_V(UnitN_) is NOT EQUAL TO 1/No2Si_V(UnitX_)^3 !!!
-    !/
     No2Si_V(UnitT_)          = No2Si_V(UnitX_)/No2Si_V(UnitU_)         ! s
     No2Si_V(UnitN_)          = No2Si_V(UnitRho_)/cProtonMass           ! #/m^3
     No2Si_V(UnitP_)          = No2Si_V(UnitRho_)*No2Si_V(UnitU_)**2    ! Pa
@@ -62,13 +71,11 @@ contains
     No2Si_V(UnitJ_)          = No2Si_V(UnitB_)/( No2Si_V(UnitX_)*cMu ) ! A/m^2
     No2Si_V(UnitElectric_)   = No2Si_V(UnitU_)*No2Si_V(UnitB_)         ! V/m
     No2Si_V(UnitTemperature_)= No2Si_V(UnitP_) &
-         /( No2Si_V(UnitN_)*cBoltzmann )                               ! K 
+         /( No2Si_V(UnitN_)*cBoltzmann )                               ! K
     No2Si_V(UnitDivB_)       = No2Si_V(UnitB_)/No2Si_V(UnitX_)         ! T/m
     No2Si_V(UnitAngle_)      = 1.0                                     ! radian
 
-    !\
     ! Set inverse conversion SI -> normalized
-    !/
     Si2No_V = 1.0/No2Si_V
 
     ! As a default use SI units, so below only the differences need to be set
@@ -93,9 +100,15 @@ contains
     Io2No_V = 1/No2Io_V
 
     Gbody  = -cGravitation*mSun*(Si2No_V(UnitU_)**2 * Si2No_V(UnitX_))
-
+    if(DoNormalizeXyz)then
+       XyzCmeCenterSi_D = XyzCmeCenterSi_D*Io2Si_V(UnitX_)
+       XyzCmeApexSi_D   = XyzCmeApexSi_D  *Io2Si_V(UnitX_)
+       rCmeApexInvSi    = 1/norm2(XyzCmeApexSi_D)
+       ! To avoid repeated scaling in subsequent sessions
+       DoNormalizeXyz = .false.
+    end if
+    DoInit = .true.
   end subroutine EEE_initialize
-
   !============================================================================
 
   subroutine EEE_set_parameters(NameCommand)
@@ -103,20 +116,22 @@ contains
     use ModReadParam,     ONLY: read_var
     use EEE_ModGL98,      ONLY: set_parameters_GL98
     use EEE_ModTD99,      ONLY: set_parameters_TD99
-    use EEE_ModTDm,       ONLY: set_parameters_tdm14
     use EEE_ModArch,      ONLY: set_parameters_arch
     use EEE_ModShearFlow, ONLY: set_parameters_shearflow
     use EEE_ModCms,       ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
-         DoAddFluxRope, LongitudeCme, LatitudeCme, OrientationCme, &
-         UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, DoAddTD14
+         LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
+         UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak
+    use ModNumConst,      ONLY: cDegToRad
+    use ModCoordTransform, ONLY: lonlat_to_xyz
+    use CON_axes,          ONLY: dLongitudeHgrDeg
 
     character(len=*), intent(in) :: NameCommand
 
     character(len=20):: TypeCme
 
-    character(len=*), parameter:: NameSub = 'EEE_ModMain::EEE_set_parameters'
+    character(len=*), parameter:: NameSub = 'EEE_set_parameters'
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#CME")
@@ -125,24 +140,30 @@ contains
           call read_var("DoAddFluxRope",  DoAddFluxRope)
           call read_var("LongitudeCme",   LongitudeCme)
           call read_var("LatitudeCme",    LatitudeCme)
+          ! Correct for Rotation
+          LongitudeCme = LongitudeCme - dLongitudeHgrDeg
+          ! Get direction vector for the CME
+          call lonlat_to_xyz(LongitudeCme*cDegToRad, &
+               LatitudeCme*cDegToRad, DirCme_D)
           call read_var("OrientationCme", OrientationCme)
           call read_var("TypeCme", TypeCme, IsUpperCase=.true.)
           select case(TypeCme)
           case("TITOV-DEMOULIN", "TD")
              UseTD = .true.
-             DoAddTD = .true.
+             DoAddTD = DoAddFluxRope
              call set_parameters_TD99(NameCommand)
           case("TD14")
+             UseTD = .true.
              UseTD14 = .true.
-             DoAddTD14 = .true.
-             call set_parameters_tdm14(NameCommand)
+             DoAddTD = DoAddFluxRope
+             call set_parameters_TD99(NameCommand)
           case("GIBSON-LOW", "GL")
              UseGL = .true.
-             DoAddGL = .true.
+             DoAddGL = DoAddFluxRope
              call set_parameters_GL98(NameCommand)
           case("SPHEROMAK")
              UseSpheromak = .true.
-             DoAddSpheromak = .true.
+             DoAddSpheromak = DoAddFluxRope
              call set_parameters_GL98("#SPHEROMAK")
           case("BREAKOUT")
              UseShearFlow = .true.
@@ -152,49 +173,44 @@ contains
           case default
              call CON_stop(NameSub//': invalid value for TypeCme='//TypeCme)
           end select
+       else
+          UseTD        = .false.
+          UseTD14      = .false.
+          UseGL        = .false.
+          UseSpheromak = .false.
+          UseShearFlow = .false.
+          UseArch      = .false.
        end if
 
        ! The remaining commands are preserved for backwards compatibility
        ! and possibly for expert use (more options than #CME command)
     case("#ARCH")
        call set_parameters_arch(NameCommand)
-    case("#TD99FLUXROPE")
-       UseCme = .true.
-       UseTD  = .true.
-       DoAddTD  = .true.
-       call set_parameters_TD99(NameCommand)
-    case("#GL98FLUXROPE")
-       UseCme = .true.
-       UseGL  = .true.
-       DoAddGL  = .true.
-       call set_parameters_GL98(NameCommand)
     case("#SHEARFLOW")
        UseCme       = .true.
        UseShearFlow = .true.
        call set_parameters_shearflow(NameCommand)
     case("#CMS")
        UseCme = .true.
-       UseCms = .true.     
+       UseCms = .true.
        call set_parameters_cms(NameCommand)
     end select
 
   end subroutine EEE_set_parameters
-
   !============================================================================
 
-  subroutine EEE_get_state_BC(x_D,Rho,U_D,B_D,p,Time,n_step,iteration_number)
+  subroutine EEE_get_state_BC(Xyz_D,Rho,U_D,B_D,p,Time,nStep,Iteration_number)
 
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, UseTD14
-    use EEE_ModTD99, ONLY: get_transformed_TD99fluxrope, DoBqField
-    use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModShearFlow, ONLY: get_shearflow
-    use EEE_ModGL98, ONLY: get_GL98_fluxrope, adjust_GL98_fluxrope
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModCms, ONLY: get_cms
 
-    real, intent(in) :: x_D(3), Time
+    real, intent(in) :: Xyz_D(3), Time
     real, intent(out) :: Rho, U_D(3), B_D(3), p
-    integer, intent(in) :: n_step,iteration_number
+    integer, intent(in):: nstep, iteration_number
 
     real :: Rho1, U1_D(3), B1_D(3), p1
     !--------------------------------------------------------------------------
@@ -205,56 +221,44 @@ contains
     if(.not.UseCme) RETURN
 
     if (UseTD) then
-       call get_transformed_TD99fluxrope(x_D,B1_D,&
-            U1_D,n_step,Iteration_Number,Rho1,Time)
+       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
 
-       if(.not.DoBqField) U1_D=0.0
-
-       Rho = Rho + Rho1; U_D = U_D + U1_D; B_D = B_D + B1_D
-    end if
-
-    if (UseTD14) then
-       call calc_tdm14_bfield(x_D, B1_D, Bstrap_D)
-
-       B_D = B_D + B1_D
+       Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     end if
 
     if(UseGL)then
        ! Add Gibson & Low (GL98) flux rope
-       call get_GL98_fluxrope(x_D, Rho1, p1, B1_D)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D)
        B_D = B_D + B1_D
     endif
 
    if(UseSpheromak)then
-       call get_GL98_fluxrope(x_D, Rho1, p1, B1_D, U1_D)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
        B_D = B_D + B1_D; U_D = U_D + U1_D
     endif
 
     if(UseShearFlow)then
-       call get_shearflow(x_D, Time, U1_D, iteration_number)
+       call get_shearflow(Xyz_D, Time, U1_D, iteration_number)
 
        U_D = U_D + U1_D
     end if
 
-    if(UseCms) call get_cms(x_D, B_D)
+    if(UseCms) call get_cms(Xyz_D, B_D)
 
   end subroutine EEE_get_state_BC
-
   !============================================================================
 
-  subroutine EEE_get_state_init(x_D, Rho, B_D, p, n_step, iteration_number)
+  subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, iteration_number)
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
-         DoAddGL, UseCms, DoAddSpheromak, DoAddTD14
-    use EEE_ModGL98, ONLY: get_GL98_fluxrope, adjust_GL98_fluxrope
-    use EEE_ModTD99, ONLY: get_transformed_TD99fluxrope
-    use EEE_ModTDm, ONLY: calc_tdm14_bfield, Bstrap_D
+         DoAddGL, UseCms, DoAddSpheromak, DoAddTD14, StartTime
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModCms,  ONLY: get_cms
 
-    real, intent(in) :: x_D(3)
+    real, intent(in) :: Xyz_D(3)
     real, intent(out) :: Rho, B_D(3), p
-    integer, intent(in) :: n_step,iteration_number
-
+    integer, intent(in) :: nStep, iteration_number
     real :: U_D(3)
     real :: Rho1, U1_D(3), B1_D(3), p1
     !--------------------------------------------------------------------------
@@ -266,34 +270,36 @@ contains
 
     if(DoAddTD)then
        ! Add Titov & Demoulin (TD99) flux rope
-       call get_transformed_TD99fluxrope(x_D, B1_D, &
-            U1_D, n_step, iteration_number, Rho1)
-       Rho = Rho + Rho1; U_D = U_D + U1_D; B_D = B_D + B1_D
-       DoAddTD = .false.
+       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
+       Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     endif
-
-    if(DoAddTD14)then
-       call calc_tdm14_bfield(x_D, B1_D, Bstrap_D)
-       B_D = B_D + B1_D
-       DoAddTD14 = .false.
-    end if
 
     if(DoAddGL)then
        ! Add Gibson & Low (GL98) flux rope
-       call get_GL98_fluxrope(x_D, Rho1, p1, B1_D)
-       call adjust_GL98_fluxrope(Rho1, p1)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
-       DoAddGL = .false.
     end if
 
     if(DoAddSpheromak)then
-       call get_GL98_fluxrope(x_D, Rho1, p1, B1_D, U1_D)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, StartTime)
        Rho = Rho + Rho1; B_D = B_D + B1_D
        p = p + p1; U_D = U_D + U1_D
-       DoAddSpheromak = .false.
     end if
-    if(UseCms) call get_cms(x_D, B_D)
+    if(UseCms) call get_cms(Xyz_D, B_D)
 
   end subroutine EEE_get_state_init
+  !============================================================================
+  subroutine EEE_do_not_add_cme_again
+    !
+    ! Designed to avoid repeatedly adding CME in subsequent sessions
+    !
+    use EEE_ModCommonVariables, ONLY: DoAddFluxRope, &
+         DoAddTD, DoAddGL, DoAddSpheromak
 
-end Module EEE_ModMain
+    !--------------------------------------------------------------------------
+    DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false.
+    DoAddSpheromak = .false.
+  end subroutine EEE_do_not_add_cme_again
+  !============================================================================
+end module EEE_ModMain
+!==============================================================================

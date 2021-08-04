@@ -1,6 +1,6 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!==============================================================================
 module EEE_ModShearFlow
 
   use ModUtilities, ONLY: CON_stop
@@ -20,7 +20,6 @@ module EEE_ModShearFlow
   real :: xFlow_D(3), MaxBr
 
 contains
-
   !============================================================================
 
   subroutine set_parameters_shearflow(NameCommand)
@@ -63,7 +62,6 @@ contains
          ': RampDownTime in #SHEARFLOW should be greater than zero')
 
   end subroutine set_parameters_shearflow
-
   !============================================================================
 
   subroutine get_shearflow(x_D,Time,U_D,iteration_number)
@@ -75,7 +73,6 @@ contains
     use EEE_ModGetB0,   ONLY: EEE_get_B0
     use ModMagnetogram, ONLY: get_magnetogram_field
     use ModNumConst,    ONLY: cTolerance, cDegToRad
-    implicit none
 
     real, intent(in)  :: x_D(3), Time
     real, intent(out) :: U_D(3)
@@ -89,6 +86,7 @@ contains
     real :: UTheta, UPhi
 
     logical, save :: DoFirst=.true.
+
     !--------------------------------------------------------------------------
     if(DoFirst)then
        DoFirst = .false.
@@ -102,7 +100,7 @@ contains
 
     if(Time < StartTime .or. Time > StopTime)then
        U_D = 0.0
-       return
+       RETURN
     else
        if(Time > StopTime - RampDownTime)then
           TimeProfile = (StopTime - Time)/RampDownTime
@@ -134,7 +132,7 @@ contains
     if(abs(FullBr)<cTolerance)then
        ! No flow at polarity inversion lines
        U_D = 0.0
-       return
+       RETURN
     else
        ShearProfileL = shear_profile(R,Theta,Phi-0.5*dPhi,Time,FullBrL)
        ShearProfileR = shear_profile(R,Theta,Phi+0.5*dPhi,Time,FullBrR)
@@ -168,14 +166,12 @@ contains
     end if
 
   end subroutine get_shearflow
-
   !============================================================================
 
   real function shear_profile(R,Theta,Phi,Time,FullBr)
     use EEE_ModCommonVariables, ONLY: Si2No_V, UnitB_
     use EEE_ModGetB0,   ONLY: EEE_get_B0
     use ModMagnetogram, ONLY: get_magnetogram_field
-    implicit none
 
     real, intent(in)  :: R, Theta, Phi, Time
     real, intent(out) :: FullBr
@@ -183,6 +179,7 @@ contains
     real :: Xy, x_D(3), UnitR_D(3)
     real :: B0_D(3), B_D(3), BrRatio
     real :: Del_D(3), Angle, Mask
+
     !--------------------------------------------------------------------------
     Xy = R*sin(Theta)
     x_D(1) = Xy*cos(Phi)
@@ -204,5 +201,7 @@ contains
     shear_profile = FullBr**3*exp(-BrRatio**2)*Mask
 
   end function shear_profile
+  !============================================================================
 
 end module EEE_ModShearFlow
+!==============================================================================

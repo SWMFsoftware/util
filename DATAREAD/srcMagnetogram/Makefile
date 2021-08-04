@@ -6,6 +6,30 @@ include ../../../Makefile.def
 
 include ../../../Makefile.conf
 
+-include Makefile.RULES
+
+help:
+	@echo 'Targets:'
+	@echo ' '
+	@echo 'LIB                    - ${MY_LIB} (library for the SWMF)'
+	@echo 'HARMONICS              - ${BINDIR}/HARMONICS.exe (spherical harmonics solver)'
+	@echo 'POTENTIAL              - POTENTIAL.exe (serial FDIPS, Finite Difference Iterative Potential field Solver)'
+	@echo 'FDIPS                  - ${BINDIR}/FDIPS.exe (parallel FDIPS)'
+	@echo 'FDIPS_HYPRE            - ${BINDIR}/FDIPS.exe (parallel FDIPS using HYPRE library)'
+	@echo 'HYPRE                  - HYPRE.exe (test program for HYPRE library)'
+	@echo 'DIPOLE11               - DIPOLE11.exe (creates a magnetogram with a rotated dipole for tests)'
+	@echo 'test                   - run all tests'
+	@echo 'test_harmonics         - run test for HARMONICS.exe'
+	@echo 'test_harmonics_check   - check test_harmonics results'
+	@echo 'test_potential         - run test for POTENTIAL.exe'
+	@echo 'test_potential_check   - check test_potential results'
+	@echo 'test_fdips             - run test for FDIPS.exe'
+	@echo 'test_fdips_check       - check test_fdips results'
+	@echo 'test_fdips_hypre       - run test for FDIPS.exe with HYPRE library'
+	@echo 'test_fdips_hypre_check - check test_fdips_hypre results'
+	@echo 'test_fdips_wedge       - run wedge test for FDIPS.exe'
+	@echo 'test_fdips_wedge_check - check test_fdips_wedge results'
+
 ${LIBDIR}/libSHARE.a:
 	cd ${SHAREDIR}; $(MAKE) LIB
 
@@ -14,18 +38,25 @@ MY_LIB = ${LIBDIR}/libMAGNETOGRAM.a
 OBJECTS = \
 	ModMagnetogram.o
 
-OBJECTS_HARMONICS= \
-	harmonics.o \
-	ModMagHarmonics.o \
-	ModReadMagnetogram.o
+LIB:
+	make ${MY_LIB}
+	@echo
+	@echo ${MY_LIB} has been brought up to date.
+	@echo
 
-harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
+${MY_LIB}: ${OBJECTS}
+	rm -f ${MY_LIB}
+	${AR} ${MY_LIB} ${OBJECTS}
+
+##########################################################
 
 POTENTIAL: ${LIBDIR}/libSHARE.a potential_field.o 
 	${LINK.f90} -o POTENTIAL.exe potential_field.o \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${Lflag}
 
 ############## FDIPS #############
+
+FDIPSEXE = ${BINDIR}/FDIPS.exe
 
 FDIPS: ${LIBDIR}/libSHARE.a ${OBJECTS_FDIPS} 
 	make ${FDIPSEXE}
@@ -38,7 +69,6 @@ OBJECTS_FDIPS= \
 	FDIPS_nohypre.o \
 	FDIPS.o
 
-
 FDIPS.o:\
         FDIPS_module.o \
         ModReadMagnetogram.o
@@ -50,11 +80,9 @@ FDIPS_hypre.o:\
 FDIPS_module.o:\
         ModReadMagnetogram.o
 
-FDIPSEXE = ${BINDIR}/FDIPS.exe
-
 ${FDIPSEXE}: ${OBJECTS_FDIPS}
 	${LINK.f90} -o ${FDIPSEXE} ${OBJECTS_FDIPS} \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${LflagMpi}
 
 ############## FDIPS_HYPRE #############
 
@@ -73,13 +101,13 @@ OBJECTS_FDIPS_HYPRE= \
 
 ${FDIPS_HYPREEXE}: ${OBJECTS_FDIPS_HYPRE}
 	${LINK.f90} -o ${FDIPS_HYPREEXE} ${OBJECTS_FDIPS_HYPRE} \
-		-L${LIBDIR} -lSHARE ${Lflag1} ${HYPRELIB}
+		-L${LIBDIR} -lSHARE ${LflagMpi} ${HYPRELIB}
 
 ############## HYPRE ONLY #############
 
 HYPRE: ${LIBDIR}/libSHARE.a ${HYPRELIB}/libHYPRE.a hypre.o
 	${LINK.f90} -o HYPRE.exe hypre.o \
-		-L${LIBDIR} -lSHARE ${Lflag1} ${HYPRELIB}
+		-L${LIBDIR} -lSHARE ${LflagMpi} ${HYPRELIB}
 
 ############## HARMONICS #############
 
@@ -90,40 +118,47 @@ HARMONICS: ${LIBDIR}/libSHARE.a
 
 HARMONICSEXE = ${BINDIR}/HARMONICS.exe
 
+OBJECTS_HARMONICS= \
+	harmonics.o \
+	ModMagHarmonics.o \
+	ModReadMagnetogram.o
+
+harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
+
 ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
-		-L${LIBDIR} -lSHARE ${Lflag1}
+		-L${LIBDIR} -lSHARE ${Lflag}
+
+################ DIPOLE11 ###################
 
 DIPOLE11:
 	make DIPOLE11.exe
 
 DIPOLE11.exe: dipole11.o
 	${LINK.f90} -o DIPOLE11.exe dipole11.o \
-	-L${LIBDIR} -lSHARE ${Lflag1}
+	-L${LIBDIR} -lSHARE ${Lflag}
 
-LIB:
-	make ${MY_LIB}
-	@echo
-	@echo ${MY_LIB} has been brought up to date.
-	@echo
-
-${MY_LIB}: ${OBJECTS}
-	rm -f ${MY_LIB}
-	${AR} ${MY_LIB} ${OBJECTS}
+############### cleaning ##################
 
 clean: cleanfiles
 
 distclean: clean
-	rm -f *.dat *.out *.log *.diff FDIPS.in HARMONICS.in
+	rm -f *.dat *.out *.log *.diff FDIPS.in HARMONICS.in pyfits
 
-### TESTS FOR HARMONICS ###
+### TESTS ###
 
-test: 
+# Setting BLESS=YES or Y will copy the solution into the reference solution
+BLESS=NO
+
+DIFFNUM = ${SCRIPTDIR}/DiffNum.pl -BLESS=${BLESS}
+
+test:
 	@rm -f *.diff
 	-@(make test_harmonics)
 	-@(make test_potential)
 	-@(make test_fdips)
 	-@(make test_fdips_hypre)
+	cd ${DIR}; ./Config.pl -nohypre
 	-@(make test_fdips_wedge)
 	@echo "All test results:"
 	@ls -l *.diff
@@ -136,14 +171,14 @@ test_harmonics:
 	make DIPOLE11
 	./DIPOLE11.exe
 	@echo "test_harmonics_run..." >> test_harmonics.diff
-	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/' HARMONICS.in.orig \
+	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/; s/\d+(\s+MaxOrder)/10$$1/' HARMONICS.in.orig \
 		> HARMONICS.in
-	${SERIAL} ./HARMONICS.exe | tee harmonics.log
+	./HARMONICS.exe | tee harmonics.log
 	@echo "test_harmonics_check..." >> test_harmonics.diff
 	make test_harmonics_check
 
 test_harmonics_check:
-	${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
+	${DIFFNUM} -t -r=1e-5 -a=1e-12 \
 		harmonics11uniform.dat \
 		harmonics.ref > test_harmonics.diff
 	@ls -l test_harmonics.diff
@@ -156,12 +191,12 @@ test_potential:
 	make DIPOLE11
 	./DIPOLE11.exe
 	@echo "test_potential_run..." >> test_potential.diff
-	${SERIAL} ./POTENTIAL.exe > potential.log
+	./POTENTIAL.exe > potential.log
 	@echo "test_potential_check..." >> test_potential.diff
 	make test_potential_check
 
 test_potential_check:
-	${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
+	${DIFFNUM} -t -r=1e-5 -a=1e-12 \
 		potential.log \
 		potential.ref > test_potential.diff
 	@ls -l test_potential.diff
@@ -174,54 +209,46 @@ test_fdips:
 	make DIPOLE11
 	./DIPOLE11.exe
 	cp -f FDIPS.in.orig FDIPS.in
-	perl -i -pe 's/real8/ascii/' FDIPS.in
+	perl -i -pe 's/real4/ascii/' FDIPS.in
 	@echo "test_fdips_run..." >> test_fdips.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
-	./redistribute.pl fdips_field_np010202.out fdips.out
-	./redistribute.pl fdips_bxyz_np010202.out fdips_bxyz.out
+	${MPIRUN} ./FDIPS.exe > fdips.log
 	@echo "test_fdips_check..." >> test_fdips.diff
 	make test_fdips_check
 
 test_fdips_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
-		fdips.log \
-		fdips.ref > test_fdips_log.diff
-	gunzip -c fdips_ref.out.gz > fdips_ref.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
-		fdips.out \
-		fdips_ref.out > test_fdips.diff
-	gunzip -c fdips_bxyz_ref.out.gz > fdips_bxyz_ref.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
+	-${DIFFNUM} -t -r=1e-7 -a=2e-9 \
+		fdips_field.out \
+		fdips_ref.out.gz > test_fdips.diff
+	-${DIFFNUM} -t -r=1e-7 -a=2e-9 \
 		fdips_bxyz.out \
-		fdips_bxyz_ref.out >> test_fdips.diff
-	@ls -l test_fdips_log.diff test_fdips.diff
+		fdips_bxyz_ref.out.gz >> test_fdips.diff
+	@ls -l test_fdips.diff
 
 ###############################################################################
 
 test_fdips_hypre:
+	cd ${DIR}; ./Config.pl -hypre
+	rm -f test_fdips_hypre.diff
+	@(if [ -d ${DIR}/util/HYPRE ]; then make test_fdips_hypre_do; fi)
+
+test_fdips_hypre_do:
 	@echo "test_fdips_hypre_compile..." > test_fdips_hypre.diff
 	make FDIPS_HYPRE
 	make DIPOLE11
 	./DIPOLE11.exe
 	cp -f FDIPS.in.orig FDIPS.in
-	perl -i -pe 's/real8/ascii/' FDIPS.in
+	perl -i -pe 's/real4/ascii/' FDIPS.in
 	perl -i -pe 's/^BiCGSTAB/GMRES/i;s/^ILU/AMG/' FDIPS.in
 	@echo "test_fdips_hypre_run..." >> test_fdips_hypre.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS_HYPRE.exe > fdips_hypre.log
-	./redistribute.pl fdips_field_np010202.out fdips.out
+	${MPIRUN} ./FDIPS_HYPRE.exe > fdips_hypre.log
 	@echo "test_fdips_hypre_check..." >> test_fdips_hypre.diff
 	make test_fdips_hypre_check
 
 test_fdips_hypre_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-12 \
-		fdips_hypre.log \
-		fdips_hypre.ref > test_fdips_hypre_log.diff
-	gunzip -c fdips_ref.out.gz > fdips_ref.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-9 -a=1e-9 \
-		fdips.out \
-		fdips_ref.out > test_fdips_hypre.diff
-	@ls -l test_fdips_hypre_log.diff test_fdips_hypre.diff
-
+	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
+		fdips_field.out \
+		fdips_ref.out.gz > test_fdips_hypre.diff
+	@ls -l test_fdips_hypre.diff
 
 ###############################################################################
 
@@ -231,22 +258,12 @@ test_fdips_wedge:
 	cp -f FDIPS.in.wedge FDIPS.in
 	gunzip -c fdips_wedge_input.gz > fitsfile.dat
 	@echo "test_fdips_wedge_run..." >> test_fdips_wedge.diff
-	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
-	./redistribute.pl fdips_field_np010202.out fdips_b.out
-	./redistribute.pl fdips_ghostface_np010202.out fdips_g.out
+	${MPIRUN} ./FDIPS.exe > fdips.log
 	@echo "test_fdips_check..." >> test_fdips_wedge.diff
 	make test_fdips_wedge_check
 
 test_fdips_wedge_check:
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-5 -a=1e-9 \
-		fdips.log \
-		fdips_wedge.ref > test_fdips_wedge_log.diff
-	gunzip -c fdips_ref_wedge_b.gz > fdips_ref_b.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-8 -a=1e-9 \
-		fdips_b.out \
-		fdips_ref_b.out > test_fdips_wedge.diff
-	gunzip -c fdips_ref_wedge_g.gz > fdips_ref_g.out
-	-${SCRIPTDIR}/DiffNum.pl -t -r=1e-8 -a=1e-9 \
-		fdips_g.out \
-		fdips_ref_g.out >> test_fdips_wedge.diff
-	@ls -l test_fdips_wedge_log.diff test_fdips_wedge.diff
+	-${DIFFNUM} -t -r=1e-8 -a=1e-9 \
+		fdips_field.out \
+		fdips_wedge_ref.gz > test_fdips_wedge.diff
+	@ls -l test_fdips_wedge.diff

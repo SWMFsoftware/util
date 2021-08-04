@@ -107,10 +107,10 @@ c     Jan. 30, 2002
 
 * If X is out of range ( abs(x)>1 ) then value is returns as if x=1.
        
-        implicit real*8 (a-h,o-z)
-	real*8           x,xx,Plm(0:10,0:10),P(0:10,0:10,0:1),fact,sfact
+        implicit real (a-h,o-z)
+	real           x,xx,Plm(0:10,0:10),P(0:10,0:10,0:1),fact,sfact
 
-	real*8           dPlm(0:10,0:10),dP(0:10,0:10,0:2),anum,term
+	real           dPlm(0:10,0:10),dP(0:10,0:10,0:2),anum,term
 
 	LOGICAL DodPlm
 
@@ -124,11 +124,11 @@ c     Jan. 30, 2002
 
 	    DO m=0,mmax
 
-		  Plm(l,m)=0.D0
+		  Plm(l,m)=0.0
 
-		  P(l,m,0)=0.D0
+		  P(l,m,0)=0.0
 
-		  P(l,m,1)=0.D0
+		  P(l,m,1)=0.0
 
 	    ENDDO
 
@@ -146,13 +146,13 @@ c     Jan. 30, 2002
 
 * Copy x to xx, and make sure it is in range of -1. to +1.
 
-	xx=MIN(x,1.D0)
+	xx=MIN(x,1.0)
 
-	xx=MAX(xx,-1.D0)
+	xx=MAX(xx,-1.0)
 
 
 
-	P(0,0,1)=1.D0
+	P(0,0,1)=1.0
 
 	IF(lmax.GT.0) P(1,0,1)=xx
 
@@ -160,7 +160,7 @@ c     Jan. 30, 2002
 
 	   DO L=2,lmax
 
-	     P(L,0,1)=( (2.D0*L-1)*xx*P(L-1,0,1) - (L-1)*P(L-2,0,1) ) / L
+	     P(L,0,1)=( (2.0*L-1)*xx*P(L-1,0,1) - (L-1)*P(L-2,0,1) ) / L
 
 	   ENDDO
 
@@ -168,9 +168,9 @@ c     Jan. 30, 2002
 
 
 
-	fact=1.D0-xx**2
+	fact=1.0 - xx**2
 
-	sfact=DSQRT(fact)
+	sfact=SQRT(fact)
 
 
 
@@ -202,13 +202,13 @@ c     Jan. 30, 2002
 
 			DO m=0,mmax
 
-				dPlm(l,m)=0.D0
+				dPlm(l,m)=0.0
 
-				dP(l,m,0)=0.D0
+				dP(l,m,0)=0.0
 
-				dP(l,m,1)=0.D0
+				dP(l,m,1)=0.0
 
-				dP(l,m,2)=0.D0
+				dP(l,m,2)=0.0
 
 			ENDDO
 
@@ -216,7 +216,7 @@ c     Jan. 30, 2002
 
 
 
-		IF(lmax .GT. 0) dP(1,0,1)=1.D0
+		IF(lmax .GT. 0) dP(1,0,1)=1.0
 
 
 
@@ -276,13 +276,13 @@ c     Jan. 30, 2002
 
 			ELSE !denominator is zero
 
-			  IF(DABS(anum).LT.1.D-7)THEN
+			  IF(ABS(anum) .LT. 1E-7)THEN
 
-				term=0.D0 !return 0 in cases where numerator is near zero
+				term=0.0 !return 0 in cases where numerator is near zero
 
 			  ELSE !return nearly infinity with same sign as numerator
 
-				term=DSIGN(1.D36,anum) 
+				term = SIGN(1E36,anum) 
 
 			  ENDIF
 
@@ -328,12 +328,12 @@ c     Jan. 30, 2002
 *
 ** at angle omega, given the F.S. coeficients in array FSC
 *
-*        implicit real*8 (a-h,o-z)
-*	REAL*8 omega,FSC(0:1,0:*)
+*        implicit real (a-h,o-z)
+*	REAL omega,FSC(0:1,0:*)
 *
 *	INTEGER MaxN,n
 *
-*	REAL*8 Y,theta
+*	REAL Y,theta
 *
 *	Y=0.
 *
@@ -372,8 +372,8 @@ c     Jan. 30, 2002
 * Sets the value of Coef and Boundfit in the common block SetW00Coef.
 
 *
-        implicit real*8 (a-h,o-z)
-	REAL*8 angle,Bt,Tilt,SWVel,SWDen,ALindex
+        implicit real (a-h,o-z)
+	REAL angle,Bt,Tilt,SWVel,SWDen,ALindex
 
 	LOGICAL First,UseAL
 
@@ -401,11 +401,11 @@ c     Jan. 30, 2002
 
 	REAL*4 BSS( 0:1 , 0:1 , 0:MO, 0:1 , 0:MN)
 
-	REAL*8 XA(0:MJ),XB(0:MJ),FSC(0:1,0:4),PSS(0:1)
+	REAL XA(0:MJ),XB(0:MJ),FSC(0:1,0:4),PSS(0:1)
 
-	REAL*8 Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
+	REAL Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
 
-	real*8           dpi
+	real           dpi
 
 	INTEGER*4 i,j,k,l,m,n,o
 
@@ -509,7 +509,7 @@ c       PRINT *,Copyright
 
 	pi=2.*ASIN(1.)
 
-	dpi=2.D0*DASIN(1.D0)
+	dpi=2.0*ASIN(1.0)
 
 	First=.FALSE.
 
@@ -659,12 +659,12 @@ c       PRINT *,Copyright
 
 	FUNCTION BoundaryLat00(gmlt)
 
-        implicit real*8 (a-h,o-z)
-	REAL*8 gmlt
+        implicit real (a-h,o-z)
+	REAL gmlt
 
-	REAL*8 Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
+	REAL Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
 
-	real*8           dpi
+	real           dpi
 
         integer*4 MaxL,MaxM,MaxN
 	COMMON /EIE_SetW00Coef/Coef,BoundFit,pi,dpi,MaxL,MaxM,MaxN
@@ -692,18 +692,18 @@ c       PRINT *,Copyright
 * number density, and (optional) AL index.
 
 *
-        implicit real*8 (a-h,o-z)
-	REAL*8 gLAT,gMLT
+        implicit real (a-h,o-z)
+	REAL gLAT,gMLT
 
-	real*8           Phi,Z,O,x,ct,Phim
+	real           Phi,Z,O,x,ct,Phim
 
-	real*8            Plm(0:10,0:10),OPlm(0:10,0:10)
-	real*8           dPlm(0:10,0:10)
+	real            Plm(0:10,0:10),OPlm(0:10,0:10)
+	real           dPlm(0:10,0:10)
 
 
-	REAL*8 Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
+	REAL Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
 
-	real*8           dpi
+	real           dpi
 
         integer*4 MaxL,MaxM,MaxN
 	COMMON /EIE_SetW00Coef/Coef,BoundFit,pi,dpi,MaxL,MaxM,MaxN
@@ -712,27 +712,27 @@ c       PRINT *,Copyright
 
 	IF(glat .GT. blat)THEN
 
-        Phi=DBLE(gMLT)*dpi/12.D0
+        Phi = gMLT*dpi/12.0
 
 	  colat=90.-glat
 
 	  bcolat=90.-blat
 
-	  x=DBLE(colat)*dpi/DBLE(bcolat)
+	  x = colat*dpi/bcolat
 
-	  DC=DBLE(Coef(0,0,0))
+	  DC=Coef(0,0,0)
 
 	  Z=DC
 
 	  O=DC
 
-	  ct=DCOS(x)
-	  dPlm(:,:)=0.D0
+	  ct=COS(x)
+	  dPlm(:,:)=0.0
 	  CALL DLegendre00(ct,MaxL,MaxM,Plm,dPlm)
 
 !Also find value at outer boundary at angle Pi, or cos(pi)=-1.
 
-	  CALL DLegendre00(-1.D0,MaxL,MaxM,OPlm,dPlm)
+	  CALL DLegendre00(-1.0,MaxL,MaxM,OPlm,dPlm)
 
 	  DO l=1,MaxL
 
@@ -833,14 +833,14 @@ CNCAR      NCAR changes are delimited by "CNCAR"
 *  final evaluation, particularly with the derivatives.  This prevents infinities
 *  at x=-1 or +1. 
 * If X is out of range ( abs(x)>1 ) then value is returns as if x=1.
-	DOUBLE PRECISION x,xx,Plm(0:10,0:10),P(0:10,0:10,0:1),fact,sfact
-	DOUBLE PRECISION dP(0:10,0:10,0:2),anum,term
+        real x,xx,Plm(0:10,0:10),P(0:10,0:10,0:1),fact,sfact
+	real dP(0:10,0:10,0:2),anum,term
 
 	DO l=0,lmax
 	    DO m=0,mmax
-		  Plm(l,m)=0.D0
-		  P(l,m,0)=0.D0
-		  P(l,m,1)=0.D0
+		  Plm(l,m)=0.0
+		  P(l,m,0)=0.0
+		  P(l,m,1)=0.0
 	    ENDDO
 	ENDDO
 	IF(lmax .LT. 0 .OR. mmax .LT. 0 .OR. mmax .GT. lmax )THEN
@@ -849,19 +849,19 @@ CNCAR      NCAR changes are delimited by "CNCAR"
 	ENDIF
 
 * Copy x to xx, and make sure it is in range of -1. to +1.
-	xx=MIN(x,1.D0)
-	xx=MAX(xx,-1.D0)
+	xx=MIN(x,1.0)
+	xx=MAX(xx,-1.0)
 
-	P(0,0,1)=1.D0
+	P(0,0,1)=1.0
 	IF(lmax.GT.0) P(1,0,1)=xx
 	IF(lmax.GT.1)THEN
 	   DO L=2,lmax
-	    P(L,0,1)=( (2.D0*L-1)*xx*P(L-1,0,1) - (L-1)*P(L-2,0,1) ) / L
+	    P(L,0,1)=( (2.0*L-1)*xx*P(L-1,0,1) - (L-1)*P(L-2,0,1) ) / L
 	   ENDDO
 	ENDIF
 
-	fact=1.D0-xx**2
-	sfact=DSQRT(fact)
+	fact=1.0-xx**2
+	sfact=SQRT(fact)
 
 	IF(mmax .GT. 0)THEN
 		DO M=1,mmax
@@ -901,7 +901,7 @@ CNCAR
 	REAL  SS( 0:1 , 0:1 , 0:MO, 0:1 , 0:ML, 0:MM)
 	REAL BSS( 0:1 , 0:1 , 0:MO, 0:1 , 0:MN)
 	REAL Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
-	DOUBLE PRECISION dpi
+	REAL dpi
 	INTEGER*4 maxj,MaxL,MaxM,MaxN,MaxO
 	COMMON /EIE_AllW01Coefs/MaxJ,MaxO,CS,BCS,SS,BSS
 	COMMON /EIE_SetW01Coef/MaxL,MaxM,MaxN,Coef,BoundFit,pi,dpi
@@ -943,7 +943,7 @@ c     OPEN (UNIT=udat,FILE=cfile,STATUS='OLD',form='UNFORMATTED')
       READ (udat) BSS
       CLOSE (udat)
       pi=2.*ASIN(1.)
-      dpi=2.D0*DASIN(1.D0)
+      dpi=2.0*ASIN(1.0)
 
       RETURN
       END SUBROUTINE READCOEF01
@@ -979,7 +979,7 @@ C       CHARACTER*30 Copyright
 	REAL BSS( 0:1 , 0:1 , 0:MO, 0:1 , 0:MN)
 	REAL XA(0:MJ),XB(0:MJ),FSC(0:1,0:4),PSS(0:1)
 	REAL Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
-	DOUBLE PRECISION dpi
+	REAL dpi
 	INTEGER*4 i,j,k,l,m,n,o
 	INTEGER*4 maxj,MaxL,MaxM,MaxN,MaxO
 	COMMON /EIE_AllW01Coefs/MaxJ,MaxO,CS,BCS,SS,BSS
@@ -1005,7 +1005,7 @@ C       READ(unit) SS
 C       READ(unit) BSS
 C       CLOSE(unit)
 C       pi=2.*ASIN(1.)
-C       dpi=2.D0*DASIN(1.D0)
+C       dpi=2.0*ASIN(1.0)
 C       First=.FALSE.
 C       Endif
 CNCAR
@@ -1083,7 +1083,7 @@ CNCAR
 	FUNCTION BoundaryLat01(gmlt)
 	REAL gmlt
 	REAL Coef(0:1,0:5,0:5),BoundFit(0:1,0:5),pi
-	DOUBLE PRECISION dpi
+	REAL dpi
 	INTEGER MaxL,MaxM,MaxN
 	COMMON /EIE_SetW01Coef/MaxL,MaxM,MaxN,Coef,BoundFit,pi,dpi
 	BoundaryLat01=FSVal(gmlt*pi/12.,MaxN,BoundFit)
@@ -1103,11 +1103,11 @@ CNCAR
 * the desired values of Bt, IMF clock angle, Dipole tilt angle, and SW Vel.
 *
       REAL gLAT,gMLT
-      DOUBLE PRECISION Phi,Z,O,x,ct,Phim
-      DOUBLE PRECISION Plm(0:10,0:10), OPlm(0:10,0:10)
+      REAL Phi,Z,O,x,ct,Phim
+      REAL Plm(0:10,0:10), OPlm(0:10,0:10)
 
       REAL Coef(0:1,0:5,0:5), BoundFit(0:1,0:5),pi
-      DOUBLE PRECISION dpi
+      REAL dpi
       COMMON /EIE_SetW01Coef/ MaxL,MaxM,MaxN,Coef,BoundFit,pi,dpi
 
       blat = BoundaryLat01(gMLT)
@@ -1119,7 +1119,7 @@ C     IF (glat .GT. blat) THEN
       glatlim = amax1 (glat,blat)
 CNCAR
 
-      Phi = DBLE (gMLT)*dpi/12.D0
+      Phi = DBLE (gMLT)*dpi/12.0
 
 CNCAR
       colat = 90.-glatlim
@@ -1134,7 +1134,7 @@ CNCAR
       ct = DCOS(x)
       CALL DLegendre01(ct,   MaxL,MaxM,Plm)
 C          Also find value at outer boundary at angle Pi, or cos(pi)=-1.
-      CALL DLegendre01(-1.D0,MaxL,MaxM,OPlm)
+      CALL DLegendre01(-1.0,MaxL,MaxM,OPlm)
       DO l=1,MaxL
 	Z = Z +  Plm(l,0)*DBLE(Coef(0,l,0))
 	O = O + OPlm(l,0)*DBLE(Coef(0,l,0))

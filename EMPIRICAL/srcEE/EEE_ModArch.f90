@@ -1,6 +1,6 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!==============================================================================
 module EEE_ModArch
 
   use EEE_ModCommonVariables
@@ -16,7 +16,6 @@ module EEE_ModArch
   integer :: nDipole
 
 contains
-
   !============================================================================
 
   subroutine set_parameters_arch(NameCommand)
@@ -56,24 +55,23 @@ contains
     end if
 
   end subroutine set_parameters_arch
-
   !============================================================================
 
   subroutine get_arch(x0_D,B0_D)
+
     use EEE_ModCommonVariables
     use ModCoordTransform, ONLY: rot_matrix_x,rot_matrix_y,rot_matrix_z
-    implicit none
 
     real, intent(in) :: x0_D(3)
     real, intent(out) :: B0_D(3)
 
     logical, save :: DoFirst=.true.
-    real, allocatable, dimension(:,:), save :: xDip_DI
+    real, allocatable, save :: xDip_DI(:,:)
     real, save :: Bdp
-    real, dimension(3,3), save :: Rotate_DD
+    real, save :: Rotate_DD(3,3)
     real :: Phi,PhiFirstDipole
-    real :: r,r_inv,r2_inv,r3_inv,x_D(3),xShift_D(3)
-    real :: Dp,Bdp_D(3),B_D(3)
+    real :: r, r_inv, r2_inv, r3_inv, x_D(3), xShift_D(3)
+    real :: Dp, Bdp_D(3), B_D(3)
     integer :: iDipole
     !--------------------------------------------------------------------------
     if(DoFirst)then
@@ -98,7 +96,6 @@ contains
        Rotate_DD = matmul(Rotate_DD,rot_matrix_z(-LongitudeCme*cDegToRad))
     end if
 
-
     x_D = matmul(Rotate_DD,x0_D)
 
     B_D = 0.0
@@ -110,18 +107,19 @@ contains
        r2_inv = r_inv*r_inv
        r3_inv = r_inv*r2_inv
 
-       Bdp_D = Bdp*(/ 0.0, 0.0, 1.0 /)
+       Bdp_D = Bdp*[ 0.0, 0.0, 1.0 ]
 
        Dp = dot_product(Bdp_D,xShift_D)*3.0*r2_inv
 
        B_D = B_D + (Dp*xShift_D-Bdp_D)*r3_inv
     end do
 
-
     B0_D = matmul(B_D,Rotate_DD)
 
     B0_D = B0_D*No2Si_V(UnitB_)
 
   end subroutine get_arch
+  !============================================================================
 
 end module EEE_ModArch
+!==============================================================================

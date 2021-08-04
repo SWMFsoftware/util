@@ -1,6 +1,6 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!==============================================================================
 module EEE_ModCms
   use EEE_ModCommonVariables
   implicit none
@@ -30,7 +30,6 @@ module EEE_ModCms
   logical :: IsFirst = .true.
 
 contains
-
   !============================================================================
 
   subroutine set_parameters_cms(NameCommand)
@@ -49,7 +48,6 @@ contains
     end select
 
   end subroutine set_parameters_cms
-
   !============================================================================
 
   subroutine get_cms(x_D, B_D)
@@ -108,12 +106,12 @@ contains
                *1e-4*Si2No_V(UnitB_)
 
           ! minimum and maximum coordinates for each domain
-          CmsData(iLevel)%Min_D = (/ minval(CmsData(iLevel)%CoordCms1_I), &
+          CmsData(iLevel)%Min_D = [ minval(CmsData(iLevel)%CoordCms1_I), &
                minval(CmsData(iLevel)%CoordCms2_I), &
-               minval(CmsData(iLevel)%CoordCms3_I) /)
-          CmsData(iLevel)%Max_D = (/ maxval(CmsData(iLevel)%CoordCms1_I), &
+               minval(CmsData(iLevel)%CoordCms3_I) ]
+          CmsData(iLevel)%Max_D = [ maxval(CmsData(iLevel)%CoordCms1_I), &
                maxval(CmsData(iLevel)%CoordCms2_I), &
-               maxval(CmsData(iLevel)%CoordCms3_I) /)
+               maxval(CmsData(iLevel)%CoordCms3_I) ]
 
        end do
 
@@ -179,5 +177,7 @@ contains
     end do
 
   end subroutine get_cms
+  !============================================================================
 
 end module EEE_ModCms
+!==============================================================================

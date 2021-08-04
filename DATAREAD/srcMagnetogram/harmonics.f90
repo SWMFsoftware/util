@@ -6,17 +6,14 @@ program harmonics
   ! Transform raw magnetogram file into spherical harmonics file
 
   use ModMagHarmonics
-  use ModMpi
   use ModReadMagnetogram
 
   implicit none
   integer:: iError
   !----------------------------------------------------------------------------
-  call MPI_init(iError)
   call read_harmonics_param
   call read_modified_magnetogram 
   call calc_harmonics
-  call MPI_finalize(iError)
 
 end program harmonics
 !==============================================================================

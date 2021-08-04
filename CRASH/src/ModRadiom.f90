@@ -1,22 +1,21 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 !------- radiom.f90
 
 module CRASH_M_RADIOM
-  ! /
   ! The module solves the main equations of the non-LTE
   ! model
   !
   use CRASH_M_projE
   use ModUtilities, ONLY: CON_stop
 
-  !Projects the radiation energy densities in user-defined groups 
-  !onto a refined grid  
+  ! Projects the radiation energy densities in user-defined groups
+  ! onto a refined grid
 
   implicit none
 
-  PRIVATE !Except
+  PRIVATE ! Except
 
   !  Flags :
   logical,save :: setXubar=.true.
@@ -26,22 +25,21 @@ module CRASH_M_RADIOM
   real,save :: Auger=1,Auger_1oB=20d0,Auger_B=0,Gaunt=0.2
   ! work arrays for "corrUbar" :
   integer,parameter :: mxN=1+20*5
-  real :: QJ_1,dQJ ,corrUs(mxN),QJs(mxN) 
+  real :: QJ_1,dQJ ,corrUs(mxN),QJs(mxN)
 
   real,parameter :: aSaha=6.02e21, b_CovR=1.34e13*0.2 ,one=1.0
-  !\
+
   ! For Indirect Equation of state either ERad or ERad/B(Te) may be
   ! used as inputs.
-  !/
   logical:: UseERadInput = .false.
 
   public:: caltz0,prep_projE,PrepCorrUBar,printversion, UseERadInput
 
   !-------
 contains
+  !============================================================================
    !-------
   subroutine printVersion
-    implicit none
     character(*),parameter :: author='M.Busquet' &
          ,wher='ARTEP,inc' &
          ,version='CRASH-2012.006.a' &
@@ -50,7 +48,8 @@ contains
          ,compiled='2012.07.31 08:59:15' &
          ,collab='M.Klapisch & I.Sokolov' &
          ,credits='D.Fyfe & J.H.Gardner'
-    !--------------
+
+    !--------------------------------------------------------------------------
     write(*,'(a)')'...................................'
     write(*,'(a)')'library=',library
     write(*,'(a)')'version=',version
@@ -62,7 +61,8 @@ contains
     write(*,'(a)')' credits also to : ',credits
     write(*,'(a)')'...................................'
   end subroutine printVersion
-  
+  !============================================================================
+
  !-------
   subroutine calTz0(Te,Ne, Tz, ERad_I, RhoDTzDRho)
     !-
@@ -71,7 +71,7 @@ contains
     !
     use CRASH_M_projE,only : nbIn
     use ModCOnst, ONLY: cEvToK
-    use CRASH_ModMultiGroup,ONLY:get_planck_g_from_temperature
+    use CRASH_ModMultiGroup, ONLY:get_planck_g_from_temperature
     real,intent(IN) :: Te,ne
     real,dimension(:),intent(IN) :: ERad_I
     real,intent(OUT) :: Tz
@@ -79,14 +79,15 @@ contains
     real,parameter :: roVar=0.015d0,roVarP=1+roVar
     real:: lgVar=0.0, QJ1, Ne1, ubar1, Tz1
     real :: at32s,ubar,QJ
-    !Array of EOverB
+    ! Array of EOverB
     real:: EoB(nbIn), TeK=0, PlanckSi=0
     integer:: iBin
-    if(nbIn.le.0) then
+    !--------------------------------------------------------------------------
+    if(nbIn <= 0) then
        write(*,*)'-P- prep_projE not done before "caltz0"'
        call CON_stop('-P- calTZ: prep_projE not done')
     end if
-   
+
     EoB = ERad_I
     if(UseERadInput)then
        TeK = Te*cEvToK
@@ -105,28 +106,28 @@ contains
     at32s=aSaha*te*sqrt(te)/Ne
     tz=te
     if(present(RhoDTzDRho))RhoDTzDRho = 0.0
-    if(at32s.le.one) return
+    if(at32s <= one) RETURN
     ! this is already done in "setErad", should pass by arg ?
     call xubar0(te,ne,EoB ,ubar)	! no more a function
     QJ=log(at32s)
     tz=te*ubar/QJ
-    !if(tz<0.9*Te.or.tz>1.1*Te)then
+    ! if(tz<0.9*Te.or.tz>1.1*Te)then
     !   write(*,*)'Te=',Te,'  Tz=',Tz, 'Ne=',Ne
     !   call CON_stop('Te/=Tz')
-    !end if
+    ! end if
     if(present(RhoDTzDRho))then
-       if(lgVar==0.0) lgVar=log(roVarP)			
-       ne1=ne*roVarP				
-       call xubar0(te,ne1,EoB,ubar1)		
-       QJ1=QJ-lgVar	! =log(at32s)	
-       tz1=te*ubar1/QJ1				
-       RhoDTzDRho = (tz1-tz)/roVar		
+       if(lgVar==0.0) lgVar=log(roVarP)
+       ne1=ne*roVarP
+       call xubar0(te,ne1,EoB,ubar1)
+       QJ1=QJ-lgVar	! =log(at32s)
+       tz1=te*ubar1/QJ1
+       RhoDTzDRho = (tz1-tz)/roVar
     end if
   end subroutine calTz0
-  !===================
+  !============================================================================
 
   subroutine xubar0(Te_in,Ne_in ,EoB,ubar)
-    ! 
+    !
     ! same as "xubar" w/o check of Eground
     !
     use CRASH_M_projE
@@ -146,28 +147,30 @@ contains
     real :: u,ey		! for 'exp_tab'  u -> ey=exp(-u), ex_u=1-ey
 
     logical,save :: lastWasPrep=.false.
+
+    !--------------------------------------------------------------------------
     ngr=nbIn
     nfgp=ngr+1
     ts=sqrt(Te_in)/Ne_in
     at32s= aSaha*Te_in*ts
-    if(at32s.le.A_LTE_limit) then
+    if(at32s <= A_LTE_limit) then
        ubar=log(at32s)	! thus Tz/Te will be  1
-       return
+       RETURN
     end if
-  
+
     QJ=log(at32s)
-    betapm= (b_CovR/Gaunt)*ts*Te_in**3        
+    betapm= (b_CovR/Gaunt)*ts*Te_in**3
     !	     --------
-    call projSP_E(Te_in,EoB,nOut,gotoLTE)	
+    call projSP_E(Te_in,EoB,nOut,gotoLTE)
     !	     --------
     if(gotoLTE) then
        ubar=QJ ! =log(at32s)		! thus Tz/Te will be  1
-       return
+       RETURN
     end if
     ! perform the "non overflow" alogrithm, u=including  jhg correction
     ubar=0
     s=one
-    if(nOut.lt.2) call CON_stop('-E- xubar0 : nbOut<2')
+    if(nOut < 2) call CON_stop('-E- xubar0 : nbOut<2')
     duu=Uout(2)-Uout(1)
     do ig=2,nOut+1
        u  = (Uout(ig)+Uout(ig-1))/two
@@ -189,7 +192,7 @@ contains
     end do
     call CorrUbar(ubar,QJ)
   end subroutine xubar0
-  !=======================
+  !============================================================================
 
   subroutine CorrUbar(ubar,QJ)
 
@@ -197,34 +200,37 @@ contains
     real :: ubar,d
     real, parameter :: QJ_limit=2.1
     integer :: iq
-    !	
-    if(setXubar) return
-    ! 
+    !
+    !--------------------------------------------------------------------------
+    if(setXubar) RETURN
+    !
     iq=int((QJ-QJ_1)/dQJ) +1
     if(iq <= 0 .or. QJ <= QJ_limit) then
        ubar=QJ
-    elseif(iq.ge.mxN) then
+    elseif(iq >= mxN) then
        ubar=ubar*corrUs(mxN)
     else
        d=(QJ-QJs(iq))/dQJ
        d=(one-d)*corrUs(iq)+d*corrUs(iq+1)
        ubar=ubar*d
     end if
-    ! 
+    !
   end subroutine CorrUbar
+  !============================================================================
   !-------
   subroutine prepCorrUbar
     !
     !  tabulate correction to UBAR (see corrUbar)
     !
     use CRASH_M_projE,only : Umin,Umax	,nbIn,Efirst,Elast
-    integer,parameter :: mxu=1+10*5 
-    real :: QJ_2 !log(6e4)
-    real :: ubar,ne,te,at32s,qj,r,eg1 
+    integer,parameter :: mxu=1+10*5
+    real :: QJ_2 ! log(6e4)
+    real :: ubar,ne,te,at32s,qj,r,eg1
     real,dimension(0:mxN) :: Ugs
     real,dimension(0:nBIn) :: EovB
     integer :: iq
-    ! 
+    !
+    !--------------------------------------------------------------------------
     EovB = 1.0    ! 0 & 1 give same result
     te=0.1
     r=(Umax/Umin)**(one/mxu)
@@ -234,7 +240,7 @@ contains
        eg1=eg1*r
     end do
     Ugs(mxN)=eg1
-    setXubar=.true.     !Disable the call for CorrUBar
+    setXubar=.true.     ! Disable the call for CorrUBar
     QJ_1=2.
     QJ_2=log(6.d4)
     dQJ=(QJ_2-QJ_1)/(mxN-1)
@@ -247,11 +253,10 @@ contains
        QJs(iq)=qj
        qj=qj+dQJ
     end do
-    ! 
-    setXubar=.false.	
+    !
+    setXubar=.false.
 
   end subroutine prepCorrUbar
-  !================
-  ! \
+  !============================================================================
+
 end module CRASH_M_RADIOM
- ! /

@@ -57,7 +57,6 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
           +strtrim(PlotRadius,2)+' Rs)',xtitle='Solar Longitude (Pixel)',$
           ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
   
-  
   loadct,39
   if(neqpar ge 2) then begin
      ;plot the Earth Carrington coordinate:
@@ -91,12 +90,11 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
         print,'Positive Polarity! Please Select NEGATIVE Polarity!'   
         !MOUSE.button=0
      endif else begin
-        plots,xNegative,yNegative,/data,psym=-2,color=50
+        plots,xNegative,yNegative,/data,psym=-2,color=100
      endelse
   endwhile
   print, '==='
   print, xPositive,yPositive,xNegative,yNegative,CMESpeed
-
   !mouse.button=0
   wait,2
   wdelete,2

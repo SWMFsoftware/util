@@ -1,6 +1,11 @@
+include ../Makefile.conf
+include ../Makefile.def
+
 install:
 	@(if [ -d HYPRE ];     then cd HYPRE;      make install; fi);
-
+	@(if [ -d DATAREAD ]; then cd DATAREAD/srcMagnetogram; \
+	rm -f pyfits; \
+	ln -s ${COMMONDIR}/Python/pyfits/ .; fi)
 ###	@(if [ -d FISHPAK ];   then cd FISHPAK/src;make LIB; fi);
 
 test:
@@ -15,7 +20,7 @@ clean:
 	@(if [ -d EMPIRICAL ]; then cd EMPIRICAL;  make clean; fi)
 	@(if [ -d CRASH ];     then cd CRASH;      make clean; fi)
 	@(if [ -d HYPRE ];     then cd HYPRE;      make clean; fi)
-	@(if [ -d AMREX ];     then cd AMREX;      make clean; fi)
+	@(if [ -f AMREX/GNUmakefile ]; then cd AMREX;      make clean; fi)
 	@(if [ -d FISHPAK ];   then cd FISHPAK/src;make clean; fi)
 
 distclean:
@@ -25,6 +30,6 @@ distclean:
 	@(if [ -d EMPIRICAL ]; then cd EMPIRICAL;  make distclean; fi)
 	@(if [ -d CRASH ];     then cd CRASH;      make distclean; fi)
 	@(if [ -d HYPRE ];     then cd HYPRE;      make distclean; fi)
-	@(if [ -d AMREX ];     then cd AMREX;      make distclean; fi)
+	@(if [ -d AMREX/GNUmakefile ]; then cd AMREX;      make distclean; fi)
 	@(if [ -d FISHPAK ];   then cd FISHPAK/src;make clean; fi)
 	rm -f *~

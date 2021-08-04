@@ -6,7 +6,7 @@ module ModPotentialField
   use ModMpi
   use ModUtilities, ONLY: CON_stop
   use ModConst, ONLY: cPi, cTwoPi, cHalfPi
-  use ModNumConst,    ONLY: cHalfPi, cPi, cDegToRad
+  use ModNumConst,    ONLY: cHalfPi, cPi, cDegToRad, cRadToDeg
 
   implicit none
 
@@ -24,6 +24,7 @@ module ModPotentialField
 
   ! domain decomposition
   integer:: nProcTheta = 0, nProcPhi = 0
+  logical :: IsProcIdle = .false.
 
   ! solver parameters
   character(len=20):: NameSolver         = 'BICGSTAB' ! or 'GMRES' or 'AMG'
@@ -36,11 +37,11 @@ module ModPotentialField
 
   ! output paramters
   logical           :: DoSaveBxyz   = .false.
-  character(len=100):: NameFileBxyz = 'potentialBxyz'
+  character(len=100):: NameFileBxyz = 'potentialBxyz.out'
   character(len=5)  :: TypeFileBxyz = 'real8'
 
   logical           :: DoSaveField   = .false.
-  character(len=100):: NameFileField = 'potentialfield'
+  character(len=100):: NameFileField = 'potentialfield.out'
   character(len=5)  :: TypeFileField = 'real8'
 
   logical           :: DoSavePotential   = .false.
@@ -49,10 +50,6 @@ module ModPotentialField
 
   logical           :: DoSaveTecplot   = .false.
   character(len=100):: NameFileTecplot = 'potentialfield.dat'
-
-  logical           :: DoSaveGhostFace   = .false.
-  character(len=100):: NameFileGhostFace = 'ghostface'
-  character(len=5)  :: TypeFileGhostFace = 'real8'
 
   ! testing parameters
   logical :: UseTiming = .true.
@@ -82,9 +79,10 @@ module ModPotentialField
   real, dimension(:), allocatable :: &
        d_I, e_I, e1_I, e2_I, f_I, f1_I, f2_I
 
-  integer, parameter :: iComm = MPI_COMM_WORLD
+  integer, parameter :: iCommWorld = MPI_COMM_WORLD
+  integer :: iComm = iCommWorld
   integer :: iProc, nProc, iProcTheta, iProcPhi
-  integer :: iTheta0, iPhi0
+  integer :: iTheta0, iPhi0, iLat0
   integer :: nTheta, nPhi
   real,  allocatable :: TmpXPhi0_II(:,:),TmpXPhipi_II(:,:)
   integer :: nThetaLgr,nThetaSml,nPhiLgr,nPhiSml
@@ -146,13 +144,14 @@ contains
              endif
           endif
        case("#GRID")
-          call read_var('nR    ', nR)
+          call read_var('nR',           nR)
           call read_var('nThetaCoarse', nThetaCoarse)
           call read_var('nPhiCoarse  ', nPhiCoarse)
        case("#PARALLEL")
           call read_var('nProcTheta', nProcTheta)
           call read_var('nProcPhi'  , nProcPhi)
-       case("#MAGNETOGRAMFILE",'#CHANGEPOLARFIELD', '#CHANGEWEAKFIELD', "#CHEBYSHEV")
+       case("#MAGNETOGRAMFILE",'#CHANGEPOLARFIELD', '#CHANGEWEAKFIELD', &
+            "#CHEBYSHEV")
           call read_magnetogram_param(NameCommand)
        case('#REMOVEMONOPOLE')
           call read_var('DoRemoveMonopole', DoRemoveMonopole)
@@ -184,16 +183,10 @@ contains
              DoSaveBxyz = .true.
              call read_var('NameFileBxyz', NameFileBxyz)
              call read_var('TypeFileBxyz', TypeFileBxyz)
-             ! remove .out extension if present
-             i = index(NameFileBxyz,'.out')
-             if(i>0) NameFileBxyz = NameFileBxyz(1:i-1)
           case('field')
              DoSaveField = .true.
              call read_var('NameFileField', NameFileField)
              call read_var('TypeFileField', TypeFileField)
-             ! remove .out extension if present
-             i = index(NameFileField,'.out')
-             if(i>0) NameFileField = NameFileField(1:i-1)
           case('potential')
              DoSavePotential = .true.
              call read_var('NameFilePotential', NameFilePotential)
@@ -206,13 +199,6 @@ contains
                   ': TypeOutput=tecplot works for serial runs only')
              DoSaveTecplot = .true.
              call read_var('NameFileTecplot', NameFileTecplot)
-          case('ghostface')
-             DoSaveGhostFace = .true.
-             call read_var('NameFileGhostFace', NameFileGhostFace)
-             call read_var('TypeFileGhostFace', TypeFileGhostFace)
-             ! remove .out extension if present
-             i = index(NameFileGhostFace,'.out')
-             if(i>0) NameFileGhostFace = NameFileGhostFace(1:i-1)
           case default
              call CON_stop(NameSub//': unknown TypeOutput='//trim(TypeOutput))
           end select
@@ -221,15 +207,17 @@ contains
        end select
     end do
 
-    if ( nProcTheta*nProcPhi /= nProc .and. &
-         nProcTheta*nProcPhi /= 0 .and. iProc==0) then
-       write(*,*) NameSub, ': WARNING: nProcTheta, nProcPhi, nProc=', &
-            nProcTheta, nProcPhi, nProc
-       write(*,*) NameSub, &
-            ': Changing to default decomposition. Look I am intelligent!'
-       nProcTheta = 0
-       nProcPhi = 0
-    end if
+    if (nProcTheta*nProcPhi > min(nProc,999) .or. &
+        max(nProcTheta,nProcPhi) > 99 .or. min(nProcTheta,nProcPhi) <= 0) then
+      if (iProc == 0) then
+        write(*,*)
+        write(*,'(A,2I4,I6)') 'WARNING: nProcTheta, nProcPhi, nProc=', nProcTheta, nProcPhi, nProc
+        write(*,'(A)') 'Changing to default decomposition!'
+        write(*,*)
+      endif
+      nProcTheta = 0
+      nProcPhi = 0
+    endif
 
     ! Do timing on proc 0 only, if at all
     if(iProc > 0) UseTiming = .false.
@@ -279,37 +267,74 @@ contains
     use ModConst, ONLY: cTwoPi
     use ModReadMagnetogram, ONLY: UseCosTheta, nThetaAll, nPhiAll
 
-    integer :: iR, iTheta, iPhi
-    integer :: i, j
+    integer :: iR, iTheta, iPhi, nTotalProc
+    integer :: i, j, k
+    integer :: iError, iColor=0
 
     real:: dR, dLogR, dTheta, dPhi, dZ, z
-    real:: CellShiftPhi
     real:: Err, ErrNew
 
     !--------------------------------------------------------------------------
 
+    ! decompose the total number of processors to 
+    ! theta (i) and phi (j) directions
+    ! 0<ni<100, 0<nj<100, ni*nj<=1000, ni*nj<=nproc
     if (nProcTheta*nProcPhi == 0) then
-       nProcPhi = 1
-       Err = real(max(nPhiAll,nThetaAll))
-       do i = 1, floor(sqrt(real(nProc)))
-          j = nProc/i
-          if (i*j == nProc) then
-             ErrNew = abs(nPhiAll/real(i)-nThetaAll/real(j))
+       nTotalProc = min(nProc,1000)
+       Err = real(nPhiAll)*real(nThetaAll)*nTotalProc
+       i = 1
+       do while (i<=floor(sqrt(real(nTotalProc))))
+          j = nTotalProc/i
+          if (j > 99) then
+             i = i+1
+             CYCLE
+          endif
+          do k = 0, 1
+             ErrNew = (ceiling(nPhiAll/real(i))+2.) * &
+                  (ceiling(nThetaAll/real(j))+2.)*real(nTotalProc)/real(i*j)
              if (ErrNew < Err) then
                 Err = ErrNew
                 nProcPhi = i
+                nProcTheta = j
              endif
-             ErrNew = abs(nPhiAll/real(j)-nThetaAll/real(i))
-             if (ErrNew < Err) then
-                Err = ErrNew
-                nProcPhi = j
-             endif
-          endif
+             i = i+j
+             j = i-j
+             i = i-j
+          enddo
+          i = i+1
        enddo
-       nProcTheta = nProc/nProcPhi
-       if (iProc == 0) write(*,*) 'New nProcTheta, nProcPhi, nProc=', &
-            nProcTheta, nProcPhi, nProc
+       if (nProcPhi == 0 .and. iProc == 0) then
+          ! Supposedly we shouldn't reach here
+          write(*,*)
+          write(*,'(A,I0,A)') &
+               'Failed to find proper layout for ',nTotalProc,' processors.'
+          write(*,*)
+          nProcPhi = 1
+          nProcTheta = 1
+       endif
+       if (iProc == 0) then 
+          write(*,*)
+          write(*,'(A,2I4,I6)') 'New nProcTheta, nProcPhi, nProc=', &
+               nProcTheta, nProcPhi, nProcTheta*nProcPhi
+          write(*,*)
+       endif
     endif
+
+    nTotalProc = nProcTheta*nProcPhi
+    if (iProc >= nTotalProc) then
+       IsProcIdle = .true.
+       iColor = 1
+    endif
+    if (nProc > nTotalProc) then
+       if (iProc == 0) then
+          write(*,*)
+          write(*,'(A,I6,A)') 'WARNING: ',nProc-nTotalProc, &
+               ' processor(s) are idle.'
+          write(*,*)
+       endif
+       call MPI_Comm_split(iCommWorld,iColor,iProc,iComm,iError)
+    endif
+    if (IsProcIdle) RETURN
 
     ! The processor coordinate
     iProcTheta = iProc/nProcPhi
@@ -341,7 +366,7 @@ contains
             'Actual nPhiAll is:   ', nPhiAll
     end if
 
-    !Both iProcTheta and iProcPhi in the large region
+    ! Both iProcTheta and iProcPhi in the large region
     if (iProcTheta < nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
        nTheta = nThetaLgr
        nPhi   = nPhiLgr
@@ -349,7 +374,7 @@ contains
        iPhi0   = iProcPhi  * nPhiLgr
     end if
 
-    !Only iProcTheta in the large region
+    ! Only iProcTheta in the large region
     if (iProcTheta < nProcThetaLgr .and. iProcPhi >= nProcPhiLgr) then
        nTheta = nThetaLgr
        nPhi   = nPhiSml
@@ -357,7 +382,7 @@ contains
        iPhi0   = nProcPhiLgr * nPhiLgr + (iProcPhi - nProcPhiLgr)*nPhiSml
     end if
 
-    !Only iProcPhi in the large region
+    ! Only iProcPhi in the large region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi < nProcPhiLgr) then
        nTheta  = nThetaSml
        nPhi    = nPhiLgr
@@ -366,7 +391,7 @@ contains
        iPhi0   = iProcPhi      * nPhiLgr
     end if
 
-    !Both iProcTheta and iProcPhi in the small region
+    ! Both iProcTheta and iProcPhi in the small region
     if (iProcTheta >= nProcThetaLgr .and. iProcPhi >= nProcPhiLgr) then
        nTheta = nThetaSml
        nPhi   = nPhiSml
@@ -389,8 +414,7 @@ contains
          DivB_C(nR,nTheta,nPhi))
 
     ! Set BrLocal_II, this is used in set_boundary when UseBr is true
-    BrLocal_II(:,:) = Br_II(iTheta0 + 1: iTheta0 + nTheta, &
-         iPhi0   + 1: iPhi0   + nPhi)
+    BrLocal_II(:,:) = Br_II(iTheta0+1:iTheta0+nTheta,iPhi0+1:iPhi0+nPhi)
 
     ! nR is the number of mesh cells in radial direction
     ! cell centered radial coordinate
@@ -494,12 +518,12 @@ contains
     real   :: r, CosTheta, SinTheta, CosPhi, SinPhi
     real   :: Br, Btheta, Bphi, XyzSph_DD(3,3)
     real   :: rI, rJ, rInv
-    real, allocatable :: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:)
-    real, allocatable :: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
-    real, allocatable :: Potential_G(:,:,:), PlotVar_VG(:,:,:,:)
+    real, allocatable:: Lat_I(:), b_DX(:,:,:,:), b_DII(:,:,:)
+    real, allocatable:: Bpole_DII(:,:,:), Btotal_DII(:,:,:)
+    real, allocatable:: LonAll_I(:), LatAll_I(:), bAll_DG(:,:,:,:)
     integer:: iError
     integer:: iStatus_I(mpi_status_size)
-    integer:: nPhiOut, MinLat, MaxLat, MinTheta, MaxTheta, MinPhi, MaxPhi
+    integer:: nPhiOut, MinLat, MaxLat
     !-------------------------------------------------------------------------
 
     ! Only the last processors in the phi direction write out the ghost cell
@@ -582,26 +606,58 @@ contains
        end if
     endif
 
-    call  MPI_bcast(StringMagHeader, len(StringMagHeader), MPI_CHARACTER, 0, iComm, iError)
-    call  MPI_bcast(LongCR, 5 , MPI_REAL, 0, iComm, iError)
-    call  MPI_bcast(CarRot, 10 , MPI_REAL, 0, iComm, iError)
-
     if(DoSaveField)then
-       ! Note the fake processor index to be used by redistribute.pl
-       write(NameFile,'(a,2i2.2,a,i3.3,a)') &
-            trim(NameFileField)//'_np01', nProcPhi, nProcTheta, '_', &
-            iProcPhi + (nProcTheta - 1 - iProcTheta)*nProcPhi, '.out'
 
-       call save_plot_file(NameFile, TypeFileIn=TypeFileField, &
-            StringHeaderIn = &
-            'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
-            nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
-            //' Ro_PFSSM Rs_PFSSM LongCR CR', &
-            ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
-            nDimIn=3, VarIn_VIII=b_DX(:,:,1:nPhiOut,1:nTheta), &
-            Coord1In_I=RadiusNode_I, &
-            Coord2In_I=Phi_I(1:nPhiOut), &
-            Coord3In_I=Lat_I(1:nLat))
+       ! Coordinates and magnetic field for the whole grid with
+       ! ghost cells in the Phi direction
+       if(UseWedge) then
+          allocate(LonAll_I(nPhiAll), LatAll_I(nThetaAll), &
+               bAll_DG(3,nR+1,nPhiAll,nThetaAll))
+       else
+          allocate(LonAll_I(nPhiAll+1), LatAll_I(nThetaAll), &
+               bAll_DG(3,nR+1,nPhiAll+1,nThetaAll))
+       end if
+       LonAll_I = -1000.0
+       LatAll_I = -1000.0
+       bAll_DG  = 0.0
+
+       ! Starting index for the latitude (not trivial formula)
+       iLat0 = nThetaAll - iTheta0 - nLat
+
+       LonAll_I(iPhi0+1:iPhi0+nPhiOut) = Phi_I(1:nPhiOut)*cRadToDeg
+       LatAll_I(iLat0+1:iLat0+nTheta)  = Lat_I(1:nLat)*cRadToDeg
+       bAll_DG(:,:,iPhi0+1:iPhi0+nPhiOut,iLat0+1:iLat0+nTheta) = &
+            b_DX(:,:,:,1:nLat)
+
+       call MPI_reduce_real_array(LonAll_I, size(LonAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(LatAll_I, size(LatAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, &
+            iComm, iError)
+
+
+       if(iProc==0)then
+          ! Switch sign for the theta -> Latitude component
+          bAll_DG(3,:,:,:) = -bAll_DG(3,:,:,:)
+
+          call save_plot_file(&
+               NameFileField, TypeFileIn=TypeFileField, &
+               StringHeaderIn = &
+               'Radius [Rs] Longitude [Deg] Latitude [Deg] B [G]', &
+               nameVarIn = 'Radius Longitude Latitude Br Blon Blat' &
+               //' rMin rMax LongCR CR', &
+               ParamIn_I = [ rMin, rMax, LongCR, CarRot ], &
+               nDimIn=3, VarIn_VIII=bAll_DG, &
+               Coord1In_I=RadiusNode_I, &
+               Coord2In_I=LonAll_I, &
+               Coord3In_I=LatAll_I)
+       end if
+
+       deallocate(LonAll_I, LatAll_I, bAll_DG)
+
     end if
 
     if(DoSaveBxyz)then
@@ -612,7 +668,7 @@ contains
              Br     = b_DX(1,iR,iPhi,iLat)
              Btheta = b_DX(3,iR,iPhi,iLat)
              Bphi   = b_DX(2,iR,iPhi,iLat)
-             b_DX(:,iR,iPhi,iLat) = matmul(XyzSph_DD, (/Br, Btheta, Bphi/))
+             b_DX(:,iR,iPhi,iLat) = matmul(XyzSph_DD, [Br, Btheta, Bphi])
           end do
        end do; end do
 
@@ -649,31 +705,56 @@ contains
           end do
        endif
 
-       ! Note the fake processor index to be used by redistribute.pl
-       write(NameFile,'(a,2i2.2,a,i3.3,a)') &
-            trim(NameFileBxyz)//'_np01', nProcPhi, nProcTheta, '_', &
-            iProcPhi + (nProcTheta - 1 - iProcTheta)*nProcPhi, '.out'
+       ! Coordinates and magnetic field for the whole grid with ghost cells
+       allocate(LonAll_I(nPhiAll+1), LatAll_I(0:nThetaAll+1), &
+            bAll_DG(3,nR+1,nPhiAll+1,0:nThetaAll+1))
+       LonAll_I = -1000.0
+       LatAll_I = -1000.0
+       bAll_DG  = 0.0
 
-       if(UseLogRadius)then
-          call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = trim(StringMagHeader),&
-               nameVarIn = 'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
-               ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
-               nDimIn=3, VarIn_VIII=b_DX, &
-               Coord1In_I=log10(RadiusNode_I), &
-               Coord2In_I=Phi_I(1:nPhiOut), &
-               Coord3In_I=Lat_I)
-       else
-          call save_plot_file(NameFile, TypeFileIn=TypeFileBxyz, &
-               StringHeaderIn = trim(StringMagHeader), &
-               nameVarIn = 'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR', &
-               ParamIn_I = (/ rMin, rMax, LongCR, CarRot/), &
-               nDimIn=3, VarIn_VIII=b_DX, &
-               Coord1In_I=RadiusNode_I, &
-               Coord2In_I=Phi_I(1:nPhiOut), &
-               Coord3In_I=Lat_I)
+       ! Starting index for the latitude (not trivial formula)
+       iLat0 = nThetaAll - iTheta0 - nLat
+
+       LonAll_I(iPhi0+1:iPhi0+nPhiOut)     = Phi_I(1:nPhiOut)*cRadToDeg
+       LatAll_I(iLat0+MinLat:iLat0+MaxLat) = Lat_I*cRadToDeg
+       bAll_DG(:,:,iPhi0+1:iPhi0+nPhiOut,iLat0+MinLat:iLat0+MaxLat) = b_DX
+
+       call MPI_reduce_real_array(LonAll_I, size(LonAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(LatAll_I, size(LatAll_I), MPI_MAX, 0, &
+            iComm, iError)
+
+       call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, &
+            iComm, iError)
+
+       if(iProc==0)then
+          if(UseLogRadius)then
+             call save_plot_file(&
+                  NameFileBxyz, TypeFileIn=TypeFileBxyz, &
+                  StringHeaderIn = StringMagHeader, &
+                  NameVarIn  = &
+                  'logRadius Longitude Latitude Bx By Bz rMin rMax LongCR CR',&
+                  ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
+                  VarIn_VIII = bAll_DG, &
+                  Coord1In_I = log10(RadiusNode_I), &
+                  Coord2In_I = LonAll_I, &
+                  Coord3In_I = LatAll_I)
+          else
+             call save_plot_file(&
+                  NameFileBxyz, TypeFileIn=TypeFileBxyz, &
+                  StringHeaderIn = StringMagHeader, &
+                  NameVarIn  = &
+                  'Radius Longitude Latitude Bx By Bz rMin rMax LongCR CR',&
+                  ParamIn_I  = [ rMin, rMax, LongCR, CarRot ], &
+                  VarIn_VIII = bAll_DG, &
+                  Coord1In_I = RadiusNode_I, &
+                  Coord2In_I = LonAll_I, &
+                  Coord3In_I = LatAll_I)
+          end if
        end if
-       deallocate(Bpole_DII, Btotal_DII)
+
+       deallocate(Bpole_DII, Btotal_DII, LonAll_I, LatAll_I, bAll_DG)
 
     end if
 
@@ -686,7 +767,7 @@ contains
     if(DoSaveTecplot)then
        open(unit = UnitTmp_, file=NameFileTecplot, status='replace')
 
-       write (UnitTmp_, '(a)') 'Title = "'     // 'PFSSM' // '"'
+       write (UnitTmp_, '(a)') 'Title = "'     // 'FDIPS' // '"'
        write (UnitTmp_, '(a)') &
             'Variables = ' // trim ('"X [Rs]", "Y [Rs]", "Z [Rs]","Bx [G]",'// &
             ' "By [G]", "Bz [G]"')
@@ -720,49 +801,6 @@ contains
     end if
 
     deallocate(b_DX)
-
-    if (DoSaveGhostFace) then
-       allocate( Potential_G(0:nR+1,0:nTheta+1,0:nPhi+1), &
-            PlotVar_VG(4,0:nR+1,0:nTheta+1,0:nPhi+1))
-
-       MinTheta = 1
-       MaxTheta = nTheta
-       MinPhi   = 1
-       MaxPhi   = nPhi
-       if(iProcTheta == 0)               MinTheta = 0
-       if(iProcTheta == nProcTheta - 1)  MaxTheta = nTheta+1
-       if(iProcPhi   == 0)               MinPhi   = 0
-       if(iProcPhi   == nProcPhi - 1)    MaxPhi   = nPhi+1
-
-       call set_boundary(Potential_C, Potential_G)
-
-       PlotVar_VG = -1.
-       PlotVar_VG(1,:,:,:) = Potential_G
-       PlotVar_VG(2:4,1:nR+1,1:nTheta+1,1:nPhi+1) = B0_DF
-
-       ! Note that the processor number here is changed. For redistribute.pl,
-       ! the grid is ordered such that the first dimension is shifted first,
-       ! then the second dimension, then the third. Here we are outputing a 
-       ! [r,t,p] grid that has the processor numbered as phi first, then theta.
-       write(NameFile,'(a,2i2.2,a,i3.3,a)') &
-            trim(NameFileGhostFace)//'_np01', nProcPhi, nProcTheta, '_', &
-            iProcTheta + iProcPhi*nProcTheta, '.out'
-
-       ! For redistribute.pl to work, the output must contain a line of 
-       ! parameters, so even if rMin and rMax are not quite needed here,
-       ! we do need to include them here
-       call save_plot_file(NameFile, TypeFileIn=TypeFileGhostFace, &
-            StringHeaderIn = &
-            'Potential field with ghost cells, face centered magnetic field', &
-            nameVarIn = 'Radius Theta Phi Pot Br Btheta Bphi rMin rMax', &
-            ParamIn_I = (/ rMin, rMax /), nDimIn=3, Coord1In_I=Radius_I, &
-            Coord2In_I=Theta_I(MinTheta:MaxTheta), &
-            Coord3In_I=Phi_I(MinPhi:MaxPhi), &
-            VarIn_VIII=PlotVar_VG(:,:,MinTheta:MaxTheta,MinPhi:MaxPhi))
-
-       deallocate(Potential_G, PlotVar_VG)
-    endif
-
 
   end subroutine save_potential_field
 
