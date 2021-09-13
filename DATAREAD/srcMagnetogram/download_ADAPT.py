@@ -1,47 +1,30 @@
-#!/usr/bin/env python3.7
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
-def download_ADAPT_magnetogram():
+from ftplib import FTP
+import gzip
+import shutil
+import math
+import sys
+import datetime as dt
+
+def download_ADAPT_magnetogram(timeIn, NameTypeMap='fixed'):
     '''
     This routine reads the date and type infomration from the command 
     line and download the corresponding ADAPT map.
     '''
-    
-    from ftplib import FTP
-    import gzip
-    import shutil
-    import math
-    import sys
 
-    # Ensure that we are using a version of python >= 3
-    if sys.version_info < (3,0):
-        print('ERROR: Python version must be >= 3')
-        print('Current version: '+sys.version)
-        exit(-1)
-
-    yyyy = int(input('Enter year: ' ))
-    mm   = int(input('Enter month: '))
-    dd   = int(input('Enter day: '  ))
-    hh   = int(input('Enter hour: ' ))
-
-    StrTypeMap = input('Type of ADAPT maps: fixed or central?  ')
-
-    if StrTypeMap == 'fixed':
-        TypeMap = 0
-    elif StrTypeMap == 'central':
-        TypeMap = 1
+    if NameTypeMap == 'fixed':
+        StrTypeMap = '0'
+    elif NameTypeMap == 'central':
+        StrTypeMap = '1'
     else:
-        print('Unrecognized type of ADAPT map')
-        return(-0)
+        raise ValueError('Unrecognized type of ADAPT map: '+NameTypeMap)
 
     # ADAPT maps only contains the hours for even numbers
-    if hh%2 != 0:
-        hh = math.floor(hh/2)*2
-        print(' Warning: Hour must be an even number.'\
-                  +' The entered hour value is changed to ', hh)
-
-    StringTime = str(yyyy).zfill(4)+'-'+str(mm).zfill(2)+'-' \
-        +str(dd).zfill(2)+'T'+str(hh).zfill(2)
+    if timeIn.hour%2 != 0:
+        timeIn.hour = floor(timeIn.hour/2)*2
+        print('Warning: Hour must be an even number. '
+              +'The entered hour value is changed to ', timeIn.hour)
 
     # Go to the the ADAPT ftp server
     ftp=FTP('gong2.nso.edu')
@@ -52,28 +35,30 @@ def download_ADAPT_magnetogram():
 
     # Go to the specific year
     try:
-        ftp.cwd(str(yyyy))
+        ftp.cwd(str(timeIn.year))
     except:
-        print('Cannot go to the specific year directory')
-        return(-1)
-
-    print('')
+        sys.exit('******************************************************************\n' 
+                 + 'Year not found on the ftp server: '+str(timeIn.year) + '.\n'
+                 + 'Check ftp://gong2.nso.edu/adapt/maps/gong in the corresponding \n'
+                 + 'year to see whether it provides a map.\n'
+                 + '******************************************************************\n')
 
     # Only consider the public (4) Carrington Fixed (0) GONG (3) ADAPT maps
-    patten = 'adapt4'+str(TypeMap)+'3*' + str(yyyy).zfill(4) + \
-        str(mm).zfill(2) + str(dd).zfill(2)  + str(hh).zfill(2) + '*'
-    
-    print('Trying to download the', StrTypeMap, 'ADAPT map', \
-              ' for date:',StringTime)
-    # print('The patten is:', patten)
+    patten = 'adapt4'+StrTypeMap+'3*' + str(timeIn.year).zfill(4) + \
+        str(timeIn.month).zfill(2) + str(timeIn.day).zfill(2)     + \
+        str(timeIn.hour).zfill(2)  + '*'
     
     filenames = ftp.nlst(patten)
     
     if len(filenames) < 1:
-        print('Could not find a file that matches the patten')
-        return(-2)
+        sys.exit('******************************************************************\n' 
+                 + 'File not found on the ftp server with the patten: '+patten + '.\n'
+                 + 'Try another even hour within 24 hours range of the desired time.\n'
+                 + 'Or check ftp://gong2.nso.edu/adapt/maps/gong in the corresponding \n'
+                 + 'year/month/day to see whether it provides a map.\n'
+                 + '******************************************************************\n')
     
-    for filename in filenames:
+    for ifile, filename in enumerate(filenames):
         # open the file locally
         fhandle=open(filename, 'wb')
         
@@ -81,23 +66,35 @@ def download_ADAPT_magnetogram():
         try:
             ftp.retrbinary('RETR '+ filename, fhandle.write)
         except:
-            print('Cannot download ', filename)
-            return(-3)
+            sys.exit('Cannot download '+filename)
         
         # close the file
         fhandle.close()
-        print('Downloaded:',filename)
 
         #unzip the file
         if '.gz' in filename:
-            print('Unzip',filename)
             filename_unzip = filename.replace('.gz','')
             with gzip.open(filename, 'rb') as s_file, \
                 open(filename_unzip, 'wb') as d_file:
                     shutil.copyfileobj(s_file, d_file, 65536)
+            filenames[ifile]=filename_unzip
     
     ftp.quit()
 
-####### Script:
+    return filenames
 
-download_ADAPT_magnetogram()
+if __name__ == '__main__':
+
+    yyyy = int(input('Enter year: ' ))
+    mm   = int(input('Enter month: '))
+    dd   = int(input('Enter day: '  ))
+    hh   = int(input('Enter hour: ' ))
+
+    StrTime = str(yyyy).zfill(4)+'-'+str(mm).zfill(2)+'-' \
+        +str(dd).zfill(2)+'T'+str(hh).zfill(2)
+
+    timeIn = dt.datetime.strptime(StrTime,"%Y-%m-%dT%H")
+
+    NameTypeMap = input('Type of ADAPT maps: fixed or central?  ')
+
+    download_ADAPT_magnetogram(timeIn,NameTypeMap)
