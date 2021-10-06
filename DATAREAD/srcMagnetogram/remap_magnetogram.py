@@ -13,8 +13,8 @@
 # June 2020: generalized for any types of maps that have multiple realizations
 # Read & remap HMI vector magnetogram (.fits)
 
-#import pyfits as fits
-from astropy.io import fits
+import pyfits as fits
+#from astropy.io import fits
 #import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
@@ -593,9 +593,9 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             mapdate = '0000-00-00T00:00:00'
 
     # Fits files from HMI have a header with limited number of keywords.
-    # Those limited keywords is not sufficient enough to provide informatoins
-    # that FITS_RECOGNIZE() want to read.
-    # Therefore you can manually set those necessay parameter in this if
+    # Those limited keywords are not sufficient enough to provide informatoins
+    # that FITS_RECOGNIZE() wants to read.
+    # Therefore you can manually set those necessay parameters in this if
     # statement
     if inputfile == 'synopMr_CR2157.fits':
         magnetogram_type = 'HMI Synoptic'
