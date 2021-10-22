@@ -63,7 +63,7 @@ program magnetogram
      iLong = i + Long0
      iLong = 1 + modulo(iLong - 1, nLong)
      if (i <= nD) then
-        Long_I(i) = iLong + LongitudeCme - nD/2
+        Long_I(i) = i + LongitudeCme - nD/2
      endif
      Longitude_I(i) = iLong - 0.5
   end do
