@@ -4,10 +4,13 @@
 module EEE_ModTD99
 
 #ifdef _OPENACC
-  use ModUtilities, ONLY: norm2 
+  use ModUtilities, ONLY: norm2
 #endif
-  use EEE_ModCommonVariables
+  use EEE_ModCommonVariables, ONLY: UseTD14, DirCme_D, No2Si_V, Si2No_V, &
+       Io2No_V, Io2Si_V, No2Io_V, UnitB_, UnitRho_, UnitX_,   &
+       UnitU_, UnitP_, UnitTemperature_, iProc, StartTime
   use ModHyperGeometric
+  use ModConst, ONLY: cMu, cDegToRad, cRadToDeg
   implicit none
   save
   private
@@ -96,15 +99,149 @@ module EEE_ModTD99
   logical :: UseDynamicStrapping = .false.
 contains
   !============================================================================
+  subroutine set_parameters_TD99(NameCommand)
+    use EEE_ModCommonVariables, ONLY: OrientationCme, LongitudeCme, &
+         LatitudeCme, XyzCmeApexSi_D, XyzCmeCenterSi_D, DoNormalizeXyz
+    use ModReadParam, ONLY: read_var
 
+    integer :: iError
+    real    :: MassDim
+    character(len=*), intent(in):: NameCommand
+
+    character(len=*), parameter:: NameSub = 'set_parameters_TD99'
+    !--------------------------------------------------------------------------
+    select case(NameCommand)
+    case("#CME")
+       ! Set defaults:
+       UseEquilibriumCurrent = .false.
+       DoGetBStrap = .false.
+       UseStaticCharge = .false.
+       UseDynamicStrapping = .false.
+       TypeBStrap = 'none'
+       TypeCharge = 'none'
+       call read_var('BcTubeDim', BcTubeDim)
+       !
+       ! Set negative helicity, if the input is negative:
+       !
+       HelicitySign = sign(1.0, BcTubeDim)
+       BcTubeDim = abs(BcTubeDim)
+       call read_var('RadiusMajor', Rtube)
+       call read_var('RadiusMinor', aTube)
+       call read_var('Depth',       Depth)
+       !
+       ! Save coords of the configuration center...
+       XyzCmeCenterSi_D = DirCme_D*(1 - Depth)
+       !
+       ! ...and those of apex:
+       XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
+       ! The coords are dimensionless, set the switch to normaalize
+       DoNormalizeXyz = .true.
+       if(.not.UseTD14)then
+          call read_var('UsePlasmaBeta', UsePlasmaBeta)
+          if(UsePlasmaBeta)then
+             call read_var('PlasmaBeta', PlasmaBeta)
+             call read_var('EjectaTemperature', EjectaTemperatureDim)
+          else
+             PlasmaBeta = 0.0
+             call read_var('MassDim',     MassDim)
+             MassSi = MassDim*1.0e-3  ! g to kg
+          end if
+          ! If UseTD14 all these parameters are not effective
+       end if
+       call read_var('TypeBStrap', TypeBStrap, iError)
+       if(iError/=0)then
+          ! The line is empty, return
+          TypeBStrap = 'none'
+          RETURN
+       elseif(len_trim(TypeBStrap)==0)then
+          ! The line is empty, return
+          TypeBStrap = 'none'
+          RETURN
+       end if
+       select case(trim(TypeBStrap))
+       case('readbstrap')
+          UseEquilibriumCurrent  = .true.
+          call read_var('bStrappingDim', bStrappingDim)
+          call read_var('TypeCharge', TypeCharge, iError)
+          if(iError/=0)then
+             ! The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          elseif(len_trim(TypeCharge)==0)then
+             ! The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          end if
+       case('getbstrap')
+          UseEquilibriumCurrent  = .true.
+          DoGetBStrap = .true.
+          call read_var('TypeCharge', TypeCharge, iError)
+          if(iError/=0)then
+             ! The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          elseif(len_trim(TypeCharge)==0)then
+             ! The line is empty, return
+             TypeCharge = 'none'
+             RETURN
+          end if
+       case('none')
+          ! No TypeCharge, no TypeBStrap. Do nothing
+          RETURN
+       case('steady','moving','cancelflux')
+          ! In this line, there is TypeCharge, not TypeBStrap
+          UseEquilibriumCurrent  = .false.
+          TypeCharge = trim(TypeBStrap)
+          if(iProc==0)write(*,'(a)')TypeCharge//'                TypeCharge'
+          TypeBStrap = 'none'
+       case default
+          if(iProc==0)call CON_stop(NameSub// ': '//&
+              trim(TypeBStrap)//' is unknown as TypeCharge or TypeBStrap')
+       end select
+       ! Now, TypeCharge is read, either after TypeBStrap or instead of it'
+       if(UseEquilibriumCurrent)then
+          ! In this case we read, which fraction of the above
+          ! defined strapping field is due to magnetic charges
+          call read_var('bQStrapFraction', bQStrapFraction)
+       else
+          ! The magnetude of magnetic charges is characterized in terms
+          ! of the strapping field they produce at the apex of flux rope
+          call read_var('bQStrappingDim', bQStrappingDim)
+       end if
+       call read_var('qDistance',  qDistance)
+
+       select case(trim(TypeCharge))
+       case('steady')
+          UseStaticCharge = .true.
+       case('cancelflux')
+          UseDynamicStrapping = .true.
+          StartTime = -1.0
+          call read_var('UChargeX', UChargeX)
+       case('moving')
+          UseStaticCharge = .true.
+          UseDynamicStrapping = .true.
+          StartTime = -1.0
+          call read_var('UChargeX', UChargeX)
+       case default
+          if(iProc==0)call CON_stop(&
+               NameSub//': TypeCharge='//trim(TypeCharge)//' is unknown')
+       end select
+
+    case default
+       call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
+    end select
+
+  end subroutine set_parameters_TD99
+  !============================================================================
   subroutine init_TD99_parameters
-
+    use EEE_ModCommonVariables, ONLY: prefix, OrientationCme,  &
+         LongitudeCme, LatitudeCme, BAmbientApexSi_D
     use ModCoordTransform, ONLY: rot_matrix_x,rot_matrix_y,rot_matrix_z
 
     real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi, bQStrapping
     ! Declare the rotational matrix of coordinate transformation:
     real :: Rotate_DD(3,3)
-    ! internal inductance releted to \mu_0 R_\infty
+    ! internal inductance related to \mu_0 R_\infty
     real, parameter :: Li = 0.5
 
     ! Define the normalized model parameters here::
@@ -303,141 +440,9 @@ contains
     end if  ! UseCharge
   end subroutine init_TD99_parameters
   !============================================================================
-  subroutine set_parameters_TD99(NameCommand)
-
-    use ModReadParam, ONLY: read_var
-
-    integer :: iError
-    real    :: MassDim
-    character(len=*), intent(in):: NameCommand
-
-    character(len=*), parameter:: NameSub = 'set_parameters_TD99'
-    !--------------------------------------------------------------------------
-    select case(NameCommand)
-    case("#CME")
-       ! Set defaults:
-       UseEquilibriumCurrent = .false.
-       DoGetBStrap = .false.
-       UseStaticCharge = .false.
-       UseDynamicStrapping = .false.
-       TypeBStrap = 'none'
-       TypeCharge = 'none'
-       call read_var('BcTubeDim', BcTubeDim)
-       !
-       ! Set negative helicity, if the input is negative:
-       !
-       HelicitySign = sign(1.0, BcTubeDim)
-       BcTubeDim = abs(BcTubeDim)
-       call read_var('RadiusMajor', Rtube)
-       call read_var('RadiusMinor', aTube)
-       call read_var('Depth',       Depth)
-       !
-       ! Save coords of the configuration center...
-       XyzCmeCenterSi_D = DirCme_D*(1 - Depth)
-       !
-       ! ...and those of apex:
-       XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
-       DoNormalizeXyz = .true.
-       if(.not.UseTD14)then
-          call read_var('UsePlasmaBeta', UsePlasmaBeta)
-          if(UsePlasmaBeta)then
-             call read_var('PlasmaBeta', PlasmaBeta)
-             call read_var('EjectaTemperature', EjectaTemperatureDim)
-          else
-             PlasmaBeta = 0.0
-             call read_var('MassDim',     MassDim)
-             MassSi = MassDim*1.0e-3  ! g to kg
-          end if
-          ! If UseTD14 all these parameters are not effective
-       end if
-       call read_var('TypeBStrap', TypeBStrap, iError)
-       if(iError/=0)then
-          ! The line is empty, return
-          TypeBStrap = 'none'
-          RETURN
-       elseif(len_trim(TypeBStrap)==0)then
-          ! The line is empty, return
-          TypeBStrap = 'none'
-          RETURN
-       end if
-       select case(trim(TypeBStrap))
-       case('readbstrap')
-          UseEquilibriumCurrent  = .true.
-          call read_var('bStrappingDim', bStrappingDim)
-          call read_var('TypeCharge', TypeCharge, iError)
-          if(iError/=0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          elseif(len_trim(TypeCharge)==0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          end if
-       case('getbstrap')
-          UseEquilibriumCurrent  = .true.
-          DoGetBStrap = .true.
-          call read_var('TypeCharge', TypeCharge, iError)
-          if(iError/=0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          elseif(len_trim(TypeCharge)==0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          end if
-       case('none')
-          ! No TypeCharge, no TypeBStrap. Do nothing
-          RETURN
-       case('steady','moving','cancelflux')
-          ! In this line, there is TypeCharge, not TypeBStrap
-          UseEquilibriumCurrent  = .false.
-          TypeCharge = trim(TypeBStrap)
-          if(iProc==0)write(*,'(a)')TypeCharge//'                TypeCharge'
-          TypeBStrap = 'none'
-       case default
-          if(iProc==0)call CON_stop(NameSub// ': '//&
-              trim(TypeBStrap)//' is unknown as TypeCharge or TypeBStrap')
-       end select
-       ! Now, TypeCharge is read, either after TypeBStrap or instead of it'
-       if(UseEquilibriumCurrent)then
-          ! In this case we read, which fraction of the above
-          ! defined strapping field is due to magnetic charges
-          call read_var('bQStrapFraction', bQStrapFraction)
-       else
-          ! The magnetude of magnetic charges is characterized in terms
-          ! of the strapping field they produce at the apex of flux rope
-          call read_var('bQStrappingDim', bQStrappingDim)
-       end if
-       call read_var('qDistance',  qDistance)
-
-       select case(trim(TypeCharge))
-       case('steady')
-          UseStaticCharge = .true.
-       case('cancelflux')
-          UseDynamicStrapping = .true.
-          StartTime = -1.0
-          call read_var('UChargeX', UChargeX)
-       case('moving')
-          UseStaticCharge = .true.
-          UseDynamicStrapping = .true.
-          StartTime = -1.0
-          call read_var('UChargeX', UChargeX)
-       case default
-          if(iProc==0)call CON_stop(&
-               NameSub//': TypeCharge='//trim(TypeCharge)//' is unknown')
-       end select
-
-    case default
-       call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
-    end select
-
-  end subroutine set_parameters_TD99
-  !============================================================================
   subroutine get_TD99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
-
-    use ModCoordTransform, ONLY: cross_product
+    use EEE_ModCommonVariables, ONLY: DoInit
+    use ModCoordTransform,      ONLY: cross_product
 
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
     !                                                                   !
