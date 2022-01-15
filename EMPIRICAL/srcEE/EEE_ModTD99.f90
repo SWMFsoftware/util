@@ -10,7 +10,7 @@ module EEE_ModTD99
        Io2No_V, Io2Si_V, No2Io_V, UnitB_, UnitRho_, UnitX_,   &
        UnitU_, UnitP_, UnitTemperature_, iProc, StartTime
   use ModHyperGeometric
-  use ModConst, ONLY: cMu, cDegToRad, cRadToDeg
+  use ModConst, ONLY: cMu, cDegToRad, cRadToDeg, cPi
   implicit none
   save
   private
