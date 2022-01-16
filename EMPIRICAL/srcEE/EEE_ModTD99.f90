@@ -6,6 +6,7 @@ module EEE_ModTD99
 #ifdef _OPENACC
   use ModUtilities, ONLY: norm2
 #endif
+  use ModUtilities, ONLY: CON_stop
   use EEE_ModCommonVariables, ONLY: UseTD14, DirCme_D, No2Si_V, Si2No_V, &
        Io2No_V, Io2Si_V, No2Io_V, UnitB_, UnitRho_, UnitX_,   &
        UnitU_, UnitP_, UnitTemperature_, iProc, StartTime
