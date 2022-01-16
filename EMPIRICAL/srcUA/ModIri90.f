@@ -281,7 +281,7 @@ C       Must set this before calling CON_io_unit_new, so if it is running
 C       stand-alone, this routine doesn't have to do anything.
         if (.not. IsOpenKonsol) then
            KONSOL=12
-           call CON_io_unit_new(KONSOL)
+           call CON_io_unit_new_ext(KONSOL)
            write(NameFile,"(a,i4.4,a)") 'UA/data/iriOut_',iProc,'.dat'
            open(unit = konsol,file=NameFile)
            IsOpenKonsol = .true.
@@ -453,7 +453,7 @@ C!!!!!!! F-REGION PARAMETERS AND E-PEAK !!!!!!!!!!!!!!!!!!!!!!!!!!
 
 C          Read CCIR coefficient set for chosen month....................
  7790 IUCCIR=9
-      call CON_io_unit_new(IUCCIR)
+      call CON_io_unit_new_ext(IUCCIR)
       OPEN  (IUCCIR,FILE=CCIRNM,STATUS='OLD',ERR=7796)
 
       DO 7791 I=1,NRMC*(MONTH-1)
@@ -474,15 +474,15 @@ C          Read URSI coefficient set for chosen month....................
       GOTO 4291
 
  7796 WRITE (KONSOL,'(''IRI90: File not found:'',A)') CCIRNM
-      call CON_stop("died in iri90.f")
+      call CON_stop_ext("died in iri90.f")
  7797 WRITE (KONSOL,'(''IRI90: Trouble skipping to month'',I4,
      +               '' at rec'',I6,'' of '',A)')  MONTH, I, CCIRNM
-      call CON_stop("died in iri90.f")
+      call CON_stop_ext("died in iri90.f")
  7798 WRITE (KONSOL,'(''IRI90: File not found:'',A)') URSINM
-      call CON_stop("died in iri90.f")
+      call CON_stop_ext("died in iri90.f")
  7799 WRITE (KONSOL,'(''IRI90: Trouble skipping to month'',I4,
      +               '' at rec'',I6,'' of '',A)')  MONTH, I, URSINM
-      call CON_stop("died in iri90.f")
+      call CON_stop_ext("died in iri90.f")
 
 C
 C LINEAR INTERPOLATION IN SOLAR ACTIVITY
