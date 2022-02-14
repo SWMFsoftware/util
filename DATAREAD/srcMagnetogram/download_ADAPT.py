@@ -22,7 +22,7 @@ def download_ADAPT_magnetogram(timeIn, NameTypeMap='fixed'):
 
     # ADAPT maps only contains the hours for even numbers
     if timeIn.hour%2 != 0:
-        timeIn.hour = floor(timeIn.hour/2)*2
+        timeIn = timeIn.replace(hour=math.floor(timeIn.hour/2)*2)
         print('Warning: Hour must be an even number. '
               +'The entered hour value is changed to ', timeIn.hour)
 
