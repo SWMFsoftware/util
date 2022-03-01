@@ -21,7 +21,10 @@ CHANGEPOLARFIELD
 #OUTPUT
 harmonics11uniform.dat		NameFileOut
 
-! The maximum order of spherical harmonics is nOrder = min(nTheta, MaxOrder)
+! If the input MaxOrder is between [0, 180], then the maximum order of
+! spherical harmonics is the input value of MaxOrder. Otherwise the maximum
+! order is min(nTheta, MaxOrder). Please refer to the source code of
+! ModMagHarmonics.f90 for more details.
 ! where nTheta is the number of latitude grid cells in the magnetogram,
 ! while MaxOrder can be set below. Default value for MaxOrder is 180.
 #HARMONICS
