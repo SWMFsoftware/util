@@ -1,7 +1,5 @@
 # The NOMPI library cannot be compiled with all debugging options because it
 # uses variable type casting. 
-$Compiler eq "f95" and $Debug eq "yes"
-	${COMPILE.f90} ${SEARCH} -c -O0 -gline -w ${PRECISION} NOMPI.f90
 
 $Compiler eq "nagfor"
-	${COMPILE.f90} ${SEARCH} -c -w -Wc=`which gcc` ${PRECISION} -O0 NOMPI.f90
+	${COMPILE.f90} ${SEARCH} -c -w -Wc=`which gcc` -kind=byte ${PRECISION} -O0 NOMPI.f90
