@@ -3,11 +3,14 @@
 module ModEIE_Interface
 
   use ModKind
-
+  use ModAMIE_Interface, ONLY: iCharLenIE_
+  
   real, allocatable, dimension(:,:,:) :: EIEr3_HaveLats, EIEr3_HaveMLTs
   real, allocatable, dimension(:,:,:) :: EIEr3_HavePotential
   real, allocatable, dimension(:,:,:) :: EIEr3_HaveEFlux
   real, allocatable, dimension(:,:,:) :: EIEr3_HaveAveE
+  real, allocatable, dimension(:,:,:) :: EIEr3_HaveIonEFlux
+  real, allocatable, dimension(:,:,:) :: EIEr3_HaveIonAveE
 
   real (Real8_)       :: EIEd_CurrentTime
   integer             :: EIEi_HavenLats
@@ -20,6 +23,8 @@ module ModEIE_Interface
   real, allocatable, dimension(:,:) :: IOr2_NeedPotential
   real, allocatable, dimension(:,:) :: IOr2_NeedEFlux
   real, allocatable, dimension(:,:) :: IOr2_NeedAveE
+  real, allocatable, dimension(:,:) :: IOr2_NeedIonEFlux
+  real, allocatable, dimension(:,:) :: IOr2_NeedIonAveE
   integer                           :: IOi_NeednLats
   integer                           :: IOi_NeednMLTs
   integer                           :: IOi_NeednTimes
@@ -39,6 +44,8 @@ module ModEIE_Interface
   real, allocatable, dimension(:,:) :: UAr2_NeedPotential
   real, allocatable, dimension(:,:) :: UAr2_NeedEFlux
   real, allocatable, dimension(:,:) :: UAr2_NeedAveE
+  real, allocatable, dimension(:,:) :: UAr2_NeedIonEFlux
+  real, allocatable, dimension(:,:) :: UAr2_NeedIonAveE
   integer                           :: UAi_NeednLats
   integer                           :: UAi_NeednMLTs
   integer                           :: UAi_NeednTimes
@@ -53,10 +60,10 @@ module ModEIE_Interface
   integer, parameter                :: EIE_After_       = 2
   integer, parameter                :: EIE_Interpolate_ = 3
 
-  character (len=100) :: EIE_NameOfEFieldModel
-  character (len=100) :: EIE_NameOfAuroralModel
-  character (len=100) :: EIE_NameOfSolarModel
-  character (len=100) :: EIE_NameOfModelDir
+  character (len=iCharLenIE_) :: EIE_NameOfEFieldModel
+  character (len=iCharLenIE_) :: EIE_NameOfAuroralModel
+  character (len=iCharLenIE_) :: EIE_NameOfSolarModel
+  character (len=iCharLenIE_) :: EIE_NameOfModelDir
 
   logical :: UAl_UseGridBasedEIE
   logical :: UseGridBasedEIE
