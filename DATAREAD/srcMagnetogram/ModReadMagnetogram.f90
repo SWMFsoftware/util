@@ -22,9 +22,15 @@ module ModReadMagnetogram
   real,    public:: dPhi=1.0, dTheta=1.0, dSinTheta=1.0
   logical, public:: UseChebyshevNode = .true.
   real,    public,  allocatable:: ChebyshevWeightE_I(:), ChebyshevWeightW_I(:)
-  ! Carrington rotation #. If the map covers parts of two rotations,
-  ! the carrington rotation for the central meridian is provided
-  real, public:: CarringtonRotation = 0.
+  ! Carrington rotation # plus  fraction of the synodic Carrington rotation
+  ! period passed since the CR start till the time of magnetogram.
+  ! For a particular case of the GONG synoptic map this equals CR#+0.5.
+  ! For a particular case of the GONG hourly magnetogram, this parameter
+  ! equals CRNOW as provided in the fitsfile header. Once read from the
+  ! magnetogram file, this parameter is converted to the fromat similar to
+  ! #STARTTIME and saved to MAGNETOGRAMTIME.in file. It is strongly
+  ! recommended to check if this saved time looks reasonable 
+  real, public:: MagnetogramTimeCR = 0.
   ! Carrington longitude of the left margin of the map
   ! ("leading longitude")
   real, public:: LongShift = 0.
@@ -86,7 +92,10 @@ contains
        IsPhiThetaOrder, UseWedge, DoRemoveMonopole, nThetaCoarse, nPhiCoarse)
 
     use ModPlotFile, ONLY: read_plot_file, save_plot_file
-    use ModNumConst, ONLY: cDegToRad
+    use ModConst, ONLY: cDegToRad, tStartCarringtonRotation, &
+         CarringtonSynodicPeriod
+    use ModTimeConvert, ONLY: time_real_to_int
+    use ModUtilities,  ONLY: open_file, close_file, cTab
 
     logical, optional,  intent(in):: IsPhiThetaOrder
     logical, optional,  intent(in):: UseWedge
@@ -96,6 +105,8 @@ contains
     real:: Param_I(2)
     real:: BrAverage
     real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:)
+    real :: MagnetogramTime
+    integer :: iTime_I(7),UnitTmp_
 
     integer:: iError, nParam, iTheta, iPhi, nThetaRatio, nPhiRatio
     integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi
@@ -116,11 +127,24 @@ contains
     ! Reading the original shift in Phi and
     ! Central Meridian Longitude from the Map
     if(nParam>0)LongShift = Param_I(1)
-    if(nParam>1)CarringtonRotation = Param_I(2)
+    if(nParam>1)MagnetogramTimeCR = Param_I(2)
 
     write(*,*)NameSub,': nTheta0, nPhi0, LongitudeShift = ', nTheta0, &
-         nPhi0, LongShift, CarringtonRotation
-
+         nPhi0, LongShift, MagnetogramTimeCR
+    MagnetogramTime = MagnetogramTimeCR*&
+         CarringtonSynodicPeriod + tStartCarringtonRotation
+    call time_real_to_int(MagnetogramTime, iTime_I)
+    call open_file(UnitTmp_,file='MAGNETOGRAMTIME.in')
+    write(UnitTmp_,'(i8,a)')iTime_I(1), cTab//cTab//'iYear'
+    write(UnitTmp_,'(i8,a)')iTime_I(2), cTab//cTab//'iMonth'
+    write(UnitTmp_,'(i8,a)')iTime_I(3), cTab//cTab//'iDay'
+    write(UnitTmp_,'(i8,a)')iTime_I(4), cTab//cTab//'iHour'
+    write(UnitTmp_,'(i8,a)')iTime_I(5), cTab//cTab//'iMinute'
+    write(UnitTmp_,'(i8,a)')iTime_I(6), cTab//cTab//'iSecond'
+    write(UnitTmp_,*)
+    write(UnitTmp_,'(a)')'#END'
+    write(UnitTmp_,*)
+    call close_file(UnitTmp_)
     ! Saves the original Magnetogram grid
     allocate(Phi0_I(nPhi0), Lat0_I(nTheta0))
     allocate(Br0_II(nPhi0,nTheta0))

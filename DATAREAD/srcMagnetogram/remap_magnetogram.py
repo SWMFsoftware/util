@@ -291,7 +291,8 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
                 +bunit+'; InputMapResolution = '+str(nlo)+','+str(nla)+\
                 '; MagnetogramDate = '+mapdate+'; CentralMeridianLong = '\
-                +CRnumber+'; InputFile = '+str(inputfile)+\
+                +format(float(CR)+0.5-float(long0)/360.,'f')+'; InputFile = '\
+                +str(inputfile)+\
                 ';ASCIIFileCreationDate = '\
                 +time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
         else:
@@ -300,7 +301,8 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 '; InputLatGrid = '+input_grid+'; OutputLatGrid = '+out_grid+\
                 '; MagUnit = '+bunit+'; InputMapResolution = '+str(nlo)+','\
                 +str(nla)+'; MagnetogramDate = '+mapdate+\
-                '; CentralMeridianLong = '+CRnumber+\
+                '; CentralMeridianLong = '+\
+                format(float(CR)+0.5-float(long0)/360.,'f')+\
                 '; InputFile = "'+str(inputfile)+\
                 ';ASCIIFileCreationDate = '\
                 +time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
@@ -476,24 +478,31 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     nla = g[0].header['NAXIS2'] #           latitude
         
     if telescope.find('NSO-GONG') > -1 :
-        magnetogram_type = 'NSO-GONG Synoptic'
-        # CR at center of map
-        try :
-            CRnumber = str(g[0].header['CRCENTER']) #works on GONG and MDI
-        except KeyError as er:
-            CRnumber = '0'
-        # CR number
-        try :
-            CR = str(g[0].header['CAR_ROT']) #works on GONG and MDI
-        except KeyError as er:
-            CR = CRnumber
         # long at left edge
         try:
             long0 = g[0].header['LONG0']
-            if float(long0) > 0.:
-                magnetogram_type = 'NSO-GONG Hourly'
         except KeyError as er:
             long0 = - 1
+        # CR number
+        try :
+            CR = g[0].header['CAR_ROT'] #works on GONG and MDI
+        except KeyError as er:
+            CR = 0
+        # CR at center of map
+        try :
+            CRnumber = g[0].header['CRNOW'] #works on GONG
+            magnetogram_type = 'NSO-GONG Hourly'
+        except KeyError as er:
+            if float(long0) > 0.:
+                # Something goes wrong: this is not synoptic map,
+                # however, the carrington time is not present
+                magnetogram_type = 'NSO-GONG Hourly'
+                CRnumber = 0
+            else:
+               magnetogram_type = 'NSO-GONG Synoptic'
+               # The Carrington time is the midtime of
+               # the Carrington rotation:
+               CRnumber=str(float(CR)+0.5)
         #Date
         try:
             mapdate = g[0].header['DATE'] #works for GONG

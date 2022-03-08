@@ -227,7 +227,7 @@ contains
   subroutine read_modified_magnetogram
 
     use ModReadMagnetogram, ONLY: read_orig_magnetogram, Br0_II,  &
-         Lat0_I, Phi0_I, nThetaAll, nPhiAll, LongShift, CarringtonRotation
+         Lat0_I, Phi0_I, nThetaAll, nPhiAll, LongShift, MagnetogramTimeCR
 
     logical :: IsPhiThetaOrder = .false.
     logical :: IsInputLonLatInDegree = .true.
@@ -257,7 +257,7 @@ contains
     ! and the Carrington Rotation of the Central Meridian 
     ! is read.
     LongCR = LongShift
-    CarRot = CarringtonRotation
+    CarRot = MagnetogramTimeCR
 
   end subroutine read_modified_magnetogram
   !============================================================================
