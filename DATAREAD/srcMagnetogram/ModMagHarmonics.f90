@@ -136,7 +136,7 @@ contains
 
     use ModPlotFile, ONLY: save_plot_file
     use ModReadMagnetogram, ONLY: Br0_II, nTheta0, nPhi0, UseChebyshevNode, &
-         CarringtonRotation, LongShift, UseCosTheta, nThetaorig, nPhiorig, &
+         MagnetogramTimeCR, LongShift, UseCosTheta, nThetaorig, nPhiorig, &
          ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta, &
          StringMagHeader
 
@@ -307,7 +307,7 @@ contains
 
     call save_plot_file(NameFileOut, &
          StringHeaderIn=StringMagHeader, &
-         ParamIn_I=[ real(nHarmonics), CarringtonRotation, dLon ], &
+         ParamIn_I=[ real(nHarmonics), MagnetogramTimeCR, dLon ], &
          IsCartesianIn = .false., &
          nDimIn = 2, &
          CoordIn_DII = Coord_DII, &
