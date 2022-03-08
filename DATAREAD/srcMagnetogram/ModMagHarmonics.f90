@@ -39,7 +39,7 @@ module ModMagHarmonics
   real:: dR=1.0
   integer:: nPhi=72, nTheta=29
 
-  integer, parameter:: MaxHarmonics = 180
+  integer, parameter:: MaxHarmonics = 1800
   integer:: nHarmonics = MaxHarmonics, nHarmonicsIn = MaxHarmonics
 
   real:: CosTheta,SinTheta
