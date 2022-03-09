@@ -1,7 +1,7 @@
 !  Copyright (C) 2002 Regents of the University of Michigan, 
 !  portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-module ModPotentialField
+module ModPotentialFieldSimple
 
   use ModUtilities, ONLY: CON_stop
   use ModNumConst, ONLY: cDegToRad
@@ -448,7 +448,7 @@ contains
 
   end subroutine set_boundary
 
-end module ModPotentialField
+end module ModPotentialFieldSimple
 
 !==============================================================================
 
@@ -462,7 +462,7 @@ contains
 
   subroutine matvec(x_C, y_C, n)
 
-    use ModPotentialField, ONLY: B0_DF, &
+    use ModPotentialFieldSimple, ONLY: B0_DF, &
          UsePreconditioner, nR, nTheta, d_I, e_I, e1_I, e2_I, f_I, f1_I, f2_I
     use ModLinearSolver, ONLY: Lhepta, Uhepta
 
@@ -487,7 +487,8 @@ contains
 
   subroutine get_gradient(x_C, Grad_DG)
 
-    use ModPotentialField, ONLY: nR, nTheta, nPhi, Radius_I, SinTheta_I, &
+    use ModPotentialFieldSimple, ONLY: &
+         nR, nTheta, nPhi, Radius_I, SinTheta_I, &
          dRadiusNode_I, dTheta_I, dCosTheta_I, dThetaNode_I, dPhiNode_I, &
          Br_II, set_boundary, &
          UseCosTheta, RadiusNode_I, Theta_I, SinThetaNode_I, dCosThetaNode_I, &
@@ -581,7 +582,8 @@ contains
 
   subroutine get_divergence(b_DG, DivB_C)
 
-    use ModPotentialField, ONLY: nR, nTheta, nPhi, Radius_I, dRadius_I, &
+    use ModPotentialFieldSimple, ONLY: &
+         nR, nTheta, nPhi, Radius_I, dRadius_I, &
          dPhi_I, SinTheta_I, dTheta_I, dCosTheta_I, RadiusNode_I, &
          SinThetaNode_I, Phi_I, &
          iRTest, iThetaTest, iPhiTest, rMax
@@ -657,7 +659,7 @@ program potential_field
   ! Solve 3D potential field with given Br at inner boundary,
   ! radial field at outer boundary.
 
-  use ModPotentialField
+  use ModPotentialFieldSimple
   use ModB0Matvec, ONLY: get_gradient, get_divergence, matvec
   use ModLinearSolver, ONLY: bicgstab, prehepta, Lhepta, Uhepta
   use ModPlotFile, ONLY: save_plot_file
