@@ -1,7 +1,10 @@
-! Merging FDIPS_module.f90 & ModMagHarmonics.f90 to read the raw
-! magnetogram & modifying the field.
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
+!  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 module ModReadMagnetogram
+
+  ! Read the raw magnetogram and modify the field as needed.
 
   use ModNumConst
   use ModUtilities, ONLY: CON_stop
@@ -99,6 +102,7 @@ contains
     use ModConst, ONLY: cDegToRad, tStartCarringtonRotation, &
          CarringtonSynodicPeriod
     use ModTimeConvert, ONLY: time_real_to_int
+    use ModIoUnit, ONLY: UnitTmp_
     use ModUtilities,  ONLY: open_file, close_file, cTab
 
     logical, optional,  intent(in):: IsPhiThetaOrder
@@ -110,7 +114,7 @@ contains
     real:: BrAverage
     real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:)
     real :: MagnetogramTime
-    integer :: iTime_I(7),UnitTmp_
+    integer :: iTime_I(7)
 
     integer:: iError, nParam, iTheta, iPhi, nThetaRatio, nPhiRatio
     integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi
@@ -136,6 +140,17 @@ contains
     write(*,*) NameSub, &
          ': nTheta0, nPhi0, LongitudeShift, MagnetogramTimeCR = ', &
          nTheta0, nPhi0, LongShift, MagnetogramTimeCR
+    ! Saves the original Magnetogram grid
+    allocate(Phi0_I(nPhi0), Lat0_I(nTheta0))
+    allocate(Br0_II(nPhi0,nTheta0))
+
+    call read_plot_file(NameFileIn, &
+         Coord1Out_I=Phi0_I, Coord2Out_I=Lat0_I, VarOut_II = Br0_II, &
+         iErrorOut=iError, NameVarOut=NameVarOut)
+
+    if(iError /= 0) call CON_stop(NameSub// &
+         ': could not read data from file '//trim(NameFileIn), iError)
+
     if(MagnetogramTimeCR > 0.0)then
        MagnetogramTime = MagnetogramTimeCR*CarringtonSynodicPeriod &
             + tStartCarringtonRotation
@@ -150,16 +165,6 @@ contains
        write(UnitTmp_,*)
        call close_file(NameCaller=NameSub)
     end if
-    ! Saves the original Magnetogram grid
-    allocate(Phi0_I(nPhi0), Lat0_I(nTheta0))
-    allocate(Br0_II(nPhi0,nTheta0))
-
-    call read_plot_file(NameFileIn, &
-         Coord1Out_I=Phi0_I, Coord2Out_I=Lat0_I, VarOut_II = Br0_II, &
-         iErrorOut=iError, NameVarOut=NameVarOut)
-
-    if(iError /= 0) call CON_stop(NameSub// &
-         ': could not read data from file'//trim(NameFileIn))
 
     ! Check if the latitude coordinate is uniform or not
     ! There is no point using Chebyshev transform if the original grid
