@@ -150,42 +150,18 @@ contains
           ! If UseTD14 all these parameters are not effective
        end if
        call read_var('TypeBStrap', TypeBStrap, iError)
-       if(iError/=0)then
-          ! The line is empty, return
-          TypeBStrap = 'none'
-          RETURN
-       elseif(len_trim(TypeBStrap)==0)then
-          ! The line is empty, return
-          TypeBStrap = 'none'
-          RETURN
-       end if
+
        select case(trim(TypeBStrap))
        case('readbstrap')
           UseEquilibriumCurrent  = .true.
           call read_var('bStrappingDim', bStrappingDim)
           call read_var('TypeCharge', TypeCharge, iError)
-          if(iError/=0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          elseif(len_trim(TypeCharge)==0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          end if
+
        case('getbstrap')
           UseEquilibriumCurrent  = .true.
           DoGetBStrap = .true.
           call read_var('TypeCharge', TypeCharge, iError)
-          if(iError/=0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          elseif(len_trim(TypeCharge)==0)then
-             ! The line is empty, return
-             TypeCharge = 'none'
-             RETURN
-          end if
+
        case('none')
           ! No TypeCharge, no TypeBStrap. Do nothing
           RETURN
