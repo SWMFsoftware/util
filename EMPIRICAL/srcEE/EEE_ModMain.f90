@@ -148,7 +148,7 @@ contains
           call read_var("OrientationCme", OrientationCme)
           call read_var("TypeCme", TypeCme, IsUpperCase=.true.)
           select case(TypeCme)
-          case("TITOV-DEMOULIN", "TD")
+          case("TD")
              UseTD = .true.
              DoAddTD = DoAddFluxRope
              call set_parameters_TD99(NameCommand)
@@ -157,7 +157,7 @@ contains
              UseTD14 = .true.
              DoAddTD = DoAddFluxRope
              call set_parameters_TD99(NameCommand)
-          case("GIBSON-LOW", "GL")
+          case("GL")
              UseGL = .true.
              DoAddGL = DoAddFluxRope
              call set_parameters_GL98(NameCommand)
