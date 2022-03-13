@@ -105,7 +105,6 @@ contains
          LatitudeCme, XyzCmeApexSi_D, XyzCmeCenterSi_D, DoNormalizeXyz
     use ModReadParam, ONLY: read_var
 
-    integer :: iError
     real    :: MassDim
     character(len=*), intent(in):: NameCommand
 
@@ -149,18 +148,18 @@ contains
           end if
           ! If UseTD14 all these parameters are not effective
        end if
-       call read_var('TypeBStrap', TypeBStrap, iError)
+       call read_var('TypeBStrap', TypeBStrap)
 
        select case(trim(TypeBStrap))
        case('readbstrap')
           UseEquilibriumCurrent  = .true.
           call read_var('bStrappingDim', bStrappingDim)
-          call read_var('TypeCharge', TypeCharge, iError)
+          call read_var('TypeCharge', TypeCharge)
 
        case('getbstrap')
           UseEquilibriumCurrent  = .true.
           DoGetBStrap = .true.
-          call read_var('TypeCharge', TypeCharge, iError)
+          call read_var('TypeCharge', TypeCharge)
 
        case('none')
           ! No TypeCharge, no TypeBStrap. Do nothing
