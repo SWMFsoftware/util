@@ -58,8 +58,8 @@ module ModMagHarmonics
   real:: SinThetaM, SinThetaM1
   integer:: delta_m0
   real, allocatable:: FactRatio1(:)
-  integer, parameter:: MaxInt=100000
-  real:: Sqrt_I(MaxInt)
+  integer:: MaxInt
+  real, allocatable:: Sqrt_I(:)
 
   real, allocatable, dimension(:) :: ChebyshevWeightE_I, ChebyshevWeightW_I
 
@@ -147,6 +147,8 @@ contains
     !--------------------------------------------------------------------------
     write(*,*)'Calculating harmonic coefficients'
 
+    allocate(Sqrt_I(nHarmonics**2))
+    MaxInt = nHarmonics**2
     ! Calculate sqrt(integer) from 1 to 10000::
     do m=1,MaxInt
        Sqrt_I(m) = sqrt(real(m))
