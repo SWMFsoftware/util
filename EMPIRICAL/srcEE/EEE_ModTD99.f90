@@ -524,7 +524,7 @@ contains
          Ak     = toroid_P(0, Kappa2In=Kappa2)
          ! Calculate d\tilde{P}^{-1}_{-1/2}(\cosh u)/du/\kappa &
          !                   /(\kappa^\prime)**2
-         dAkDk  = toroid_dp0du(Kappa2In=Kappa2)
+         dAkDk  = 3*toroid_p(1, Kappa2In=Kappa2)
 
          BFRope_D = BcTube*(Rtube/sqrt(RPlus2))**3*&
               (dAkDk*(2*xRel*XyzRel_D + (RTube**2 - R2Rel)*UnitX_D)/RPlus2 &
@@ -553,7 +553,7 @@ contains
          ! A_i = A_k(KappaA) + dA_k/dKappaA*(Kappa - Kappa_A) (*)
          !
          Ak      = toroid_P(0, Kappa2In=KappaA2)*KappaA**3
-         dAkdk   = toroid_dp0du(Kappa2In=KappaA2)*KappaA2
+         dAkdk   = 3*toroid_p(1,Kappa2In=KappaA2)*KappaA2
          AI = Ak + dAkdk*(Kappa - KappaA)
          !
          ! 3.
@@ -580,7 +580,7 @@ contains
          !
          d2Akdk2A = &
               KappaA/(1 - KappaA**2)*(3*toroid_P(0, Kappa2In=KappaA**2) +&
-              toroid_dp0du(Kappa2In=KappaA**2)*(1 + KappaA**2))
+              3*toroid_p(1,Kappa2In=KappaA**2)*(1 + KappaA**2))
          dKappaAdr = KappaA*aTube**2/&
               (4.0*Rperp*Rtube + aTube**2)
          dAIdr = dAIdr + d2Akdk2A*dKappaAdr*(Kappa - KappaA)
