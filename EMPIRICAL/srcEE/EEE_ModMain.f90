@@ -121,7 +121,7 @@ contains
     use EEE_ModCms,       ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
-         LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
+         UseTD22, LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak
     use ModNumConst,      ONLY: cDegToRad
     use ModCoordTransform, ONLY: lonlat_to_xyz
@@ -155,6 +155,11 @@ contains
           case("TD14")
              UseTD = .true.
              UseTD14 = .true.
+             DoAddTD = DoAddFluxRope
+             call set_parameters_TD99(NameCommand)
+          case("TD22")
+             UseTD = .true.
+             UseTD22 = .true.
              DoAddTD = DoAddFluxRope
              call set_parameters_TD99(NameCommand)
           case("GL")
@@ -251,7 +256,7 @@ contains
   subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, iteration_number)
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
-         DoAddGL, UseCms, DoAddSpheromak, DoAddTD14, StartTime
+         DoAddGL, UseCms, DoAddSpheromak, StartTime
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModCms,  ONLY: get_cms

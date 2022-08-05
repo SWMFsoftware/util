@@ -52,12 +52,11 @@ module EEE_ModCommonVariables
 
   ! Use Gibbson-Law, Titov-Demoulin, spheromak flux ropes
   logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false.
-  ! Use Titov-Demoulin 2014
-  logical:: UseTD14 = .false.
+  ! Use Titov-Demoulin 2014 or 2022
+  logical:: UseTD14 = .false., UseTD22 = .false.
 
   ! Logicals to add the CMEs
   logical:: DoAddGL = .false., DoAddTD = .false., DoAddSpheromak = .false.
-  logical:: DoAddTD14 = .false.
 
   ! Use shear-flow boundary condition, use arcade magnetic field
   logical:: UseShearFlow = .false., UseArch = .false.
