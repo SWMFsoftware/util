@@ -7,11 +7,13 @@ module EEE_ModTD99
   use ModUtilities, ONLY: norm2
 #endif
   use ModUtilities, ONLY: CON_stop
-  use EEE_ModCommonVariables, ONLY: UseTD14, DirCme_D, No2Si_V, Si2No_V, &
-       Io2No_V, Io2Si_V, No2Io_V, UnitB_, UnitRho_, UnitX_,   &
-       UnitU_, UnitP_, UnitTemperature_, iProc, StartTime
+  use EEE_ModCommonVariables, ONLY: UseTD, UseTD14, UseTD22, DirCme_D, &
+       No2Si_V, Si2No_V, Io2No_V, Io2Si_V, No2Io_V,                    &
+       UnitB_, UnitRho_, UnitX_,  UnitU_, UnitP_, UnitTemperature_,    &
+       iProc, StartTime
   use ModHyperGeometric
   use ModConst, ONLY: cMu, cDegToRad, cRadToDeg, cPi
+  use ModFieldGS
   implicit none
   save
   private
@@ -140,7 +142,11 @@ contains
        XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
        ! The coords are dimensionless, set the switch to normaalize
        DoNormalizeXyz = .true.
-       if(.not.UseTD14)then
+       if(UseTD22)then
+          UsePlasmaBeta = .true.
+          call read_var('PlasmaBeta', PlasmaBeta)
+          call read_var('EjectaTemperature', EjectaTemperatureDim)
+       elseif(.not.UseTD14)then
           call read_var('UsePlasmaBeta', UsePlasmaBeta)
           if(UsePlasmaBeta)then
              call read_var('PlasmaBeta', PlasmaBeta)
@@ -236,12 +242,16 @@ contains
     Rtube = Rtube*Io2No_V(UnitX_)
     aTube = aTube*Io2No_V(UnitX_)
     Depth = Depth*Io2No_V(UnitX_)
-
+    if(UseTD22) UseUniformCurrent = .true.
+    if(.not.UseTD14)call set_filament_geometry(aTube, Rtube)  ! Check what happens at UseTD14 = .true.
     if (iProc==0) then
        write(*,'(a)') prefix
        if(UseTD14)then
           write(*,'(a)') prefix//&
                '    Twisted Flux Rope Model by Titov, 2014.     '
+       elseif(UseTD22)then
+          write(*,'(a)') prefix//&
+               ' Finite-Beta Twisted Flux Rope Derived from GS Equqtion, 2022.'
        else
           write(*,'(a)') prefix//&
                '    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
@@ -254,6 +264,11 @@ contains
        write(*,'(a,es13.5,a)') prefix//'aTube  = ', &
             aTube*No2Si_V(UnitX_)/1.0E6,'[Mm]'
        write(*,'(a,es13.5,a)') prefix//'atube/Rtube = ',aTube/Rtube,'[-]'
+       if(UseTD22)then
+          write(*,'(a,es13.5,a)') prefix//'rInfty  = ', &
+               rInfty*No2Si_V(UnitX_)/1.0E6,'[Mm]'
+          write(*,'(a,es13.5,a)') prefix//'KappaPrime0 = ',KappaPrime0,'[-]'
+       end if
        write(*,'(a)') prefix
     end if
 
@@ -280,7 +295,15 @@ contains
          rot_matrix_z(-LongitudeCme*cDegToRad))
     UnitX_D = matmul([1.0, 0.0, 0.0], Rotate_DD)
     XyzCenter_D = (1 - Depth)*DirCme_D
-    if(.not.UseTD14)then
+    if(UseTD22)then
+       EjectaTemperature =  EjectaTemperatureDim*Io2No_V(UnitTemperature_)
+       if(iProc==0)then
+          write(*,'(a,es13.5,a)') prefix//'Beta   =',PlasmaBeta
+          write(*,'(a,es13.5,a)') prefix//'Tejecta=',&
+               EjectaTemperatureDim,'[K]'
+          write(*,'(a)') prefix
+       end if
+    elseif(.not.UseTD14)then
        if(.not.UsePlasmaBeta)then
           !
           ! Compute the average density inside the flux rope assuming that the
