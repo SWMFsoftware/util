@@ -286,11 +286,9 @@ contains
     !
     ! Construct the rotational matrix, Rotate_DD, to position the
     ! flux rope in the desired way on the solar surface::
-
-    Rotate_DD = matmul(rot_matrix_y(-0.5*cPi),&
-         rot_matrix_x(-OrientationCme*cDegToRad))
-    Rotate_DD = matmul(Rotate_DD,          &
-         rot_matrix_y(LatitudeCme*cDegToRad))
+    Rotate_DD  = matmul( &
+         rot_matrix_z(-OrientationCme*cDegToRad),&
+         rot_matrix_y((LatitudeCme-90)*cDegToRad))
     Rotate_DD = matmul(Rotate_DD,          &
          rot_matrix_z(-LongitudeCme*cDegToRad))
     UnitX_D = matmul([1.0, 0.0, 0.0], Rotate_DD)
