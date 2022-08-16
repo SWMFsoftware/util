@@ -168,7 +168,7 @@ contains
 
     ! The same for the magnetic field of configuration
 
-    bConf_D = matmul([B0, 0.0, 0.0], Rotate_DD)
+    bConf_D = matmul([-B0, 0.0, 0.0], Rotate_DD)
   end subroutine init
   !============================================================================
   subroutine set_parameters_gl98(NameCommand)
@@ -345,7 +345,7 @@ contains
        ! Magnetic field components
        R2CrossB0_D = cross_product(XyzConf_D,bConf_D)
        b_D = (2*bConf_D &
-            + sign(Alpha0, B0)* &  ! Helicity
+            - sign(Alpha0, B0)* &  ! Helicity
             R2CrossB0_D)*(spher_bessel1_over_x(Alpha0R2) - Beta0) &
             + spher_bessel2(Alpha0R2)/Distance2ConfCenter**2*&
             cross_product(XyzConf_D, R2CrossB0_D)
