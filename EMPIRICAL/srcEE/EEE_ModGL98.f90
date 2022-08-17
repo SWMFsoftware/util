@@ -95,11 +95,6 @@ contains
     ! The constant coefficient, Beta0 = -2.8723629148938019E-02
     ! This is Beta0 parameter for the GL particular configuration
 
-    ! 4\pi in the formula below is incorrect. The GL98 paper is in
-    ! CGS system, while in dimensionless formulae used below it may not
-    ! appear. To mantain the capability with EEGGL, the multiplier 4\pi
-    ! is included into a definition of A1Scaled
-
     B0 = B0Dim*Io2No_V(UnitB_)
 
     ! Relation between the cme_a1 parameter by Gibson-Low and B0
