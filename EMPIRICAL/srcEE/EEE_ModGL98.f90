@@ -175,13 +175,16 @@ contains
     use ModReadParam, ONLY: read_var
     character(len=*), intent(in):: NameCommand
 
+    integer:: iHelicity
     character(len=*), parameter:: NameSub = 'set_parameters_gl98'
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#CME","#SPHEROMAK")
        call read_var('BStrength',   B0Dim)         ![Gauss]
+       call read_var('iHelicity',   iHelicity)
+       B0Dim = abs(B0Dim)*iHelicity ! Set the sign of B0Dim based on iHelicity
        call read_var('Radius',      Radius)        ![rSun]
-       call read_var('Stretch',     Stretch)      ![rSun]
+       call read_var('Stretch',     Stretch)       ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
        rDistance1 = 1 + ApexHeight + Stretch - Radius
        !
