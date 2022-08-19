@@ -140,7 +140,7 @@ contains
        !
        ! ...and those of apex:
        XyzCmeApexSi_D = XyzCmeCenterSi_D + DirCme_D*RTube
-       ! The coords are dimensionless, set the switch to normaalize
+       ! The coords are dimensionless, set the switch to normalize
        DoNormalizeXyz = .true.
        if(UseTD22)then
           UsePlasmaBeta = .true.
@@ -227,7 +227,7 @@ contains
 
     use EEE_ModCommonVariables, ONLY: prefix, OrientationCme,  &
          LongitudeCme, LatitudeCme, BAmbientApexSi_D
-    use ModCoordTransform, ONLY: rot_matrix_x,rot_matrix_y,rot_matrix_z
+    use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
 
     real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi, bQStrapping
 
@@ -243,7 +243,7 @@ contains
     aTube = aTube*Io2No_V(UnitX_)
     Depth = Depth*Io2No_V(UnitX_)
     if(UseTD22) UseUniformCurrent = .true.
-    if(.not.UseTD14)call set_filament_geometry(aTube, Rtube)  ! Check what happens at UseTD14 = .true.
+    if(.not.UseTD14)call set_filament_geometry(aTube, Rtube)  
     if (iProc==0) then
        write(*,'(a)') prefix
        if(UseTD14)then
@@ -283,15 +283,18 @@ contains
        write(*,'(a)') prefix
     end if
     !
-    !
-    ! Construct the rotational matrix, Rotate_DD, to position the
-    ! flux rope in the desired way on the solar surface::
-    Rotate_DD  = matmul( &
-         rot_matrix_z(-OrientationCme*cDegToRad),&
-         rot_matrix_y((LatitudeCme-90)*cDegToRad))
-    Rotate_DD = matmul(Rotate_DD,          &
-         rot_matrix_z(-LongitudeCme*cDegToRad))
-    UnitX_D = matmul([1.0, 0.0, 0.0], Rotate_DD)
+    ! Construct the rotational matrix Rotate_DD,
+    ! Rotate to the local Mercator map around the CME center and then rotate
+    ! about the vertical direction to align x-axis with the direction from
+    ! negaitive to positive spot.
+
+    Rotate_DD  = matmul(rot_xyz_mercator(DirCme_D), &
+         rot_matrix_z(OrientationCme*cDegToRad))
+
+    ! In the rotated frane magnetic field at the center of configuration
+    ! is directed along x-axis
+    UnitX_D = matmul(Rotate_DD, [1.0, 0.0, 0.0])
+ 
     XyzCenter_D = (1 - Depth)*DirCme_D
     if(UseTD22)then
        EjectaTemperature =  EjectaTemperatureDim*Io2No_V(UnitTemperature_)
