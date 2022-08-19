@@ -83,7 +83,7 @@ module EEE_ModGL98
 contains
   !============================================================================
   subroutine init
-    use ModCoordTransform, ONLY: rot_matrix_y, rot_matrix_z
+    use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
     real :: Rotate_DD(3,3)
 
     !--------------------------------------------------------------------------
@@ -147,12 +147,19 @@ contains
     end if
 
     ! Construct the rotational matrix Rotate_DD,
+    ! Rotate to the local Mercator map around the CME center and then rotate
+    ! about the vertical direction to align x-axis with the direction from
+    ! positive to negative spot.
 
-    Rotate_DD  = matmul( &
-         rot_matrix_z(-OrientationCme*cDegToRad),&
-         rot_matrix_y((LatitudeCme-90)*cDegToRad))
-    Rotate_DD = matmul(Rotate_DD, &
-         rot_matrix_z(-LongitudeCme*cDegToRad))
+    Rotate_DD  = matmul(rot_xyz_mercator(DirCme_D), &
+         rot_matrix_z(OrientationCme*cDegToRad))
+
+    ! In the rotated frane magnetic field at the center of configuration
+    ! is directed along y-axis in the case of positive helicity or in the
+    ! opposite direction in the case of negative helicity. With the properly
+    ! signed B0, we have
+
+    bConf_D = matmul(Rotate_DD, [0.0, B0, 0.0])
 
     ! In the rotated coordinates the coordinate vector from
     ! the heiocenter to the center of configuration is
@@ -161,9 +168,6 @@ contains
 
     XyzCenterConf_D = rDistance1*DirCme_D
 
-    ! The same for the magnetic field of configuration
-
-    bConf_D = matmul([-B0, 0.0, 0.0], Rotate_DD)
   end subroutine init
   !============================================================================
   subroutine set_parameters_gl98(NameCommand)
