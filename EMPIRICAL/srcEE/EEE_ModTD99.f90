@@ -185,6 +185,9 @@ contains
 end module ModCurrentFilament
 !==============================================================================
 module ModFieldGS
+#ifdef _OPENACC
+  use ModUtilities, ONLY: norm2
+#endif
   use ModCurrentFilament
   implicit none
   ! Magnitude of the magnetic field at the center of filament:
