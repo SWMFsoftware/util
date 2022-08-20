@@ -53,6 +53,33 @@ ${BINDIR}/FRMAGNETOGRAM.exe: flux_rope_magnetogram.o
 			${LINK.f90} -o ${BINDIR}/FRMAGNETOGRAM.exe \
 			flux_rope_magnetogram.o Tmp_/*.o ${Lflag1}    ; 
 			rm -rf Tmp_
+#######################################################################
+# Setting BLESS=YES or Y will copy the solution into the reference solution
+BLESS=NO
+
+DIFFNUM = ${SCRIPTDIR}/DiffNum.pl -BLESS=${BLESS}
+
+test_td22.o: test_td22.f90 ${LIBSHARE} ${MY_LIB}
+	${COMPILE.f90} ${Cflag0} test_td22.f90
+
+test_td22_exe: test_td22.o
+	${LINK.f90} -o test_td22.exe test_td22.o \
+		-L${LIBDIR} -lSHARE -lEMPIRICALEE ${Lflag}
+
+test_td22_check:
+	-@(${DIFFNUM} -b -r=1e-7 \
+		test_fields.out test_fields.ref \
+                        >> test_td22.diff)
+
+test_td22:
+	@echo test_td22 starting     >  test_td22.diff
+	@make test_td22_exe	       >> test_td22.diff
+	@echo ./test_td22.exe        >> test_td22.diff
+	-@(rm -f test_fields.out)
+	-@(./test_td22.exe > test_td22.diff)
+	-@(make test_td22_check)
+	@ls -l test_td22.diff
+#######################################################################
 
 clean: cleanfiles
 
