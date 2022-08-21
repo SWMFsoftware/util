@@ -644,9 +644,8 @@ contains
     ! Rotational matrix of coordinate transformation:
     real :: Rotate_DD(3,3)
 
-    ! internal inductance related to \mu_0 R_\infty
-    ! real, parameter :: Li = 0.5
-
+    ! MISC
+    real::qIncorrrect, qCorrect, bQStrapFactorNew
     character(len=*), parameter:: NameSub = 'init_TD99_parameters'
     !--------------------------------------------------------------------------
     Rtube = Rtube*Io2No_V(UnitX_)
@@ -799,8 +798,6 @@ contains
        ! Equilibrium bStrapping
        bStrapping = BcTube*Inductance/( 2*cPi)
     end if
-    if(UseStaticCharge .or. UseDynamicStrapping)&
-         bQStrapping = bStrapping*bQStrapFraction
     if(iProc==0)then
        write(*,'(a,i2)') prefix//'Sign of helicity is ', iHelicity
        write(*,'(a)') prefix
@@ -815,16 +812,16 @@ contains
             WFRope,'[erg].'
        write(*,'(a)') prefix
     end if
+    ! Set parameters of the filament field
     call set_filament_field(iHelicity, BcTube*UnitX_D)
-    ! if(iProc==0)&
-    !   write(*,*)'Equilibrium strapping field=',sqrt(sum(BStrap_D**2))*No2Io_V(UnitB_)
     if(UseStaticCharge.or.UseDynamicStrapping)then
+       ! Strapping field of magnetic charges:
        qDistance = qDistance*Io2No_V(UnitX_)
-       ! Strapping field of charges::
        ! Invert formula:
-       ! bQStrapping = 2*q*qDistance &
+       ! bQStrapFraction*bQStrapping = 2*q*qDistance &
        !     *(qDistance**2+Rtube**2)**(-1.5)
-       q = bQStrapping**(qDistance**2 + Rtube**2)**1.50/(2*qDistance)
+       q = bQStrapFraction*bQStrapping*(qDistance**2 + Rtube**2)**1.50/&
+            (2*qDistance)
        if(iProc==0)then
           write(*,'(a)') prefix//&
                ' The field of point magnetic charges is introduced'
@@ -1225,7 +1222,7 @@ contains
     real    :: RPlusSteady_D(3), RMinusSteady_D(3)
     real    :: RPlusMoving_D(3), RMinusMoving_D(3)
     !--------------------------------------------------------------------------
-    ! if UseDynamicStrapping is .false. the cal may be only accidental
+    ! if UseDynamicStrapping is .false. the call may be only accidental
     if(present(TimeNow).and.(.not.UseDynamicStrapping))RETURN
 
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
@@ -1250,8 +1247,10 @@ contains
 
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
     ! charges, -/+q::
-    RPlusMoving_D  = Xyz_D - RPlus_D  + (TimeNow - StartTime)*UChargeX*UnitX_D
-    RMinusMoving_D = Xyz_D - RMinus_D - (TimeNow - StartTime)*UChargeX*UnitX_D
+    RPlusMoving_D  = Xyz_D - &
+         (RPlus_D  - (TimeNow - StartTime)*UChargeX*UnitX_D)
+    RMinusMoving_D = Xyz_D - &
+         (RMinus_D + (TimeNow - StartTime)*UChargeX*UnitX_D)
     RPlus  = norm2( RPlusMoving_D)
     RMinus = norm2(RMinusMoving_D)
     BqField_D = (BqField_D + &
