@@ -191,31 +191,32 @@ module ModFieldGS
   use ModCurrentFilament
   implicit none
   ! Magnitude of the magnetic field at the center of filament:
-  real :: Bc         = 1.0   ! In SI, Bc = \mu_0 I / (2 R_\infty)
+  real, private :: Bc      ! In SI, Bc = \mu_0 I / (2 R_\infty)
   ! Magnetic field vector at the center of filament: Bc times
   ! the unit vector of the axis direction
-  real :: Bc_D(3)    = [1.0, 0.0, 0.0]
+  real, private :: Bc_D(3)
   ! The sign of ratio between always positive toroidal current density  and
   ! the toridal magnetic field, which may be either positive or negative
   ! everywhere
-  real :: Helicity   = 1.0
+  integer, private :: iHelicity
   !  Strapping field. Its action on the filament current balances
   !  the hoop force.
   real :: BStrap_D(3)
 contains
   !============================================================================
-  subroutine set_filament_field(BcIn, BDir_D)
+  subroutine set_filament_field(iHelicityIn, BcIn_D)
     use ModNumConst,       ONLY:  cTwoPi
     ! Inputs:
-    ! Combined paraameter: its magnititude is Bc, the sign being helicity.
-    real, intent(in)  :: BcIn
-    ! Unit direction vector of the axis of symmetry, equaal to (-1, 0, 0) in
-    ! the coordinate frame, z, x, y  (or z, r, \phi) with z-axis colinear
-    ! with the direction of axis of symmetry.
-    real, intent(in) :: BDir_D(3)
+    ! The sign of helicity (+/- 1)
+    integer, intent(in)  :: iHelicityIn
+    ! Magnetic field vector at the center of filament:
+    ! Bc (= \mu_0 I / (2 R_\infty) if the SI system of units is used)
+    ! times the unit direction vector of the  axis of symmetry
+    real, intent(in) :: BcIn_D(3)
     !--------------------------------------------------------------------------
-    Bc = abs(BcIn); Helicity = sign(1.0, BcIn)
-    Bc_D = BDir_D*Bc
+    iHelicity = iHelicityIn
+    Bc_D = BcIn_D
+    Bc = norm2(Bc_D)
     ! With the earlier calculated inductance, determine the strapping field:
     BStrap_D = - (Inductance / cTwoPi)*Bc_D ! Eq. 57 in GS22
   end subroutine set_filament_field
@@ -241,7 +242,7 @@ contains
     !
     real :: R2, Z2, rPerp2, rPerp, RPlus2, Kappa2, KappaPrime2, RMinus2
     !
-    ! Msic: field charaacteristics
+    ! Msic: field characteristics
     !
     real :: BcDotR, CommonFactor, BPhi
     real :: Poloidal_D(3)  !  Not a unit vector, its length is Bc*KappaPrime
@@ -276,7 +277,7 @@ contains
        ! Field harmonics
        call uniform_current_field(KappaPrime2, Amplitude_I)
        ! Calculate separately the toroidal field:
-       BPhi = Helicity*Amplitude_I(Toroidal_)
+       BPhi = iHelicity*Amplitude_I(Toroidal_)
        if(present(BetaIn)) BPhi = BPhi/sqrt(1 + BetaIn)
        CommonFactor = (sqrt(rInfty/rPerp))**3
        B_D = CommonFactor*(Bc_D*Amplitude_I(Axial_)    + &
@@ -309,59 +310,59 @@ contains
     real, parameter :: LCharge = 0.7
     real :: QCharge
     real :: R_D(3)
+    ! Internal field
+    ! Parameters on the plasma filament surface at which \kappa^\prime_0 = 0.1
     !--------------------------------------------------------------------------
-      !!!!!!!!!!!!!!!!!!!!!  Internal field  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! Parameters on the plasma filament surface at which \kappa^\prime_0 = 0.1
-  UseUniformCurrent = .true.;  UseSurfaceCurrent = .true.
-  a  = 0.20/0.990;  R0 = 1.010/0.990
-  call set_filament_geometry(a, R0)
-  do iLoop = 1, nStep/2
-     !
-     ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
-     KappaPrime     = iLoop*DeltaKappaPrime
-     Coord_I(iLoop) = KappaPrime
-     !
-     ! For surface curent
-     !
-     call surface_current_field(KappaPrime2In = KappaPrime**2, &
-          Amplitude_I=Amplitude_I)
-     Var_VI(AxialS_,iLoop)    = Amplitude_I(Axial_)
-     Var_VI(PoloidalS_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
-     !
-     ! Internal field from the uniform current
-     !
-     call uniform_current_field(KappaPrime2In = KappaPrime**2, &
-          Amplitude_I=Amplitude_I)
-     ! Eqs. 35
-     Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
-     Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
-     Var_VI(ToroidalU_,iLoop) = Amplitude_I(Toroidal_)
-  end do
-  !!!!!!!!!!!!!!!!!!!!!  External magnetic field !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  do iLoop = 1 + nStep/2, nStep
-     KappaPrime = iLoop*DeltaKappaPrime
-     Kappa2     = 1 - KappaPrime**2
-     Kappa3 = sqrt(Kappa2)*Kappa2
-     Coord_I(iLoop) = KappaPrime
-     call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
-     ! Eqs. 27
-     Var_VI(AxialS_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
-     Var_VI(AxialU_,iLoop)    = Var_VI(AxialS_,iLoop)
-     Var_VI(PoloidalS_,iLoop) = 0.125*Kappa3*KappaPrime*Amplitude_I(Poloidal_)
-     Var_VI(PoloidalU_,iLoop) = Var_VI(PoloidalS_,iLoop)
-     Var_VI(ToroidalU_,iLoop) = 0.0
-  end do
-  call save_plot_file(NameFile='test_fields.out', &
-       TypeFileIn='ascii'                     ,&
-       NameVarIn=&
-       'kappa_prime AxialS PoloidalS AxialU PoloidalU ToroidalU', &
-       StringFormatIn = '(6es18.10)'          ,&
-       Coord1In_I = Coord_I                   ,&
-       VarIn_VI = Var_VI(AxialS_:ToroidalU_,1:nStep))
+    UseUniformCurrent = .true.;  UseSurfaceCurrent = .true.
+    a  = 0.20/0.990;  R0 = 1.010/0.990
+    call set_filament_geometry(a, R0)
+    do iLoop = 1, nStep/2
+       !
+       ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
+       KappaPrime     = iLoop*DeltaKappaPrime
+       Coord_I(iLoop) = KappaPrime
+       !
+       ! For surface curent
+       !
+       call surface_current_field(KappaPrime2In = KappaPrime**2, &
+            Amplitude_I=Amplitude_I)
+       Var_VI(AxialS_,iLoop)    = Amplitude_I(Axial_)
+       Var_VI(PoloidalS_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
+       !
+       ! Internal field from the uniform current
+       !
+       call uniform_current_field(KappaPrime2In = KappaPrime**2, &
+            Amplitude_I=Amplitude_I)
+       ! Eqs. 35
+       Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
+       Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
+       Var_VI(ToroidalU_,iLoop) = Amplitude_I(Toroidal_)
+    end do
+    ! External magnetic field
+    do iLoop = 1 + nStep/2, nStep
+       KappaPrime = iLoop*DeltaKappaPrime
+       Kappa2     = 1 - KappaPrime**2
+       Kappa3 = sqrt(Kappa2)*Kappa2
+       Coord_I(iLoop) = KappaPrime
+       call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
+       ! Eqs. 27
+       Var_VI(AxialS_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
+       Var_VI(AxialU_,iLoop)    = Var_VI(AxialS_,iLoop)
+       Var_VI(PoloidalS_,iLoop) = 0.125*Kappa3*KappaPrime*Amplitude_I(Poloidal_)
+       Var_VI(PoloidalU_,iLoop) = Var_VI(PoloidalS_,iLoop)
+       Var_VI(ToroidalU_,iLoop) = 0.0
+    end do
+    call save_plot_file(NameFile='test_fields.out', &
+         TypeFileIn='ascii'                     ,&
+         NameVarIn=&
+         'kappa_prime AxialS PoloidalS AxialU PoloidalU ToroidalU', &
+         StringFormatIn = '(6es18.10)'          ,&
+         Coord1In_I = Coord_I                   ,&
+         VarIn_VI = Var_VI(AxialS_:ToroidalU_,1:nStep))
     UseUniformCurrent = .true.;  UseSurfaceCurrent = .false.
     ! Set rInfty = 1 and KappaPrime  = 0.1
     call set_filament_geometry(0.20 / 0.990, 1.01 / 0.990)
-    call set_filament_field(1.0, [1.0, 0.0, 0.0])
+    call set_filament_field(+1, [1.0, 0.0, 0.0])
     do j = -N, N
        do i = -N, N
           call get_filament_field(R_D=[DGrid*i, DGrid*j, 0.0],&
@@ -378,7 +379,7 @@ contains
     ! Test the strapped field:
     do j = -N, N
        do i = -N, N
-           Field_DII(:, i, j) = Field_DII(:, i, j) + BStrap_D
+          Field_DII(:, i, j) = Field_DII(:, i, j) + BStrap_D
        end do
     end do
     call save_plot_file(NameFile='strapped_field.out', &
@@ -391,7 +392,7 @@ contains
     ! Express magnetic charge in terms of BStrap:
     ! 2L/(L^2 +R_\infty^2)^{3/2}*QCharge = -BStrap
     QCharge = norm2(BStrap_D)*0.50*(LCharge**2 + 1)**1.50/LCharge
-     ! Test the strapped field created by a pair of magnetic charges:
+    ! Test the strapped field created by a pair of magnetic charges:
     do j = JMin, N
        do i = -N/2, N/2
           ! Eliminate uniform BStrap
@@ -399,7 +400,7 @@ contains
           ! Radius vector:
           R_D = [DGrid*i, DGrid*j, 0.0]
           ! Add  strapping field of twoo magnetic charges
-          Field_DII(:, i, j) = Field_DII(:, i, j) + & 
+          Field_DII(:, i, j) = Field_DII(:, i, j) + &
                QCharge*(R_D - [LCharge, 0.0, 0.0])/&  ! Positive charge
                norm2(R_D - [LCharge, 0.0, 0.0])**3 &  ! field
                -QCharge*(R_D + [LCharge, 0.0, 0.0])/& ! Negative charge
@@ -412,8 +413,7 @@ contains
          CoordMinIn_D=[-0.5*ZMax, 0.1*ZMax],&
          CoordMaxIn_D=[ 0.5*ZMax,  ZMax],&
          StringFormatIn = '(6F12.5)',&
-         VarIn_VII = Field_DII(:,-N/2:N/2,JMin:N ) )  
-
+         VarIn_VII = Field_DII(:,-N/2:N/2,JMin:N ) )
   end subroutine test
   !============================================================================
 end module ModFieldGS
@@ -430,7 +430,8 @@ module EEE_ModTD99
        iProc, StartTime
   use ModHyperGeometric
   use ModConst, ONLY: cMu, cDegToRad, cRadToDeg, cPi
-  use ModFieldGS
+  use ModFieldGS, ONLY: set_filament_geometry, set_filament_field, &
+       get_filament_field, KappaPrime0, UseUniformCurrent, Inductance, rInfty
   implicit none
   save
   private
@@ -464,7 +465,7 @@ module EEE_ModTD99
   ! of the toroidal current is positive. However, the sign of the toroidal
   ! field component may be both positive and negative. To account for
   ! this, we introduce the variable to store the helicity sign.
-  real :: HelicitySign = 1.0
+  integer :: iHelicity = +1
 
   ! To set the negative helicity, the input parameter, BcTube, should be
   ! negative. This choice affects only the sign of helicity, but not the
@@ -542,11 +543,8 @@ contains
        UseDynamicStrapping = .false.
        TypeBStrap = 'none'
        TypeCharge = 'none'
-       call read_var('BcTubeDim', BcTubeDim)
-
        ! Set negative helicity, if the input is negative:
-       HelicitySign = sign(1.0, BcTubeDim)
-       BcTubeDim = abs(BcTubeDim)
+       call read_var('iHelicity', iHelicity)
 
        call read_var('RadiusMajor', Rtube)
        call read_var('RadiusMinor', aTube)
@@ -589,32 +587,27 @@ contains
           call read_var('TypeCharge', TypeCharge)
 
        case('none')
-
+          call read_var('BcTubeDim', BcTubeDim)
        case('steady','moving','cancelflux')
-          ! In this line, there is TypeCharge, not TypeBStrap
           UseEquilibriumCurrent  = .false.
           TypeCharge = TypeBStrap
-          if(iProc==0)write(*,'(a)')TypeCharge//'                TypeCharge'
-          TypeBStrap = 'none'
-
+          call read_var('BcTubeDim', BcTubeDim)
        case default
           if(iProc==0)call CON_stop(NameSub// ': '//&
-               trim(TypeBStrap)//' is unknown as TypeCharge or TypeBStrap')
+               trim(TypeBStrap)//' is unknown TypeBStrap')
        end select
 
        ! The rest is only read if TypeCharge is not "none"
        if(TypeCharge /= "none")then
-
-          ! Now, TypeCharge is read, either after TypeBStrap or instead of it'
-          if(UseEquilibriumCurrent)then
+          !  if(UseEquilibriumCurrent)then
              ! In this case we read, which fraction of the above
-             ! defined strapping field is due to magnetic charges
-             call read_var('bQStrapFraction', bQStrapFraction)
-          else
+             ! equilibrium strapping field is due to magnetic charges
+          call read_var('bQStrapFraction', bQStrapFraction)
+          ! else
              ! The magnetude of magnetic charges is characterized in terms
              ! of the strapping field they produce at the apex of flux rope
-             call read_var('bQStrappingDim', bQStrappingDim)
-          end if
+          !   call read_var('bQStrappingDim', bQStrappingDim)
+          ! end if
           call read_var('qDistance',  qDistance)
 
           select case(TypeCharge)
@@ -645,14 +638,14 @@ contains
     use EEE_ModCommonVariables, ONLY: prefix, OrientationCme,  &
          LongitudeCme, LatitudeCme, BAmbientApexSi_D
     use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
-
+    use ModFieldGS, ONLY: BStrap_D
     real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi, bQStrapping
 
     ! Rotational matrix of coordinate transformation:
     real :: Rotate_DD(3,3)
 
     ! internal inductance related to \mu_0 R_\infty
-    real, parameter :: Li = 0.5
+    ! real, parameter :: Li = 0.5
 
     character(len=*), parameter:: NameSub = 'init_TD99_parameters'
     !--------------------------------------------------------------------------
@@ -660,7 +653,7 @@ contains
     aTube = aTube*Io2No_V(UnitX_)
     Depth = Depth*Io2No_V(UnitX_)
     if(UseTD22) UseUniformCurrent = .true.
-    if(.not.UseTD14)call set_filament_geometry(aTube, Rtube)  
+    if(.not.UseTD14)call set_filament_geometry(aTube, Rtube)
     if (iProc==0) then
        write(*,'(a)') prefix
        if(UseTD14)then
@@ -711,7 +704,7 @@ contains
     ! In the rotated frane magnetic field at the center of configuration
     ! is antiparallel to x-axis
     UnitX_D = matmul(Rotate_DD, [-1.0, 0.0, 0.0])
- 
+
     XyzCenter_D = (1 - Depth)*DirCme_D
     if(UseTD22)then
        EjectaTemperature =  EjectaTemperatureDim*Io2No_V(UnitTemperature_)
@@ -775,8 +768,7 @@ contains
           !     4*cPi*bStrapping*RTube/(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)
           ! From here, we can calculate BcTube = ITube/(2*RTube)
           ! in [-]
-          BcTube  = 2*cPi*bStrapping/ &
-               (log(8.0*Rtube/aTube) - 1.5 + Li/2.0)            ! in [-]
+          BcTube  = 2*cPi*bStrapping/ Inductance
           ! Invert the equation, BcTubeSi = 0.5 \Mu_0 * ITubeSi/ RTubeSi
           ITubeSi = 2*(BcTube*No2Si_V(UnitB_))*&
                (RTube*No2Si_V(UnitX_))/cMu ![A]
@@ -794,8 +786,6 @@ contains
                ItubeSi,' [A]'
           write(*,'(a)') prefix
        endif
-       if(UseStaticCharge .or. UseDynamicStrapping)&
-            bQStrapping = bStrapping*bQStrapFraction
     else
        ! Normalize field read from parameter file
        BcTube= BcTubeDim*Io2No_V(UnitB_)
@@ -806,16 +796,18 @@ contains
           write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
           write(*,'(a)') prefix
        end if
-       if(UseStaticCharge.or.UseDynamicStrapping)&
-            bQStrapping = bQStrappingDim*Io2No_V(UnitB_)
+       ! Equilibrium bStrapping
+       bStrapping = BcTube*Inductance/( 2*cPi)
     end if
+    if(UseStaticCharge .or. UseDynamicStrapping)&
+         bQStrapping = bStrapping*bQStrapFraction
     if(iProc==0)then
-       write(*,'(a,f4.0)') prefix//'Sign of helicity is ', HelicitySign
+       write(*,'(a,i2)') prefix//'Sign of helicity is ', iHelicity
        write(*,'(a)') prefix
     end if
 
-    LInduct    = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*(log(8.0 &
-         *(Rtube - Depth)/aTube) - 1.75)               ! in [H]
+    LInduct = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*&
+         (Inductance + log(1 - Depth/Rtube) - 0.50)    ! in [H]
     WFRope  = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
 
     if(iProc==0)then
@@ -823,7 +815,9 @@ contains
             WFRope,'[erg].'
        write(*,'(a)') prefix
     end if
-
+    call set_filament_field(iHelicity, BcTube*UnitX_D)
+    ! if(iProc==0)&
+    !   write(*,*)'Equilibrium strapping field=',sqrt(sum(BStrap_D**2))*No2Io_V(UnitB_)
     if(UseStaticCharge.or.UseDynamicStrapping)then
        qDistance = qDistance*Io2No_V(UnitX_)
        ! Strapping field of charges::
@@ -886,7 +880,7 @@ contains
     real:: xRel
     real:: RMinus, RPlus2, Rperp
     real:: Kappa, Kappa2
-    real:: B1qField_D(3)
+    real:: BPhi, B1qField_D(3)
 
     ! Initialize the TD99 model parameters once::
 
@@ -910,21 +904,31 @@ contains
     ! photosphere level.
     ! yyy coordinate is equal to zero at the axis of symmetry.
     XyzRel_D = Xyz_D - XyzCenter_D
-    R2Rel = sum(XyzRel_D**2); xRel = sum(XyzRel_D*UnitX_D)
-
-    ! Compute Rperp and TubalDist::
-
-    Rperp = sqrt(R2Rel - xRel**2)
-    RMinus = sqrt(xRel**2 + (Rperp - Rtube)**2)
-    RPlus2 = (Rperp + Rtube)**2 + xRel**2
-
-    ! Define the model input, Kappa
-
-    Kappa2 = 4.0*Rperp*Rtube/RPlus2; Kappa = sqrt(Kappa2)
-    if(.not.UseTD14)then
-       call td99
+    if(UseTD22)then
+       call get_filament_field(&
+            R_D = XyzRel_D,         &
+            B_D = BFRope_D,         &
+            BetaIn = PlasmaBeta,    &
+            BPhiOut = BPhi)
+       pFluxRope = PlasmaBeta*(0.50*BPhi**2)
+       RhoFRope = pFluxRope/EjectaTemperature
     else
-       call tdm
+       R2Rel = sum(XyzRel_D**2); xRel = sum(XyzRel_D*UnitX_D)
+
+       ! Compute Rperp and TubalDist::
+
+       Rperp = sqrt(R2Rel - xRel**2)
+       RMinus = sqrt(xRel**2 + (Rperp - Rtube)**2)
+       RPlus2 = (Rperp + Rtube)**2 + xRel**2
+
+       ! Define the model input, Kappa
+
+       Kappa2 = 4.0*Rperp*Rtube/RPlus2; Kappa = sqrt(Kappa2)
+       if(.not.UseTD14)then
+          call td99
+       else
+          call tdm
+       end if
     end if
     !
     ! Add the field of two magnetic charges
@@ -957,20 +961,7 @@ contains
          RhoFRope = 0.0; pFluxRope = 0.0
          ! Compute the field outside the current torus
          !
-
-         ! Compute the vector potential, Ak, of the magnetic field
-         ! produced by the ring current Itube and its derivatives
-
-         ! Calculate \tilde{P}^{-1}_{-1/2}(\cosh u)/\kappa**3
-         Ak     = toroid_P(0, Kappa2In=Kappa2)
-         ! Calculate d\tilde{P}^{-1}_{-1/2}(\cosh u)/du/\kappa &
-         !                   /(\kappa^\prime)**2
-         dAkDk  = 3*toroid_p(1, Kappa2In=Kappa2)
-
-         BFRope_D = BcTube*(Rtube/sqrt(RPlus2))**3*&
-              (dAkDk*(2*xRel*XyzRel_D + (RTube**2 - R2Rel)*UnitX_D)/RPlus2 &
-              + Ak*UnitX_D)
-         ! No toroidal field outside the filament
+         call get_filament_field(XyzRel_D, BFRope_D)
          BIPhi_D = 0.0
       else
          !
@@ -1031,7 +1022,7 @@ contains
          ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
          ! produced by the azimuthal current Iphi. This is needed to ensure
          ! that the flux rope configuration is force free.
-         BIPhi_D = HelicitySign*BcTube*RTube/(cPi*RPerp*aTube**2) &
+         BIPhi_D = iHelicity*BcTube*RTube/(cPi*RPerp*aTube**2) &
               *sqrt(2.0*(aTube**2 - RMinus**2))*&
               cross_product(UnitX_D,XyzRel_D)
          ! Add the prominence material inside the flux rope, assuming that the
