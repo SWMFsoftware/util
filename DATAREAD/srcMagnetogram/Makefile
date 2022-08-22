@@ -267,3 +267,14 @@ test_fdips_wedge_check:
 		fdips_field.out \
 		fdips_wedge_ref.gz > test_fdips_wedge.diff
 	@ls -l test_fdips_wedge.diff
+
+###############################################################################
+test_eeggl:
+	cd ../../EMPIRICAL/srcEE;make FRM
+	rm -f runlog.eeggl test_eeggl.diff
+	python3 ./GLSETUP.py fitsfile.fits -CMESpeed 600 \
+		-LonPosIn 333.5 -LatPosIn 22.606750850296976 \
+		-LonNegIn 324.5 -LatNegIn 23.996973841730536 > runlog_eeggl
+	-${DIFFNUM} -t -r=1e-7 -a=1e-9 \
+		CME.in CME.ref > test_eeggl.diff
+	@ls -l test_eeggl.diff

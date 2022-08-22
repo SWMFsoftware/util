@@ -413,15 +413,16 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
          HMI_helicity = np.sign(cross_pro)
 
    if Helicity != 0 : # helicity input by user
-      GL_Bstrength = Helicity * GL_Bstrength
+      iHelicity = Helicity
       print('Using user input helicity = ', Helicity)
    elif IsPresentHMI == 0: # helicity if HMI is not used
       # based on hemisphere
+      iHelicity = 1
       if GL_Latitude > 0: 
-         GL_Bstrength = -GL_Bstrength
-         print('Helicity based on hemisphere: ',np.sign(GL_Bstrength))
+         iHelicity = -1
+         print('Helicity based on hemisphere: ',iHelicity)
    else: # helicity if HMI is present & used
-      GL_Bstrength = HMI_helicity * GL_Bstrength
+      iHelicity = HMI_helicity
    
    # (2) Helicity based on angle between PN vector & PIL vector
    # DOT product 
@@ -470,6 +471,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    FileId.write("%-10.2f          OrientationCme \n"% GL_Orientation)
    FileId.write("GL                  TypeCme \n")
    FileId.write("%-10.2f          BStrength \n"% GL_Bstrength)
+   FileId.write("%-+d                  iHelicity \n"% iHelicity)
    FileId.write("%-10.2f          Radius \n"% GLRadius)
    FileId.write("%-10.2f          aStretch \n"% Stretch)
    FileId.write("%-10.2f          ApexHeight \n"% ApexHeight)
