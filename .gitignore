@@ -34,3 +34,9 @@ DATAREAD/srcMagnetogram/harmonics11uniform.dat
 DATAREAD/srcMagnetogram/potentialfield.dat
 DATAREAD/srcMagnetogram/*.exe
 DATAREAD/srcMagnetogram/adapt*
+DATAREAD/srcMagnetogram/runidl*
+DATAREAD/srcMagnetogram/runlog*
+DATAREAD/srcMagnetogram/RunFRM
+
+EMPIRICAL/srcEE/*.exe
+
