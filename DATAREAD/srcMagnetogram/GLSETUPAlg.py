@@ -16,9 +16,9 @@ def round_my(x):
 
 def get_angular_dist(Point1_I,Point2_I):
    #Calculate the angular distance between two points on a sphere
-   AngularDist = math.acos(np.sin(Point1_I[1]) * np.sin(Point2_I[1]) +
-                           np.cos(Point1_I[1]) * np.cos(Point2_I[1]) * 
-                           np.cos(Point1_I[0] - Point2_I[0]))
+   AngularDist = 2*math.asin(np.sqrt(np.sin(0.5*(Point1_I[1] - Point2_I[1]))**2
+                           + np.cos(Point1_I[1])*np.cos(Point2_I[1])*
+                           np.sin(0.5*(Point1_I[0] - Point2_I[0]))**2))
    return(AngularDist)
 
 def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLong,Lat_I,Long_I,\
@@ -164,8 +164,8 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    print('\n Negative Weighted Center (lon,lat) =',\
             LonNeg*Rad2Deg,LatNeg*Rad2Deg)
 
-   Point1_I=[LonNeg,LatNeg] # negative spot
-   Point2_I=[LonPos,LatPos] # positive spot
+   PointN_I=[LonNeg,LatNeg] # negative spot
+   PointP_I=[LonPos,LatPos] # positive spot
 
    # Find center of the active region as the point on the line
    # connecting the positive and negative center at which the MF is minimal
@@ -252,7 +252,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    Diff_LonPN = LonNeg - LonPos
    Diff_LatPN = LatNeg - LatPos
    Dist_PN     = np.sqrt(Diff_LonPN**2 + Diff_LatPN**2)  # in radians
-   AngularDistance = get_angular_dist(Point1_I,Point2_I)
+   AngularDistance = get_angular_dist(PointN_I,PointP_I)
 
    # Distances from the AR center and spot centers:
    DisCenter_C = np.zeros([nLat,nLong])
@@ -316,7 +316,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    # GL_Orientation calculation
    # Calculate the GL flux rope orientation from the two weighted points.
    r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex]
-   r1=r1/np.sqrt(r1[0]**2+r1[1]**2) 
+   r1 /= np.sqrt(r1[0]**2+r1[1]**2)
    r2=[1.0,0.0]
    if Orientation != -1.0 :
       GL_Orientation = Orientation
