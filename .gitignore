@@ -34,4 +34,3 @@ DATAREAD/srcMagnetogram/harmonics11uniform.dat
 DATAREAD/srcMagnetogram/potentialfield.dat
 DATAREAD/srcMagnetogram/*.exe
 DATAREAD/srcMagnetogram/adapt*
-DATAREAD/srcMagnetogram/*.fits
