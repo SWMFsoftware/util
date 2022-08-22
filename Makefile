@@ -11,6 +11,7 @@ install:
 test:
 	rm -f */src*/*.diff
 	cd DATAREAD/srcMagnetogram; make -j1 test
+	cd EMPIRICAL/srcEE; make -j1 test_td22
 	ls -l */src*/*.diff
 
 clean:
