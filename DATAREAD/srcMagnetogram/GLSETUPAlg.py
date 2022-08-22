@@ -16,7 +16,8 @@ def round_my(x):
 
 def get_angular_dist(Point1_I,Point2_I):
    #Calculate the angular distance between two points on a sphere
-   AngularDist = 2*math.asin(np.sqrt(np.sin(0.5*(Point1_I[1] - Point2_I[1]))**2
+   AngularDist = 2*math.asin(np.sqrt(
+                           np.sin(0.5*(Point1_I[1] - Point2_I[1]))**2
                            + np.cos(Point1_I[1])*np.cos(Point2_I[1])*
                            np.sin(0.5*(Point1_I[0] - Point2_I[0]))**2))
    return(AngularDist)
@@ -263,8 +264,6 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    # Distance cut-off for determining the PIL.
    # Min:2/3 of the distance between positive and negative spots.
    # Max:dist between the two spots
-   NPCentersDist = np.sqrt((LonPosIndex - LonNegIndex)**2 +
-                           (LatPosIndex - LatNegIndex)**2)
    DisThreshold = Dist_PN * (2./3.)
    DisMax      = Dist_PN
    PILMap_C = np.where(DisCenter_C<=min([DisMax,DisThreshold]),PILBitMap_C, 0.)
@@ -315,14 +314,18 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
 
    # GL_Orientation calculation
    # Calculate the GL flux rope orientation from the two weighted points.
-   r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex]
+   #r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex] - incorrect
+   r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
+   r1[0] *= np.cos(LonAR)
    r1 /= np.sqrt(r1[0]**2+r1[1]**2)
    r2=[1.0,0.0]
    if Orientation != -1.0 :
       GL_Orientation = Orientation
    else:
+      # If sine of Orientation is positive
       GL_Orientation=np.arccos(r1[0]*r2[0]+r1[1]*r2[1])*Rad2Deg
       if r1[1] < 0:
+         # If sine of Orientation is negative
          GL_Orientation=360-GL_Orientation
    # Orientation calculation based on the angle as a func of radius needs
    # to be calcualted for both GLRadius formulations and included here. 
