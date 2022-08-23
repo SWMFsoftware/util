@@ -864,7 +864,7 @@ subroutine timing_sort(iclock,show_length,unique)
   else
      write(iUnit,'(a,i8)',ADVANCE='NO')' at step',step
   end if
-  write(iUnit,'(a,i4)')' '//NameComp//' on PE ',iProc
+  write(iUnit,'(a,i5)')' '//NameComp//' on PE ',iProc
 
   write(iUnit,'(a20)',ADVANCE='NO')                'name'//spaces
   if(.not.unique)write(iUnit,'(a20)',ADVANCE='NO') '(parent)'//spaces
