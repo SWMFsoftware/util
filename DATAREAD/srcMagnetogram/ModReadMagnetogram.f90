@@ -33,14 +33,14 @@ module ModReadMagnetogram
   ! equals CRNOW as provided in the fitsfile header. Once read from the
   ! magnetogram file, this parameter is converted to the fromat similar to
   ! #STARTTIME and saved to MAGNETOGRAMTIME.in file. It is strongly
-  ! recommended to check if this saved time looks reasonable 
+  ! recommended to check if this saved time looks reasonable
   real, public:: MagnetogramTimeCR = 0.
 
   ! Carrington longitude of the left margin of the map ("leading longitude")
   real, public:: LongShift = 0.
 
   ! Phi, Lat passed to FDIPS
-  real, public, allocatable:: Phi0_I(:), Lat0_I(:) 
+  real, public, allocatable:: Phi0_I(:), Lat0_I(:)
 
   ! Header
   character(len=500), public :: StringMagHeader
@@ -162,6 +162,8 @@ contains
        write(UnitTmp_,'(i8,a)')iTime_I(4), cTab//cTab//'iHour'
        write(UnitTmp_,'(i8,a)')iTime_I(5), cTab//cTab//'iMinute'
        write(UnitTmp_,'(i8,a)')iTime_I(6), cTab//cTab//'iSecond'
+       write(UnitTmp_,'(a)')'     0.0'//cTab//cTab//'FracSecond'
+       write(UnitTmp_,'(a)')'#END'
        write(UnitTmp_,*)
        call close_file(NameCaller=NameSub)
     end if

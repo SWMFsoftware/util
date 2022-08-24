@@ -39,7 +39,7 @@ module ModMagnetogram
   real:: CarringtonRot = -1.0, CarringtonRotNew = -1.0
 
   ! radius of magnetogram and source surface for spatial extrapolation
-  real   :: rMagnetogram=1.0, rSourceSurface=2.5 
+  real   :: rMagnetogram=1.0, rSourceSurface=2.5
   logical:: IsLogRadius = .false.   ! logarithmic grid in radius
   integer:: nR=30, nLon=72, nLat=30 ! Size of grid created from harmonics
 
@@ -64,12 +64,14 @@ module ModMagnetogram
   ! Lookup table related variables
   real:: rMinB0=1.0 ! radial limits of table
   real, public:: rMaxB0=30.0 ! radial limits of table
-  real:: LonMinB0 = 0.0 ! starting longitude in the table
-  real:: dLonB0   = 0.0   ! longitude shift
-  real:: RotB0_DD(3,3)  ! rotation matrix due to longitude shift
-  
+  real:: LonMinB0 = 0.0    ! starting longitude in the field lookup table (rad)
+  real:: dLonB0   = 0.0    ! longitude shift
+  real:: RotB0_DD(3,3)     ! rotation matrix due to longitude shift
+  real:: dLonB0New   = 0.0 ! longitude shift
+  real:: RotB0New_DD(3,3)  ! rotation matrix due to longitude shift
+
   real:: FactorB0 = 1.0 ! multiplier for the magnetic field
-  
+
   interface get_magnetogram_field
      module procedure get_magnetogram_field11, get_magnetogram_field31
   end interface get_magnetogram_field
@@ -95,7 +97,7 @@ contains
 
     ! Nothing to do if there is no B0 table defined or to be made
     if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
-    
+
     if(DoReadHarmonics)then
        ! Read harmonics coefficient and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFile, CarringtonRot, dLon)
@@ -141,7 +143,7 @@ contains
 
     ! Get Carrington rotation for the central meridian (time of magnetogram)
     if(nParam > 3) CarringtonRot = Param_I(4)
-    
+
     ! Second lookup table for a different time for temporal interpolation
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and Carrington rotation info
@@ -162,16 +164,22 @@ contains
             StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
 
        iTableB0New = i_lookup_table('B0')
-       
+
        ! Make second lookup table using the just read harmonics coefficients
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
 
        call deallocate_harmonics_arrays
     end if
-    
+
     if(iTableB0New > 0)then
        ! Get Carrington rotation (time) for new magnetogram
        call get_lookup_table(iTableB0New, nParam=nParam, Param_I=Param_I)
+       ! Rotation matrix for longitude shift if needed
+       if(nParam > 2) then
+          dLonB0New = (Param_I(3) - dLongitudeHgrDeg)*cDegToRad
+          RotB0New_DD = rot_matrix_z(dLonB0New)
+       end if
+
        if(nParam > 3)then
           CarringtonRotNew = Param_I(4)
        else
@@ -179,7 +187,7 @@ contains
                trim(NameHarmonicsFileNew))
        end if
     end if
-    
+
   end subroutine init_magnetogram_lookup_table
   !============================================================================
   subroutine calc_b0_table(iTable, r, Lon, Lat, b_D)
@@ -228,9 +236,9 @@ contains
 
     real:: rLonLat_D(3), r, B0New_D(3)
 
-    character(len=*), parameter:: NameSub = 'get_magnetogram_field'
-    !--------------------------------------------------------------------------
     ! Converting to rlonlat (radians)
+    character(len=*), parameter:: NameSub = 'get_magnetogram_field11'
+    !--------------------------------------------------------------------------
     call xyz_to_rlonlat(Xyz_D, rLonLat_D)
 
     ! Include the shift in Phi coordinate and make sure that it is
@@ -247,6 +255,9 @@ contains
     call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
          DoExtrapolate=(r<rMinB0) )
 
+    ! Rotate Bx, By based on shifted coordinates
+    if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
+
     if(present(Carrington) .and. iTableB0New > 0)then
 
        if(CarringtonRot < 0.0 .or. CarringtonRotNew < 0.0) call CON_stop( &
@@ -257,6 +268,8 @@ contains
           if(Carrington > CarringtonRot)then
              call interpolate_lookup_table(iTableB0New, rLonLat_D, B0New_D, &
                   DoExtrapolate=(r<rMinB0) )
+             ! Rotate Bx, By based on shifted coordinates
+             if(dLonB0New /= 0.0) B0New_D = matmul(RotB0New_DD, B0New_D)
              if(Carrington > CarringtonRotNew)then
                 ! Time is beyond new table time, so take that
                 B0_D = B0New_D
@@ -272,6 +285,8 @@ contains
           if(Carrington < CarringtonRot)then
              call interpolate_lookup_table(iTableB0New, rLonLat_D, B0New_D, &
                   DoExtrapolate=(r<rMinB0) )
+             ! Rotate Bx, By based on shifted coordinates
+             if(dLonB0New /= 0.0) B0New_D = matmul(RotB0New_DD, B0New_D)
              if(Carrington <= CarringtonRotNew)then
                 ! Time is before new table time, so take that
                 B0_D = B0New_D
@@ -284,9 +299,6 @@ contains
           end if
        end if
     end if
-    
-    ! Rotate Bx, By based on shifted coordinates
-    if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
 
     ! Scale with r^2 for r > rMaxB0
     if(r > rMaxB0) B0_D = (rMaxB0/r)**2 * B0_D
@@ -302,9 +314,8 @@ contains
 
     character(len=*), intent(in) :: NameCommand
 
-    character(len=*), parameter:: NameSub = 'read_magnetogram_param'
-
     real:: Height ! pointless variable
+    character(len=*), parameter:: NameSub = 'read_magnetogram_param'
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#FACTORB0")
@@ -628,7 +639,7 @@ contains
 
       integer:: m
       complex:: z, zM ! Powers of cos(Phi)+i*sin(Phi)
-      
+
       real   :: PhiOld = -10.0
       !------------------------------------------------------------------------
       if(Phiold == Phi) RETURN
@@ -641,7 +652,7 @@ contains
       SinPhi_I(0) = 0.0
       CosPhi_I(1) = real(zM)
       SinPhi_I(1) = aimag(zM)
-      
+
       do m = 2, nOrder
          zM = zM*z
          CosPhi_I(m) = real(zM)
