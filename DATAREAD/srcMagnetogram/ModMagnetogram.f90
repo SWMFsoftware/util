@@ -262,6 +262,15 @@ contains
 
        if(CarringtonRot < 0.0 .or. CarringtonRotNew < 0.0) call CON_stop( &
             NameSub//': no Carrington time in at least one magnetogram')
+       call xyz_to_rlonlat(Xyz_D, rLonLat_D)
+
+       ! Include the shift in Phi coordinate and make sure that it is
+       ! in the range provided by the lookup table
+       if(dLonB0New /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
+         modulo(rLonLat_D(2) - dLonB0New - LonMinB0, cTwoPi) + LonMinB0
+
+       ! Lookup table uses degrees
+       rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
 
        if(CarringtonRot < CarringtonRotNew)then
           ! Check if time has passed the original magnetogram time
@@ -465,7 +474,7 @@ contains
 
     deallocate(g_II, h_II, Sqrt_I, SqrtRatio_I, &
          rRsPower_I, RmRsPower_I, RmRPower_I, &
-         SinPhi_I, CosPhi_I)
+         SinPhi_I, CosPhi_I, p_II, Dp_II)
 
   end subroutine deallocate_harmonics_arrays
   !============================================================================
