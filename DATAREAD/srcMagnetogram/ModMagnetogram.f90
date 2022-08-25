@@ -163,7 +163,7 @@ contains
             Param_I = [rMagnetogram, rSourceSurface, dLon, CarringtonRotNew], &
             StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
 
-       iTableB0New = i_lookup_table('B0')
+       iTableB0New = i_lookup_table('B0New')
 
        ! Make second lookup table using the just read harmonics coefficients
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
