@@ -36,3 +36,21 @@ harmonics11uniform.dat		NameFileOut
 #CHEBYSHEV
 T				UseChebyshevNode
 
+#END
+
+The file is copied to subfolder SC in the run rirectory as HARMONICS.in. This is
+an input file for converting the magnetogram file into thhe list of harmonics
+amplitudes, using the command (from run directory):
+
+cd SC; ./HARMONICS.exe
+
+The name files for input (magnetogram file) or output (harmonics file) may be changed maanually or
+using a reaarl script. For example, the command (from run directory)
+
+cd SC; perl -i -pe \
+	's/dipole11uniform/map_01/; s/harmonics11uniform/endmagnetogram/; s/\d+(\s+MaxOrder)/30$$1/' \
+	HARMONICS.in
+
+changes the input magnetogram file name to map_01.out (the default output from remap_magnetogram.py),
+the output harmonics file to endmagnetogram.dat (the default input for real-time simulations) and reduces
+the harmonic number to 30.
