@@ -120,7 +120,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    yPositive = Param_I[3]
    xNegative = Param_I[4]
    yNegative = Param_I[5]
-   #unnecessary can be removed because check is done below
+   # Check if the latitude grid is uniform
    if abs(Lat_I[2]-2*Lat_I[1]+Lat_I[0])<1.0e-5:
       IsUniformLat = True
       print('Uniform in Latitude grid')
