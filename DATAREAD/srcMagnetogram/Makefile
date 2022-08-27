@@ -270,8 +270,9 @@ test_fdips_wedge_check:
 
 ###############################################################################
 test_eeggl:
-	cd ../../EMPIRICAL/srcEE;make FRM
+	cd ${EMPIRICALEEDIR}; make FRM
 	rm -f runlog.eeggl test_eeggl.diff runidl* RunFRM
+	ln -sf ${BINDIR}/FRMAGNETOGRAM.exe .
 	python3 ./GLSETUP.py fitsfile.fits -CMESpeed 600 \
 		-LonPosIn 333.5 -LatPosIn 22.606750850296976 \
 		-LonNegIn 324.5 -LatNegIn 23.996973841730536 > runlog_eeggl
