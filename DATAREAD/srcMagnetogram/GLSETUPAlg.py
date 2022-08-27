@@ -543,7 +543,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
        FileId.write('sin(latitude) \n')
    FileId.close()
    FileId=open('RunFRM','r')
-   subprocess.call('../../../bin/FRMAGNETOGRAM.exe',stdin=FileId)
+   subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
    FileId.close()
    
    nParam = 8 + 2*nPIL
