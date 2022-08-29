@@ -129,6 +129,25 @@ ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
 		-L${LIBDIR} -lSHARE ${Lflag}
 
+############## CONVERTHARMONICS #############
+
+CONVERTHARMONICS: ${LIBDIR}/libSHARE.a
+	make ${CONVERTHARMONICSEXE}
+	@echo ${CONVERTHARMONICSEXE} has been compiled.
+	ln -sf ${CONVERTHARMONICSEXE} .
+
+CONVERTHARMONICSEXE = ${BINDIR}/CONVERTHARMONICS.exe
+
+OBJECTS_CONVERTHARMONICS= \
+	convert_harmonics.o \
+	ModMagnetogram.o
+
+convert_harmonics.o: ModMagnetogram.o
+
+${CONVERTHARMONICSEXE}: ${OBJECTS_CONVERTHARMONICS}
+	${LINK.f90} -o ${CONVERTHARMONICSEXE} ${OBJECTS_CONVERTHARMONICS} \
+		-L${LIBDIR} -lSHARE ${Lflag}
+
 ################ DIPOLE11 ###################
 
 DIPOLE11:
