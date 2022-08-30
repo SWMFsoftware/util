@@ -10,7 +10,7 @@ program magnetogram
        read_line, read_command
   use ModUtilities, ONLY: CON_stop
   use ModCoordTransform, ONLY: rlonlat_to_xyz, xyz_to_rlonlat
-  use ModMpi
+  use ModMpi, ONLY: MPI_COMM_SELF
 
   implicit none
 
@@ -26,8 +26,6 @@ program magnetogram
   logical:: DoDebug = .false.
   !----------------------------------------------------------------------------
 
-  call MPI_init(iError)
-
   Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
   No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
 
@@ -37,7 +35,7 @@ program magnetogram
   write(*,'(a)')prefix//TypeLatAxis
 
   write(*,*)'Reading CME.in'
-  call read_file('CME.in')
+  call read_file('CME.in', iCommIn = MPI_COMM_SELF)
   call read_init
   READPARAM: do
      if(.not.read_line(StringLine) ) EXIT READPARAM
@@ -155,8 +153,6 @@ program magnetogram
          Coord2In_I= Latitude_I,        &
          NameVarIn = 'Longitude Latitude Br BLon BLat Long0',&
          VarIn_VII = BSurface_DC)
-
-  call MPI_finalize(iError)
 
 end program magnetogram
 !==============================================================================
