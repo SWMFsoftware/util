@@ -79,22 +79,25 @@ module ModMagnetogram
 contains
   !============================================================================
   subroutine init_magnetogram_lookup_table(iComm)
-
     use ModNumConst, ONLY: cDegToRad
 
-    integer, intent(in):: iComm
+    integer, intent(in), optional :: iComm
 
     real:: dLon ! longitude shift
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
+    ! Two  variables to store magnetogram time.
+    ! Carrigton rootation number:
+    integer :: nCR = 0
+    ! Fraction of Carrington rotation since its beginning till magnetogram time
+    real    :: CRFraction  = 0.0
 
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
     ! Make sure these are set
     iTableB0    = i_lookup_table('B0')
-    iTableB0New = i_lookup_table('B0NEW')
-
+    iTableB0New = i_lookup_table('B0New')
     ! Nothing to do if there is no B0 table defined or to be made
     if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
 
@@ -102,7 +105,8 @@ contains
        ! Read harmonics coefficient and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFile, CarringtonRot, dLon)
        DoReadHarmonics = .false.
-
+       nCR        = int(CarringtonRot)
+       CRFraction = CarringtonRot  - nCR
        ! Initialize lookup table based on #HARMONICSGRID parameters
        call init_lookup_table( &
             NameTable   = 'B0',                    &
@@ -113,7 +117,8 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],  &
             IndexMin_I  = [rMagnetogram,     0.0, -90.0],    &
             IndexMax_I  = [rSourceSurface, 360.0,  90.0],    &
-            Param_I = [rMagnetogram, rSourceSurface, dLon, CarringtonRot], &
+            Param_I = [rMagnetogram, rSourceSurface, dLon, real(nCR)], &
+            Time    = CRFraction,                  &
             StringDescription = 'Created from '//trim(NameHarmonicsFile) )
        iTableB0 = i_lookup_table('B0')
 
@@ -125,7 +130,7 @@ contains
 
     ! Get coordinate limits, Carrington rotation
     call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
-         IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, &
+         IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, Time=CRFraction, &
          IsLogIndex_I=IsLogIndex_I)
 
     if(IsLogIndex_I(1))then
@@ -140,16 +145,20 @@ contains
        dLonB0 = (Param_I(3) - dLongitudeHgrDeg)*cDegToRad
        RotB0_DD = rot_matrix_z(dLonB0)
     end if
-
-    ! Get Carrington rotation for the central meridian (time of magnetogram)
-    if(nParam > 3) CarringtonRot = Param_I(4)
-
+    ! There only 6 meaning digits in the magnetogram metadata fot the
+    ! Carrington time:
+    CRFraction = real(nint(CRFraction*1000000))/1000000
+    ! Get Carrington rotation time of magnetogram
+    if(nParam > 3) CarringtonRot = nint(Param_I(4)) + CRFraction
+    !
     ! Second lookup table for a different time for temporal interpolation
+    !
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew, dLon)
        DoReadHarmonicsNew = .false.
-
+       nCR        = int(CarringtonRotNew)
+       CRFraction = CarringtonRotNew  - nCR
        ! Set up lookup table
        call init_lookup_table( &
             NameTable   = 'B0New',                         &
@@ -160,7 +169,8 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],          &
             IndexMin_I  = [rMagnetogram,     0.0, -90.0],  &
             IndexMax_I  = [rSourceSurface, 360.0,  90.0],  &
-            Param_I = [rMagnetogram, rSourceSurface, dLon, CarringtonRotNew], &
+            Param_I = [rMagnetogram, rSourceSurface, dLon, real(nCR)], &
+            Time=CRFraction,                               &
             StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
 
        iTableB0New = i_lookup_table('B0New')
@@ -173,7 +183,8 @@ contains
 
     if(iTableB0New > 0)then
        ! Get Carrington rotation (time) for new magnetogram
-       call get_lookup_table(iTableB0New, nParam=nParam, Param_I=Param_I)
+       call get_lookup_table(iTableB0New, nParam=nParam, Param_I=Param_I,&
+            Time=CRFraction)
        ! Rotation matrix for longitude shift if needed
        if(nParam > 2) then
           dLonB0New = (Param_I(3) - dLongitudeHgrDeg)*cDegToRad
@@ -181,7 +192,8 @@ contains
        end if
 
        if(nParam > 3)then
-          CarringtonRotNew = Param_I(4)
+          ! Get Carrington rotation time of magnetogram
+          CarringtonRotNew = nint(Param_I(4)) + CRFraction
        else
           call CON_stop(NameSub//': missing Carrington rotation info in '// &
                trim(NameHarmonicsFileNew))
