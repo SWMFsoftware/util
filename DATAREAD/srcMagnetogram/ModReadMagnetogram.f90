@@ -162,7 +162,7 @@ contains
        write(UnitTmp_,'(i8,a)')iTime_I(4), cTab//cTab//'iHour'
        write(UnitTmp_,'(i8,a)')iTime_I(5), cTab//cTab//'iMinute'
        write(UnitTmp_,'(i8,a)')iTime_I(6), cTab//cTab//'iSecond'
-       write(UnitTmp_,'(a)')'     0.0'//cTab//cTab//'FracSecond'
+       write(UnitTmp_,'(a)')'0.0'//cTab//cTab//cTab//'FracSecond'
        write(UnitTmp_,'(a)')'#END'
        write(UnitTmp_,*)
        call close_file(NameCaller=NameSub)
