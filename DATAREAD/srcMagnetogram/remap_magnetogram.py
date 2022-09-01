@@ -307,12 +307,12 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 ';ASCIIFileCreationDate = '\
                 +time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
         fid.write(line0)
-        line0 = '       0      0.00000       2       2       1 \n'
+        line0 = '       0     '+str(CRnumber-int(CRnumber))+'      2       2       1 \n'
         fid.write(line0)
         fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
         # Only adding the original longitude shift as read from the FITS file 
         # and the CM of the CR
-        fid.write(str(long0) +'  '+str(CRnumber)+' \n') 
+        fid.write(str(long0) +'  '+str(int(CRnumber))+' \n') 
         #longitude shift (important for GONG Hourly)
         fid.write('Longitude Latitude Br LongitudeShift CarringtonRotation \n')
         

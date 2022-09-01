@@ -88,7 +88,8 @@ contains
           call read_var('nHarmonics', nHarmonicsIn)
        case("#OUTPUT")
           call read_var('NameFileOut', NameFileOut)
-       case("#MAGNETOGRAMFILE", "#CHEBYSHEV", '#CHANGEWEAKFIELD', '#CHANGEPOLARFIELD')
+       case("#MAGNETOGRAMFILE", "#CHEBYSHEV", '#CHANGEWEAKFIELD',&
+            '#CHANGEPOLARFIELD')
           call read_magnetogram_param(NameCommand)
        case default
           call CON_stop(NameSub//': unknown command='//trim(NameCommand))
@@ -142,6 +143,7 @@ contains
 
     integer :: iTheta, iPhi, m,inm, nn, mm
     real    :: dThetaChebyshev, dLon = 0.0
+    real    :: CRFraction, CRNumber
     real, allocatable:: Br_II(:,:), Coord_DII(:,:,:), Var_VI(:,:)
 
     !--------------------------------------------------------------------------
@@ -306,10 +308,12 @@ contains
     Coord_DII(2,:,1) = mArray
     Var_VI(1,:)      = gArray
     Var_VI(2,:)      = hArray
-
+    CRNumber = int(MagnetogramTimeCR)
+    CRFraction = MagnetogramTimeCR - CRNumber
     call save_plot_file(NameFileOut, &
          StringHeaderIn=StringMagHeader, &
-         ParamIn_I=[ real(nHarmonics), MagnetogramTimeCR, dLon ], &
+         TimeIn = CRFraction, &
+         ParamIn_I=[ real(nHarmonics), CRNumber, dLon ], &
          IsCartesianIn = .false., &
          nDimIn = 2, &
          CoordIn_DII = Coord_DII, &
