@@ -11,6 +11,7 @@ program magnetogram
   use ModUtilities, ONLY: CON_stop
   use ModCoordTransform, ONLY: rlonlat_to_xyz, xyz_to_rlonlat
   use ModMpi, ONLY: MPI_COMM_SELF
+  use ModMagnetogram
 
   implicit none
 
