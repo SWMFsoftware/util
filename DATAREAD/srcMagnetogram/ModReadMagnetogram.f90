@@ -113,7 +113,7 @@ contains
     real:: Param_I(2)
     real:: BrAverage
     real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:)
-    real :: MagnetogramTime
+    real :: MagnetogramTime, CRFraction
     integer :: iTime_I(7)
 
     integer:: iError, nParam, iTheta, iPhi, nThetaRatio, nPhiRatio
@@ -127,7 +127,7 @@ contains
     !--------------------------------------------------------------------------
     call read_plot_file(NameFileIn, StringHeaderOut=StringMagHeader, &
          n1Out = nPhi0, n2Out = nTheta0, &
-         ParamOut_I=Param_I, iErrorOut=iError, nParamOut=nParam)
+         ParamOut_I=Param_I, iErrorOut=iError, nParamOut=nParam, TimeOut=CRFraction)
 
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read header from file '//trim(NameFileIn))
@@ -135,7 +135,7 @@ contains
     ! Reading the original shift in Phi and
     ! Central Meridian Longitude from the Map
     if(nParam>0) LongShift = Param_I(1)
-    if(nParam>1) MagnetogramTimeCR = Param_I(2)
+    if(nParam>1) MagnetogramTimeCR = Param_I(2) + CRFraction
 
     write(*,*) NameSub, &
          ': nTheta0, nPhi0, LongitudeShift, MagnetogramTimeCR = ', &
@@ -233,12 +233,12 @@ contains
     endif
 
     ! Save 2D Br in the original magnetogram grid
-    call save_plot_file('field_2d.out', TypeFileIn='ascii',&
-         StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
-         NameVarIn='Longitude Latitude Br',&
-         VarIn_II=Br0_II, &
-         Coord1In_I=Phi0_I, &
-         Coord2In_I=Lat0_I)
+    ! call save_plot_file('field_2d.out', TypeFileIn='ascii',&
+    !     StringHeaderIn='Longitude, Latitude [Deg], Br[G]', &
+    !     NameVarIn='Longitude Latitude Br',&
+    !     VarIn_II=Br0_II, &
+    !     Coord1In_I=Phi0_I, &
+    !     Coord2In_I=Lat0_I)
 
     ! to be passed to harmonics before remeshing
     nThetaorig = nTheta0
