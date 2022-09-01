@@ -702,7 +702,9 @@ if __name__ == '__main__':
     if map_local[0] == 'ADAPT Synchronic':
         istart = 1
         iend   = 12
-
-    for i in range(istart,iend+1):
-        out=args.outputfile+'_'+str(i).zfill(2)+'.out'
-        remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
+        for i in range(istart,iend+1):
+            out=args.outputfile+'_'+str(i).zfill(2)+'.out'
+            remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
+    else:
+        out=args.outputfile+'.out'
+        remap(args.inputfile, out, args.nlat, args.nlon, grid_type, 0)
