@@ -18,7 +18,7 @@ module EEE_ModGL98
 
   public :: set_parameters_gl98
   public :: get_gl98_fluxrope
-
+  public :: get_GL98_size
   ! Local variables
 
   ! Geometric characteristics of the superimposed configuration:
@@ -434,6 +434,12 @@ contains
     !==========================================================================
   end subroutine get_gl98_fluxrope
   !============================================================================
-
+  subroutine get_GL98_size(SizeXY,  SizeZ)
+    real,  intent(out) :: SizeXY,  SizeZ
+    !--------------------------------------------------------------------------
+    SizeXY = Radius                    ! Horizontal size
+    SizeZ  = ApexHeight                ! Apex height
+  end subroutine get_GL98_size
+  !============================================================================
 end module EEE_ModGL98
 !==============================================================================

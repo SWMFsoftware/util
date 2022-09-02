@@ -17,6 +17,7 @@ module EEE_ModMain
   public :: EEE_get_state_BC
   public :: EEE_get_B0
   public :: EEE_do_not_add_cme_again
+  public :: EEE_set_plot_range
 contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
@@ -204,10 +205,12 @@ contains
   end subroutine EEE_set_parameters
   !============================================================================
 
-  subroutine EEE_get_state_BC(Xyz_D,Rho,U_D,B_D,p,Time,nStep,Iteration_number)
-
+  subroutine EEE_get_state_BC(Xyz_D,     &
+       Rho, U_D, B_D, p,                 &
+       Time, nStep, Iteration_number)
+    
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
-         UseCms, UseSpheromak, UseTD14
+         UseCms, UseSpheromak
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
@@ -305,6 +308,27 @@ contains
     DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false.
     DoAddSpheromak = .false.
   end subroutine EEE_do_not_add_cme_again
+  !============================================================================
+  subroutine EEE_set_plot_range(nXY, nZ)
+    use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseGL, UseSpheromak, &
+         DXyzPlot, ExtensionFactor
+    use EEE_ModTD99, ONLY: get_TD99_size
+    use EEE_ModGL98, ONLY: get_GL98_size
+    integer, intent(out) :: nXY, nZ
+    real :: SizeXY, SizeZ
+    !--------------------------------------------------------------------------
+    nXY = -1; nZ = -1
+    if(.not.UseCme)RETURN
+    if(UseGL.or.UseSpheromak)then
+       call get_GL98_size(SizeXY,  SizeZ)
+    elseif(UseTD) then
+       call get_TD99_size(SizeXY,  SizeZ)
+    else
+       RETURN
+    end if
+    nXY = nint(ExtensionFactor*SizeXY/DXyzPlot)
+    nZ  = nint(ExtensionFactor*SizeZ /DXyzPlot)
+  end subroutine EEE_set_plot_range
   !============================================================================
 end module EEE_ModMain
 !==============================================================================

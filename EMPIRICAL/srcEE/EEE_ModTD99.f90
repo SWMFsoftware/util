@@ -436,7 +436,10 @@ module EEE_ModTD99
   save
   private
 
-  public :: set_parameters_TD99, get_TD99_fluxrope, compute_TD99_BqField
+  public :: set_parameters_TD99
+  public :: get_TD99_fluxrope
+  public :: compute_TD99_BqField
+  public :: get_TD99_size
 
   ! Variables related to the position of the flux rope:
 
@@ -1257,6 +1260,13 @@ contains
          q*(RPlusMoving_D/RPlus**3 - RMinusMoving_D/RMinus**3))*No2Si_V(UnitB_)
 
   end subroutine compute_TD99_BqField
+  !============================================================================
+  subroutine get_TD99_size(SizeXY,  SizeZ)
+    real,  intent(out) :: SizeXY,  SizeZ
+    !--------------------------------------------------------------------------
+    SizeXY = sqrt( (rTube + aTube)**2 - Depth**2 ) ! Horrizontal size
+    SizeZ  = rTube +  aTube - Depth                ! Apex height
+  end subroutine get_TD99_size
   !============================================================================
 end module EEE_ModTD99
 !==============================================================================

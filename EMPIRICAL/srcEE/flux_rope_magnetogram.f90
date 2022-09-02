@@ -2,29 +2,45 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 program magnetogram
-  use EEE_ModMain
-  use EEE_ModCommonVariables
+  use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
+       EEE_set_plot_range
+  use EEE_ModCommonVariables, ONLY:   Io2Si_V, Si2Io_V, Io2No_V, &
+       No2Io_V, Si2No_V, No2Si_V, prefix, x_, y_, z_,            &
+       LongitudeCme, LatitudeCme, OrientationCME
   use ModConst, ONLY: cPi, cTwoPi, cDegToRad, cRadToDeg
   use ModPlotFile, ONLY:save_plot_file
   use ModReadParam, ONLY: read_file, read_init, &
        read_line, read_command
   use ModUtilities, ONLY: CON_stop
-  use ModCoordTransform, ONLY: rlonlat_to_xyz, xyz_to_rlonlat
+  use ModCoordTransform, ONLY: rot_xyz_rlonlat, rlonlat_to_xyz, &
+       rot_xyz_mercator, rot_matrix_z
   use ModMpi, ONLY: MPI_COMM_SELF
-  use ModMagnetogram
+  use ModMagnetogram, ONLY: iTableB0, init_magnetogram_lookup_table, &
+       get_magnetogram_field
+  use ModLookupTable, ONLY: read_lookup_table_param, get_lookup_table
 
   implicit none
-
-  integer,parameter:: nLong = 360, nLat = 180, nR = 70, nD = 40
-  integer:: Long0, i, j, k, iError, iLong
-  real:: Radius, Longitude, Latitude, dR
-  real:: Radius_I(nR), Longitude_I(nLong), Latitude_I(nLat), Long_I(nD), Lat_I(nD)
-  real:: PlotVar_V(3,nR,nD,nD) = 0
-  real:: BSurface_DC(3,nLong,nLat) = 0, B_DC(3,nR,nD,nD) = 0
-  real::Xyz_D(3),SinLong,CosLong,SinLat,CosLat, Rho, p, U_D(3), B_D(3)
-  character(LEN=3)::TypeLatAxis
+  ! Number of indexes for magnetogram map
+  integer,parameter:: nLong = 360, nLat = 180
+  ! Number of indexes for 3D plot
+  integer           :: nXY = -1, nZ = -1
+  ! Plot variables:
+  real, allocatable :: Var_VN(:,:,:,:)
+  ! Named indexes, maay be redifined depending on the use of potential and/or
+  ! EE field
+  integer:: B0x_ = 1, B0y_ = 2, B0z_ = 3, B1x_ = 1, B1y_ = 2, B1z_ = 3
+  ! Rotational matrix of coordinate transformation:
+  real              :: Rotate_DD(3,3)
+  ! Loop indexes    ::
+  integer           :: i, j, k
+  integer           :: Long0, iLong
+  real              :: Longitude, Latitude
+  real              :: Longitude_I(nLong), Latitude_I(nLat)
+  real              :: BSurface_DC(3,nLong,nLat) = 0
+  real              :: XyzRLonLat_DD(3,3)
+  real              :: Xyz_D(3), Rho, p, U_D(3), B_D(3)
+  character(LEN=3)  :: TypeLatAxis
   character(LEN=100):: StringLine, NameCommand
-  logical:: DoDebug = .false.
   !----------------------------------------------------------------------------
 
   Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
@@ -35,7 +51,7 @@ program magnetogram
   read(*,*)TypeLatAxis
   write(*,'(a)')prefix//TypeLatAxis
 
-  write(*,*)'Reading CME.in'
+  write(*,'(a)')prefix//'Reading CME.in'
   call read_file('CME.in', iCommIn = MPI_COMM_SELF)
   call read_init
   READPARAM: do
@@ -45,115 +61,68 @@ program magnetogram
      case('#END')
         EXIT READPARAM
      case('#CME')
-        write(*,*)'Reading CME Para'
+        write(*,*)'Reading CME Parameters'
         call EEE_set_parameters(NameCommand)
+        write(*,'(a,f10.2,a)')'LongitudeCme = ', LongitudeCme, ' [deg]'
+        write(*,'(a,f10.2,a)')'LatitudeCme = ', LatitudeCme, ' [deg]'
+        write(*,'(a,f10.2,a)')'OrientationCme =', OrientationCme, ' [deg]'
+     case('#LOOKUPTABLE')
+        call read_lookup_table_param
+        call init_magnetogram_lookup_table()
      case default
         call CON_stop('Unknown command:'//NameCommand)
      end select
   end do READPARAM
 
-  write(*,*)'LongitudeCme, LatitudeCme =',LongitudeCme, LatitudeCme
-  dR = 1.0/nR
-  do i = 0, nR-1
-     Radius_I(i+1) = 1 + i*dR
-  enddo
   do i = 1, nLong
      ! Include the Phishift to correctly place the CME
      iLong = i + Long0
      iLong = 1 + modulo(iLong - 1, nLong)
-     if (i <= nD) then
-        Long_I(i) = i + LongitudeCme - nD/2
-     endif
      Longitude_I(i) = iLong - 0.5
   end do
   do i = 1, nLat
      select case(TypeLatAxis)
      case('uni')
-        if (i <= nD) then
-           Lat_I(i) = i + LatitudeCme - nD/2
-        endif
         Latitude_I(i) = i - 90.5
      case('sin')
-        SinLat = asin((2.0*i - nLat - 1.0)/nLat)
-        if (i <= nD) then
-           Lat_I(i) = SinLat*cRadToDeg + LatitudeCme - nD/2 + 90.5
-        endif
-        Latitude_I(i) = SinLat*cRadToDeg
+        Latitude_I(i) = asin((2.0*i - nLat - 1.0)/nLat)*cRadToDeg
      case default
      end select
   end do
 
-  if (DoDebug)then
-     write(*,*)'Radius_I    = ',Radius_I
-     write(*,*)'Long_I      =',Long_I
-     write(*,*)'Lat_I       =',Lat_I
-     write(*,*)'Longitude_I =',Longitude_I
-     write(*,*)'Latitude_I  =',Latitude_I
-  endif
-
-  do k = 1,nD
-     Latitude = Lat_I(k) * cDegToRad
-     SinLat = sin(Latitude)
-     CosLat = cos(Latitude)
-     do j = 1,nD
-        Longitude = Long_I(j) * cDegToRad
-        SinLong = sin(Longitude)
-        CosLong = cos(Longitude)
-        do i = 1, nR
-           Radius = Radius_I(i)
-	   call rlonlat_to_xyz(Radius,Longitude,Latitude, Xyz_D)
-           call EEE_get_state_BC(Xyz_D,Rho,U_D,B_D,p,0.0,0,0)
-           B_DC(1,i,j,k) = sum(Xyz_D*B_D)
-           B_DC(2,i,j,k) = B_D(y_)*CosLong - B_D(x_)*SinLong
-           B_DC(3,i,j,k) = (B_D(x_)*CosLong + B_D(y_)*SinLong)*(-SinLat) &
-                + B_D(z_)*CosLat
-        end do
-     enddo
-  end do
-
-  PlotVar_V(1:3,:,:,:) = B_DC
-
-  write(*,*)'Saving 3d Flux Rope output file'
-  call save_plot_file(&
-       NameFile = 'FluxRope.out',&
-       TypeFileIn = 'ascii',          &
-       StringHeaderIn = '3D Flux rope magnetic field +/- 20 deg of Flux rope location',&
-       nDimIn = 3,                    &
-       ParamIn_I = [float(Long0)],         &
-       Coord1In_I = Radius_I, &
-       Coord2In_I = Longitude_I,       &
-       Coord3In_I = Latitude_I,        &
-       NameVarIn  = 'Radius Longitude Latitude Br BLon BLat Long0',&
-       VarIn_VIII = PlotVar_V(1:3,:,:,:))
-
   do j = 1,nLat
      Latitude = Latitude_I(j) * cDegToRad
-     SinLat = sin(Latitude)
-     CosLat = cos(Latitude)
      do i = 1,nLong
-        Longitude = Longitude_I(i) * cDegToRad
-        SinLong = sin(Longitude)
-        CosLong = cos(Longitude)
+        Longitude = Longitude_I(i)*cDegToRad
         call rlonlat_to_xyz(1.0,Longitude,Latitude, Xyz_D)
-        call EEE_get_state_BC(Xyz_D,Rho,U_D,B_D,p,0.0,0,0)
-        BSurface_DC(1,i,j) = sum(Xyz_D*B_D)
-        BSurface_DC(2,i,j) = B_D(y_)*CosLong - B_D(x_)*SinLong
-        BSurface_DC(3,i,j) = (B_D(x_)*CosLong + B_D(y_)*SinLong)*(-SinLat) &
-                + B_D(z_)*CosLat
+        call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
+             Time = 0.0, nStep  = 0, Iteration_Number=0)
+        ! Convert to Br, BLon, BLat components
+        XyzRLonLat_DD = rot_xyz_rlonlat(lon=Longitude, &
+             lat=Latitude)
+        BSurface_DC(:,i,j) = matmul(B_D, XyzRLonLat_DD)
      end do
   enddo
 
-    write(*,*)'Saving 2d Flux Rope output file'
-    call save_plot_file(&
-         NameFile = 'FRMagnetogram.out',&
-         TypeFileIn = 'ascii',          &
-         StringHeaderIn = 'Flux rope magnetic field at 1 R_s',&
-         nDimIn = 2,                    &
-         ParamIn_I = [float(Long0)],         &
-         CoordIn_I = Longitude_I,       &
-         Coord2In_I= Latitude_I,        &
-         NameVarIn = 'Longitude Latitude Br BLon BLat Long0',&
-         VarIn_VII = BSurface_DC)
+  write(*,*)'Saving 2d Flux Rope output file'
+  call save_plot_file(&
+       NameFile = 'FRMagnetogram.out',&
+       TypeFileIn = 'ascii',          &
+       StringHeaderIn = 'Flux rope magnetic field at 1 R_s',&
+       nDimIn = 2,                    &
+       ParamIn_I = [real(Long0)],     &
+       CoordIn_I = Longitude_I,       &
+       Coord2In_I= Latitude_I,        &
+       NameVarIn = 'Longitude Latitude Br BLon BLat Long0',&
+       VarIn_VII = BSurface_DC)
 
+  call EEE_set_plot_range(nXY, nZ)
+  if(nXY < 1 .and. nZ < 1)STOP
+  write(*,*)'nXY, nZ = ', nXY, nZ
+  if(iTableB0 > 0)then
+     allocate(Var_VN(6, 2*nXY+1, 2*nXY+1, nZ+1))
+  else
+     allocate(Var_VN(3, 2*nXY+1, 2*nXY+1, nZ+1))
+  end if
 end program magnetogram
 !==============================================================================

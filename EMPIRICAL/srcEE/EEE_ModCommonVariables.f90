@@ -85,5 +85,12 @@ module EEE_ModCommonVariables
   ! is stored, to calculate the effect of displacement of moving charges
   real    :: StartTime = -1.0
   logical :: DoInit = .true.
+  ! Plotting options:
+  ! Lineaar resolution, in terms of the unit of length.  For solar
+  ! applications, the magnetogram resolution of 1 degree, corresponds
+  ! to the linear resolution of about 1/60
+  real, parameter :: DXyzPlot = 0.0150
+  ! Extension of the plot domain in terms of  rreaal size of configuration
+  real, parameter :: ExtensionFactor = 1.50
 end module EEE_ModCommonVariables
 !==============================================================================
