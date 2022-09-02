@@ -6,10 +6,11 @@ module ModMagnetogram
   use ModNumConst,       ONLY: cTwoPi, cRadToDeg, cDegToRad
   use CON_axes,          ONLY: dLongitudeHgrDeg
   use ModUtilities,      ONLY: CON_stop
-  use ModCoordTransform, ONLY: rot_xyz_sph, rot_matrix_z, xyz_to_rlonlat
+  use ModCoordTransform, ONLY: rot_xyz_sph, rot_xyz_rlonlat, rot_matrix_z,&
+       xyz_to_rlonlat
   use ModLookupTable, ONLY: &
        i_lookup_table, init_lookup_table, make_lookup_table_3d, &
-       get_lookup_table, interpolate_lookup_table
+       get_lookup_table, interpolate_lookup_table, Table_I, TableType
 
   implicit none
   save
@@ -80,7 +81,9 @@ contains
   !============================================================================
   subroutine init_magnetogram_lookup_table(iComm)
     use ModNumConst, ONLY: cDegToRad
-
+    use ModKind,     ONLY: Real4_
+    use ModMpi,      ONLY: MPI_comm_rank
+    use ModPlotFile, ONLY: save_plot_file
     integer, intent(in), optional :: iComm
 
     real:: dLon ! longitude shift
@@ -92,7 +95,14 @@ contains
     integer :: nCR = 0
     ! Fraction of Carrington rotation since its beginning till magnetogram time
     real    :: CRFraction  = 0.0
-
+    type(TableType),  pointer :: Ptr
+    real(Real4_), allocatable  :: Tmp_VIIIII(:,:,:,:,:,:)
+    real, allocatable :: Magnetogram_VII(:,:,:)
+    real :: DX_D(3), Lon, Lat ! in degrees
+    real :: XyzRLonLat_DD(3,3)
+    integer :: iLon, iLat
+    ! To get iProc  and determine  the root PE:
+    integer :: iProc, iError
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
     ! Make sure these are set
@@ -100,7 +110,12 @@ contains
     iTableB0New = i_lookup_table('B0New')
     ! Nothing to do if there is no B0 table defined or to be made
     if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
-
+     ! Get processor index and total number of processors
+    if(present(iComm))then
+       call MPI_comm_rank(iComm,iProc,iError)
+    else
+       iProc = 0
+    end if
     if(DoReadHarmonics)then
        ! Read harmonics coefficient and Carrington rotation info
        call read_harmonics_file(NameHarmonicsFile, CarringtonRot, dLon)
@@ -126,9 +141,48 @@ contains
        call make_lookup_table_3d(iTableB0, calc_b0_table, iComm)
 
        call deallocate_harmonics_arrays
+       if(iProc==0) then
+          Ptr => Table_I(iTableB0)
+          allocate(Magnetogram_VII(3, nLon, nLat+1))
+          allocate(Tmp_VIIIII(3, nR+1, nLon+1,  nLat+1, 1, 1))
+          Tmp_VIIIII = Ptr%Value4_VC
+          ! Take the radial slice at the photospheric level,
+          ! omit the strip at the longitude of 360 degrees:
+          Magnetogram_VII  =  real(Tmp_VIIIII(:,1,1:nLon,:,1,1))
+          DX_D = Ptr%DIndex_I
+          do iLat  = 1, nLat + 1
+             Lat = -90 + DX_D(3)*(iLat - 1)
+             do iLon = 1, nLon
+                Lon = DX_D(2)*(iLon - 1)
+                ! Convert to Br, BLon, BLat components
+                XyzRLonLat_DD = rot_xyz_rlonlat(lon=cDegToRad*Lon, &
+                     lat= cDegToRad*Lat)
+                Magnetogram_VII(:, iLon, iLat) =            &
+                     matmul(Magnetogram_VII(:, iLon, iLat), &
+                     XyzRLonLat_DD)
+             end do
+          end do
+          ! Remesh from latitudinal nodes to pixels:
+          Magnetogram_VII(:,:,1:nLat) = 0.5*(&
+               Magnetogram_VII(:,:,1:nLat) + Magnetogram_VII(:,:,2:nLat+1))
+          call save_plot_file(NameFile = 'field_2d.out',  &
+               nDimIn  = 2,                       &
+               TimeIn = CRFraction,               &
+               ParamIn_I= [real(int(dLon)), real(nCR)], &
+               VarIn_VII= Magnetogram_VII(:,1:nLon,1:nLat), &
+               TypeFileIn    = 'ascii',           &
+               CoordMinIn_D  = [  0.0 + dLon - int(dLon), -90.0 + 90.0/nLat], &
+               CoordMaxIn_D  = [360.0 - 360.0/nLon + dLon - int(dLon),  &
+               90.0 - 90.0/nLat ],&
+               StringHeaderIn  = 'Created from '//trim(NameHarmonicsFile), &
+               NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
+               NameVarIn = 'Longitude Latitude Br BTheta BPhi Long0 CRNumber')
+          deallocate(Magnetogram_VII)
+          deallocate(Tmp_VIIIII)
+          nullify(Ptr)
+       end if
     end if
-
-    ! Get coordinate limits, Carrington rotation
+       ! Get coordinate limits, Carrington rotation
     call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
          IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, Time=CRFraction, &
          IsLogIndex_I=IsLogIndex_I)
@@ -179,6 +233,46 @@ contains
        call make_lookup_table_3d(iTableB0New, calc_b0_table, iComm)
 
        call deallocate_harmonics_arrays
+       if(iProc==0) then
+          Ptr => Table_I(iTableB0New)
+          allocate(Magnetogram_VII(3, nLon, nLat+1))
+          allocate(Tmp_VIIIII(3, nR+1, nLon+1,  nLat+1, 1, 1))
+          Tmp_VIIIII = Ptr%Value4_VC
+          ! Take the radial slice at the photospheric level,
+          ! omit the strip at the longitude of 360 degrees:
+          Magnetogram_VII  =  real(Tmp_VIIIII(:,1,1:nLon,:,1,1))
+          DX_D = Ptr%DIndex_I
+          do iLat  = 1, nLat + 1
+             Lat = -90 + DX_D(3)*(iLat - 1)
+             do iLon = 1, nLon
+                Lon = DX_D(2)*(iLon - 1)
+                ! Convert to Br, BLon, BLat components
+                XyzRLonLat_DD = rot_xyz_rlonlat(lon=cDegToRad*Lon, &
+                     lat= cDegToRad*Lat)
+                Magnetogram_VII(:, iLon, iLat) =            &
+                     matmul(Magnetogram_VII(:, iLon, iLat), &
+                     XyzRLonLat_DD)
+             end do
+          end do
+          ! Remesh from latitudinal nodes to pixels:
+          Magnetogram_VII(:,:,1:nLat) = 0.5*(&
+               Magnetogram_VII(:,:,1:nLat) + Magnetogram_VII(:,:,2:nLat+1))
+          call save_plot_file(NameFile = 'field_2d.out',  &
+               nDimIn  = 2,                       &
+               TimeIn = CRFraction,               &
+               ParamIn_I= [real(int(dLon)), real(nCR)], &
+               VarIn_VII= Magnetogram_VII(:,1:nLon,1:nLat), &
+               TypeFileIn    = 'ascii',           &
+               CoordMinIn_D  = [  0.0 + dLon - int(dLon), -90.0 + 90.0/nLat], &
+               CoordMaxIn_D  = [360.0 - 360.0/nLon + dLon - int(dLon),  &
+               90.0 - 90.0/nLat ],&
+               StringHeaderIn  = 'Created from '//trim(NameHarmonicsFileNew), &
+               NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
+               NameVarIn = 'Longitude Latitude Br BTheta BPhi Long0 CRNumber')
+          deallocate(Magnetogram_VII)
+          deallocate(Tmp_VIIIII)
+          nullify(Ptr)
+       end if
     end if
 
     if(iTableB0New > 0)then
@@ -210,8 +304,9 @@ contains
     real, intent(in)   :: r, Lon, Lat
     real, intent(out)  :: b_D(:)
 
-    real:: Theta, Phi, Bsph_D(3), XyzSph_DD(3,3)
-
+    real:: Theta, Phi, Bsph_D(3)
+    ! Rotation matrix to convert Br, BTheta, BPhi to  Bx, By, Bz.
+    real :: XyzSph_DD(3,3)
     character(len=*), parameter:: NameSub = 'calc_b0_table'
     !--------------------------------------------------------------------------
     Phi   = cDegToRad*Lon
@@ -393,13 +488,13 @@ contains
     integer:: nHarmonic ! number of harmonics = (nOrder+1)*(nOrder+2)/2
     integer:: nParam, nOrderIn, i, n, m
 
-    real:: Param_I(3), Coef, Coef1
+    real:: Param_I(3), Coef, Coef1, CRFraction
     real, allocatable:: Var_VI(:,:), Coord_DII(:,:,:)
 
     character(len=*), parameter:: NameSub = 'read_harmonics_file'
     !--------------------------------------------------------------------------
 
-    call read_plot_file(NameFile, &
+    call read_plot_file(NameFile, TimeOut = CRFraction, &
          nParamOut=nParam, ParamOut_I=Param_I, n1Out=nHarmonic)
 
     if(nParam < 3) call CON_stop(NameSub// &
@@ -407,7 +502,7 @@ contains
 
     nOrderIn   = nint(Param_I(1))
     nOrder     = min(MaxOrder, nOrderIn)
-    Carrington = Param_I(2)
+    Carrington = Param_I(2) + CRFraction
     dLon       = Param_I(3)
 
     if(nHarmonic /= (nOrderIn+1)*(nOrderIn+2)/2) call CON_stop(NameSub// &
