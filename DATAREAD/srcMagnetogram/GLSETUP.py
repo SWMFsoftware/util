@@ -73,6 +73,7 @@ if __name__ == '__main__':
                        'Reading magnetogram in the ModPlotFile format')
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
+   NameFile    = args.NameFile
    CMESpeed    = args.CMESpeed
    GLRadius    = args.GLRadius
    SizeFactor  = args.SizeFactor
@@ -96,8 +97,18 @@ if __name__ == '__main__':
    DoScaling   = args.DoScaling
    UseBATS     = args.UseBATS
 
+   IdlFile = 'fitsfile.out'
+   if UseBATS==False:
+      # Check if the file extension is .out
+      SplitName = NameFile.split('.')
+      if  SplitName[-1]=='out':
+         print('\n File name '+NameFile+
+               ' has extension .out, is treated as ASCII converted file')
+         UseBATS = True
+
    if not UsePNDist and not UseARArea and GLRadius <=0. :
-      print('\n WARNING: User did not specify how to calculate GLRadius. Default is using Active Region area to estimate GLRadius.')
+      print('\n WARNING: User did not specify how to calculate GLRadius.'+
+            ' Default is using Active Region area to estimate GLRadius.')
       UseARArea = True
   
    if (xPositive !=999. and yPositive !=999. and yNegative !=999.
@@ -120,7 +131,7 @@ if __name__ == '__main__':
    #################PROCESS MAGNETOGRAM###
    ##READ AND SMOOTH, IF DESIRED########################
    if UseBATS:
-      cc =  rmag.read_bats(args.NameFile)
+      cc =  rmag.read_bats(NameFile)
       nIndex_I     = cc[0]
       nLong        = nIndex_I[0]
       nLat         = nIndex_I[1]
@@ -138,10 +149,11 @@ if __name__ == '__main__':
          Br_C = data[:,:,0]
       if nSmooth > 2:
          Br_C = rmag.smooth(nLong,  nLat,  nSmooth, Br_C)
+      IdlFile = NameFile
    else:
       # fits magnetogram is read, remapped (if required) using
       # remap_magnetogram.py to fitsfile.out
-      cc = rmag.remap(args.NameFile, 'fitsfile.out', nlat, nlon, grid_type,
+      cc = rmag.remap(NameFile, IdlFile, nlat, nlon, grid_type,
                       i-1, nSmooth,BMax)
       nLong        = cc[0]
       nLat         = cc[1]
@@ -181,7 +193,7 @@ if __name__ == '__main__':
       FileId=open('runidl1','w')
       FileId.write(';\n;\n')
       FileId.write(
-         "      GLSETUP1,file='fitsfile.out',/UseBATS,CMESpeed=%-5.1f "\
+         "      GLSETUP1,file='"+IdlFile+"',/UseBATS,CMESpeed=%-5.1f "\
             %CMESpeed)
       FileId.close()
    ########SHOW MAGNETOGRAM##########################
