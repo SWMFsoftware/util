@@ -113,7 +113,7 @@ def calculate_index(Y, Y_I, n):
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
         Stretch, Distance, Helicity, DoHMI, IsPositionInput, UsePNDist, 
-        UseARArea, DoScaling, gridtype):
+        UseARArea, DoScaling):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -481,7 +481,8 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    FileId.write(" \n")
    FileId.write("#END \n")
    FileId.write("\n")
-   FileId.write("Angular Size            = %5.2f\n"%(2*GLRadius/Distance*Rad2Deg))
+   FileId.write("Angular Size            = %5.2f\n"%(
+      2*GLRadius/Distance*Rad2Deg))
    FileId.write("Poloidal flux [1E21 Mx] = %5.2f\n"%(GL_poloidal))
    FileId.write("Average HMI field components along PIL :\n")
    if DoHMI:

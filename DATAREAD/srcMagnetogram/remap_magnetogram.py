@@ -642,6 +642,61 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         
     return( (magnetogram_type, grid_type, map_data, nlo, nla, CRnumber, CR, long0, bunit, mapdate) )
 
+def read_bats(inputfile):
+    """
+    This function opens inputfile in the form it is produced by ModPlotFile
+    and reads data and parameters in Python foormat.
+    """
+    f = open(inputfile,'r')
+    # Header line
+    string=f.readline()
+    # Second line
+    string=f.readline()
+    array=string.split()
+    nDim = int(array[2])
+    if nDim != 2:
+        print('nDim = '+str(nDim)+' is not equal to 2, table cannot be read')
+        exit()
+    Time = float(array[1])
+    print('Time = '+str(Time))
+    nParam = int(array[3])
+    print('nParam = '+str(nParam))
+    nVar = int(array[4])
+    print('nVar = '+str(nVar))
+    # Third line
+    string=f.readline()
+    nIndex_I=[int(x) for  x in string.split()]
+    print('nIndex_I = '+str(nIndex_I))
+    # Fourth line
+    string=f.readline()
+    Param_I=[float(x) for  x in string.split()]
+    print('Param_I = '+str(Param_I))
+    # Fifth line
+    string=f.readline()
+    print(string)
+    # Allocate data arrays
+    Coord1_I = np.zeros(nIndex_I[0])
+    Coord2_I = np.zeros(nIndex_I[1])
+    if  nVar ==1:
+        Data_IV = np.zeros([nIndex_I[1],nIndex_I[0]])
+        for j in np.arange(nIndex_I[1]):
+            for i in np.arange(nIndex_I[0]):
+                string=f.readline()
+                Data_I = [float(x) for x in string.split()]
+                Coord1_I[i] = Data_I[0]
+                Coord2_I[j] = Data_I[1]
+                Data_IV[j,i] = Data_I[2]
+    else:
+        Data_IV = np.zeros([nIndex_I[1],nIndex_I[0],nVar])
+        for j in np.arange(nIndex_I[1]):
+            for i in np.arange(nIndex_I[0]):
+                string=f.readline()
+                Data_I = [float(x) for x in string.split()]
+                Coord1_I[i] = Data_I[0]
+                Coord2_I[j] = Data_I[1]
+                Data_IV[j,i,:] = Data_I[2:2+nVar-1]
+
+    return(nIndex_I, nVar, nParam, Param_I, Coord1_I, Coord2_I, Data_IV, Time)
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter, description="""

@@ -17,6 +17,7 @@ import datetime as dt
 BMax = 1900.0
 cPi = np.pi
 Rad2Deg = 180/cPi
+Deg2Rad = 1/Rad2Deg
 IsPositionInput = 0
 
 if __name__ == '__main__':
@@ -68,6 +69,8 @@ if __name__ == '__main__':
                        'GLRadius is limited by GLRadiusRange = 2-elements array. Default is [0.2,2.0].')
    parser.add_argument('--DoHMI',action='store_true', help=
                        'Use HMI map for helicity determination')
+   parser.add_argument('--UseBATS',action='store_true', help=
+                       'Reading magnetogram in the ModPlotFile format')
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
    CMESpeed    = args.CMESpeed
@@ -91,6 +94,7 @@ if __name__ == '__main__':
    UsePNDist   = args.UsePNDist
    UseARArea   = args.UseARArea
    DoScaling   = args.DoScaling
+   UseBATS     = args.UseBATS
 
    if not UsePNDist and not UseARArea and GLRadius <=0. :
       print('\n WARNING: User did not specify how to calculate GLRadius. Default is using Active Region area to estimate GLRadius.')
@@ -115,34 +119,51 @@ if __name__ == '__main__':
    #################SERVER SIDE, PYTHON################
    #################PROCESS MAGNETOGRAM###
    ##READ AND SMOOTH, IF DESIRED########################
-
-   # fits magnetogram is read, remapped (if required) using 
-   # remap_magnetogram.py to fitsfile.out
-   cc = rmag.remap(args.NameFile, 'fitsfile.out', nlat, nlon, grid_type, i-1, args.nSmooth, BMax)
-   
-   nLong        = cc[0]
-   nLat         = cc[1]
-   nParam       = cc[2]
-   Param_I      = cc[3]
-   Long0        = Param_I[0] # Longitude of left edge
-   LongEarth    = Param_I[1] # CR number of central meridian
-   Long_I       = cc[4]      # in radians
-   Lat_I        = cc[5]      # in radians
-   Br_C         = cc[6]
-   grid         = cc[7]      # grid type of output map
-   date         = cc[8]
-
-   if DoHMI:
-      hmi_yymm = date.split("-")
-      hmi_dd = hmi_yymm[2].split("T")
-      hmi_hh = hmi_dd[1].split(":")
-      hmi_yyyy     = int(hmi_yymm[0])
-      hmi_mm       = int(hmi_yymm[1])
-      hmi_dd       = int(hmi_dd[0])
-      hmi_hh       = int(hmi_hh[0])
-      cwd = os.getcwd()
-      time_mag = dt.datetime(hmi_yyyy, hmi_mm, hmi_dd, hmi_hh)
-      hmi_file = hmi_map(mag_time=time_mag, hmi_map='hmi.b_synoptic_small',
+   if UseBATS:
+      cc =  rmag.read_bats(args.NameFile)
+      nIndex_I     = cc[0]
+      nLong        = nIndex_I[0]
+      nLat         = nIndex_I[1]
+      nVar         = cc[1]
+      nParam       = cc[2]
+      Param_I      = cc[3]
+      Long0        = Param_I[0] # Longitude of left edge
+      LongEarth    = Param_I[1] + cc[7] # CR number plus CRFraction
+      Long_I       = cc[4]*Deg2Rad      # in radians
+      Lat_I        = cc[5]*Deg2Rad      # in radians
+      data         = cc[6]
+      if nVar ==1:
+         Br_C = data
+      else:
+         Br_C = data[:,:,0]
+      if nSmooth > 2:
+         Br_C = rmag.smooth(nLong,  nLat,  nSmooth, Br_C)
+   else:
+      # fits magnetogram is read, remapped (if required) using
+      # remap_magnetogram.py to fitsfile.out
+      cc = rmag.remap(args.NameFile, 'fitsfile.out', nlat, nlon, grid_type,
+                      i-1, nSmooth,BMax)
+      nLong        = cc[0]
+      nLat         = cc[1]
+      nParam       = cc[2]
+      Param_I      = cc[3]
+      Long0        = Param_I[0] # Longitude of left edge
+      LongEarth    = Param_I[1] # CR number of central meridian
+      Long_I       = cc[4]      # in radians
+      Lat_I        = cc[5]      # in radians
+      Br_C         = cc[6]
+      if DoHMI:
+         date         = cc[8]
+         hmi_yymm = date.split("-")
+         hmi_dd = hmi_yymm[2].split("T")
+         hmi_hh = hmi_dd[1].split(":")
+         hmi_yyyy     = int(hmi_yymm[0])
+         hmi_mm       = int(hmi_yymm[1])
+         hmi_dd       = int(hmi_dd[0])
+         hmi_hh       = int(hmi_hh[0])
+         cwd = os.getcwd()
+         time_mag = dt.datetime(hmi_yyyy, hmi_mm, hmi_dd, hmi_hh)
+         hmi_file = hmi_map(mag_time=time_mag, hmi_map='hmi.b_synoptic_small',
                          download_dir=cwd)
 
    #Info to the idl session is passed via the fitsfile.out file####
@@ -198,29 +219,29 @@ if __name__ == '__main__':
              CMESpeed,GLRadius,SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI, IsPositionInput,
-             UsePNDist, UseARArea, DoScaling, grid)
+             UsePNDist, UseARArea, DoScaling)
    ##SHAPE INPUT PARAMETERS FOR THE CONCLUDING SESSION#########
-   nLong   =    CC[0] 
-   nLat    =  CC[1] 
-   nParam  =  CC[2]
-   Param_I =  CC[3]
-   Long0     =  Param_I[0]
-   LongEarth =  Param_I[1]
-   xPositive =  Param_I[2]
-   yPositive =  Param_I[3]
-   xNegative =  Param_I[4]
-   yNegative =  Param_I[5]
-   XyARCenter_D = Param_I[6:8]
-   nPIL        = (nParam - 8)//2
-   xPIL_I      =  Param_I[8:8+nPIL]
-   yPIL_I      =  Param_I[8+nPIL:nParam]
-   Long_I      = CC[4]
-   Lat_I       = CC[5]
-   Br_C        =  CC[6]
-   PSizeMap_C  =  CC[7]
-   NSizeMap_C  =  CC[8]
-   occPos      = CC[9]
-   occNeg      = CC[10]
+   # nLong   =    CC[0] 
+   # nLat    =  CC[1] 
+   # nParam  =  CC[2]
+   # Param_I =  CC[3]
+   # Long0     =  Param_I[0]
+   # LongEarth =  Param_I[1]
+   # xPositive =  Param_I[2]
+   # yPositive =  Param_I[3]
+   # xNegative =  Param_I[4]
+   # yNegative =  Param_I[5]
+   # XyARCenter_D = Param_I[6:8]
+   # nPIL        = (nParam - 8)//2
+   # xPIL_I      =  Param_I[8:8+nPIL]
+   # yPIL_I      =  Param_I[8+nPIL:nParam]
+   # Long_I      = CC[4]
+   # Lat_I       = CC[5]
+   # Br_C        =  CC[6]
+   # PSizeMap_C  =  CC[7]
+   # NSizeMap_C  =  CC[8]
+   # occPos      = CC[9]
+   # occNeg      = CC[10]
 
    FileId=open('runidl','w')
    FileId.write(';\n;\n')
