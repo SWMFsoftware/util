@@ -176,7 +176,7 @@ contains
                90.0 - 90.0/nLat ],&
                StringHeaderIn  = 'Created from '//trim(NameHarmonicsFile), &
                NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
-               NameVarIn = 'Longitude Latitude Br BTheta BPhi Long0 CRNumber')
+               NameVarIn = 'Longitude Latitude Br BLon BLat Long0 CRNumber')
           deallocate(Magnetogram_VII)
           deallocate(Tmp_VIIIII)
           nullify(Ptr)
@@ -268,7 +268,7 @@ contains
                90.0 - 90.0/nLat ],&
                StringHeaderIn  = 'Created from '//trim(NameHarmonicsFileNew), &
                NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
-               NameVarIn = 'Longitude Latitude Br BTheta BPhi Long0 CRNumber')
+               NameVarIn = 'Longitude Latitude Br BLon BLat Long0 CRNumber')
           deallocate(Magnetogram_VII)
           deallocate(Tmp_VIIIII)
           nullify(Ptr)
