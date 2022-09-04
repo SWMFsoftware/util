@@ -195,8 +195,7 @@ if __name__ == '__main__':
       FileId=open('runidl1','w')
       FileId.write(';\n;\n')
       FileId.write(
-         "      GLSETUP1,file='"+IdlFile+"',/UseBATS,CMESpeed=%-5.1f "\
-            %CMESpeed)
+         "      GLSETUP1,file='"+IdlFile+"',/UseBATS ")
       FileId.close()
    ########SHOW MAGNETOGRAM##########################
    # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
@@ -206,15 +205,12 @@ if __name__ == '__main__':
    #################PROCESSING STDOUT################
       stdout,stderr=ls.communicate()
       b=stdout[stdout.index('===')+4:len(stdout)]
-      a=b.split() # x,y coordinates & CME speed
+      a=b.split() # x,y coordinates 
    ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
       xPositive = float(a[0])
       yPositive = float(a[1])
       xNegative = float(a[2])
       yNegative = float(a[3])
-   ###The CME speed may be set within the idl/browser session:
-      CMESpeed  = float(a[4])
-
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
    nParam  = 6
    Param_I = np.zeros(nParam)

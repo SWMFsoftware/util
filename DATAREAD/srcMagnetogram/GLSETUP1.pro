@@ -1,4 +1,4 @@
-pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
+pro GLSETUP1, FILE=FILE, UseBATS=UseBATS
 
 ;-----------------------------------------------------------------------
 ; NAME:
@@ -94,7 +94,7 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
      endelse
   endwhile
   print, '==='
-  print, xPositive,yPositive,xNegative,yNegative,CMESpeed
+  print, xPositive,yPositive,xNegative,yNegative
   !mouse.button=0
   wait,2
   wdelete,2
