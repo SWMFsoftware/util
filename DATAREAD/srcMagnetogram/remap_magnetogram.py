@@ -694,7 +694,8 @@ def read_bats(inputfile):
                 Data_I = [float(x) for x in string.split()]
                 Coord1_I[i] = Data_I[0]
                 Coord2_I[j] = Data_I[1]
-                Data_IV[j,i,:] = Data_I[2:2+nVar-1]
+                for iw in  np.arange(nVar):
+                    Data_IV[j,i,iw] = Data_I[2+iw]
 
     return(nIndex_I, nVar, nParam, Param_I, Coord1_I, Coord2_I, Data_IV, Time)
 if __name__ == '__main__':
