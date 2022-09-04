@@ -34,22 +34,22 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
            
            mag_info = {nlon:nlon,$
                        nlat:nlat,$
+                       time:time,$
                        longitude:fltarr(nlon,nlat),$
                        latitude:fltarr(nlon,nlat),$
                        br_field:fltarr(nlon,nlat),$
-                       bphi_field:fltarr(nlon,nlat),$
-                       btheta_field:fltarr(nlon,nlat),$
+                       blon_field:fltarr(nlon,nlat),$
+                       blat_field:fltarr(nlon,nlat),$
                        occPos:fltarr(nlon,nlat),$
                        occNeg:fltarr(nlon,nlat),$
                        neqpar:neqpar,$
                        eqpar:fltarr(neqpar)}
-
            mag_info.longitude = x(*,*,0)*!dtor
            mag_info.latitude  = x(*,*,1)*!dtor
            mag_info.br_field = w(*,*,0)
            mag_info.eqpar    = eqpar
-           if nw ge 2 then mag_info.bphi_field = w(*,*,1)
-           if nw ge 3 then mag_info.btheta_field = w(*,*,2)
+           if nw ge 2 then mag_info.blon_field = w(*,*,1)
+           if nw ge 3 then mag_info.blat_field = w(*,*,2)
            if nw ge 4 then mag_info.occPos = w(*,*,3)
            if nw ge 5 then mag_info.occNeg = w(*,*,4)
            
@@ -67,11 +67,12 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
            
            mag_info = {nlon:nlon,$
                        nlat:nlat,$
+                       time:time,$
                        longitude:fltarr(nlon,nlat),$
                        latitude:fltarr(nlon,nlat),$
                        br_field:fltarr(nlon,nlat),$
-                       bphi_field:fltarr(nlon,nlat),$
-                       btheta_field:fltarr(nlon,nlat),$
+                       blon_field:fltarr(nlon,nlat),$
+                       blat_field:fltarr(nlon,nlat),$
                        neqpar:neqpar,$
                        eqpar:fltarr(neqpar)}
 
@@ -87,8 +88,8 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
            btheta_field = w(icut,*,*,2)
            
            mag_info.br_field = reform(br_field[0,0:nlon-1,*])
-           mag_info.bphi_field = reform(bphi_field[0,0:nlon-1,*])
-           mag_info.btheta_field = reform(btheta_field[0,0:nlon-1,*])
+           mag_info.blon_field = reform(blon_field[0,0:nlon-1,*])
+           mag_info.blat_field = reform(blat_field[0,0:nlon-1,*])
            mag_info.longitude = reform(longitude[0,0:nlon-1,*])
            mag_info.latitude = reform(latitude[0,0:nlon-1,*])
         end
@@ -120,8 +121,8 @@ FUNCTION read_magnetogram, file, PlotRadius, UseBATS
                  longitude:fltarr(nlon,nlat),$
                  latitude:fltarr(nlon,nlat),$
                  br_field:fltarr(nlon,nlat),$
-                 bphi_field:fltarr(nlon,nlat),$
-                 btheta_field:fltarr(nlon,nlat),$
+                 blon_field:fltarr(nlon,nlat),$
+                 blat_field:fltarr(nlon,nlat),$
                  neqpar:0, eqpar:fltarr(1)}
      
     ;;;; already assumes that it is sin theta grid

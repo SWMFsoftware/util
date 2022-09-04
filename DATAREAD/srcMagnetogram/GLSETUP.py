@@ -139,7 +139,8 @@ if __name__ == '__main__':
       nParam       = cc[2]
       Param_I      = cc[3]
       Long0        = Param_I[0] # Longitude of left edge
-      LongEarth    = Param_I[1] + cc[7] # CR number plus CRFraction
+      Time         = cc[7]
+      LongEarth    = Param_I[1] + Time # CR number plus CRFraction
       Long_I       = cc[4]*Deg2Rad      # in radians
       Lat_I        = cc[5]*Deg2Rad      # in radians
       data         = cc[6]
@@ -164,6 +165,7 @@ if __name__ == '__main__':
       Long_I       = cc[4]      # in radians
       Lat_I        = cc[5]      # in radians
       Br_C         = cc[6]
+      Time         = LongEarth - int(LongEarth)
       if DoHMI:
          date         = cc[8]
          hmi_yymm = date.split("-")
@@ -231,7 +233,7 @@ if __name__ == '__main__':
              CMESpeed,GLRadius,SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI, IsPositionInput,
-             UsePNDist, UseARArea, DoScaling)
+             UsePNDist, UseARArea, DoScaling, Time)
    ##SHAPE INPUT PARAMETERS FOR THE CONCLUDING SESSION#########
    # nLong   =    CC[0] 
    # nLat    =  CC[1] 

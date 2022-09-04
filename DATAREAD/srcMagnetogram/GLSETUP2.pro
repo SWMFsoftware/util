@@ -29,8 +29,8 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
   longitude=mag_info.longitude
   latitude=mag_info.latitude
   br_field=mag_info.br_field
-  sizemap_p= mag_info.bphi_field
-  sizemap_n= mag_info.btheta_field
+  sizemap_p= mag_info.blon_field
+  sizemap_n= mag_info.blat_field
   occPos = mag_info.occPos
   occNeg = mag_info.occNeg
 
@@ -49,8 +49,8 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
   ;Read the magnetogram
   mag1_info=read_magnetogram('FRMagnetogram.out',PlotRadius,UseBATS)
   gl_bradfield = mag1_info.br_field
-  gl_blonfield = mag1_info.bphi_field
-  gl_blatfield = mag1_info.btheta_field
+  gl_blonfield = mag1_info.blon_field
+  gl_blatfield = mag1_info.blat_field
 
   br_field_show=br_field ; from AfterGlSETUP.out
   index=where(br_field lt -20)
@@ -72,8 +72,8 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
      IsPresentHMI = 1
      hmi_info = read_magnetogram('hmi_map.out',PlotRadius,UseBATS)
      hmi_Brad = hmi_info.br_field
-     hmi_Blon = hmi_info.bphi_field
-     hmi_Blat = hmi_info.btheta_field
+     hmi_Blon = hmi_info.blon_field
+     hmi_Blat = hmi_info.blat_field
      for i = 0, nPIL -1 do begin
         cp[i] = (longitude[xPIL_I(i)] * hmi_Blat[xPIL_I(i),yPIL_I(i)] - $
                  latitude[yPIL_I(i)] * hmi_Blon[xPIL_I(i),yPIL_I(i)])
@@ -97,7 +97,7 @@ pro GLSETUP2, FILE=FILE, UseBATS=UseBATS
      if eqpar[1] gt 0 then begin
         ;eqpar[1] is the Carrington coordinate of the Earth
         ;eqpar[0] is the Carrington coordinate of the left margin
-        MapLongEarth = eqpar[1]-eqpar[0]
+        MapLongEarth = 360*(1 - mag_info.time) - eqpar[0]
         ;If the left margin of the map is in the next Carrington 
         ;rotation, add 360 deg:
         if MapLongEarth lt 0 then MapLongEarth = MapLongEarth +360

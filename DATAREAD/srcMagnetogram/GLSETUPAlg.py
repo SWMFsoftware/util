@@ -113,7 +113,7 @@ def calculate_index(Y, Y_I, n):
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
         Stretch, Distance, Helicity, DoHMI, IsPositionInput, UsePNDist, 
-        UseARArea, DoScaling):
+        UseARArea, DoScaling, Time):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -557,7 +557,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
     
    FileId.write('After GLSETUP: Br[Gauss]'+'\n')
    FileId.write(
-      '       0      0.00000       2      %2d       5 \n'% nParam)
+      '       0     '+str(Time)+'     2      %2d       5 \n'% nParam)
    FileId.write('      '+str(nLong)+'     '+str(nLat)+'\n')
    FileId.write(
       ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(Long0,LongEarth,LonPosIndex,LatPosIndex,LonNegIndex,LatNegIndex,iLonAR,iLatAR))

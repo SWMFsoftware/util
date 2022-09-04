@@ -63,7 +63,7 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS, CMESpeed=CMESpeed
      if eqpar[1] gt 0 then begin
         ;eqpar[1] is the Carrington coordinate of the Earth
         ;eqpar[0] is the Carrington coordinate of the left margin
-        MapLongEarth = eqpar[1]-eqpar[0]
+        MapLongEarth = 360*(1 - mag_info.time)  - eqpar[0]
         ;If the left margin of the map is in the next Carrington 
         ;rotation, add 360 deg:
         if MapLongEarth lt 0 then MapLongEarth = MapLongEarth +360
