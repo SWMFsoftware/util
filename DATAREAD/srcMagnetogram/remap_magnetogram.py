@@ -46,7 +46,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
        by Richard Frazin, July 2014 - Feb 2015
     """
     mapdate = 0.
-    pi = 3.141592653589793
+    pi = np.pi
     if ( (out_grid != 'sin(lat)') and (out_grid != 'uniform') and \
              (out_grid != 'unspecified') ):
         print ("Unknown output grid type.  Choices are blank, 'unspecified',\
@@ -280,12 +280,16 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
             return(-1)
         print ("original flux =",str(oldflux),", new flux =",str(newflux))
     
-    #ascii output file, Gabor format, the first line is arbitary
-
-    fid = open(outputfile,'w')
+    # ascii output file, Gabor's format
+    nParam = 2
+    Param_I = np.zeros(nParam)
+    Param_I[0] = long0
+    Param_I[1] = int(CRnumber)
+    Long_I = np.linspace(0.5*360./nlong, 359.5*360./nlong, nlong)
+    # The first line is arbitary
     if (DoHMI == 0):
         if magtype == 'ADAPT Synchronic':
-            line0 = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
+            StrHeader = 'MagnetogramType = '+magtype+'; ADAPTRealization = ' \
                 +str(imdex+1)+ '; InstrumentName = '+map_data+\
                 '; InputLatGrid = '\
                 +input_grid+'; OutputLatGrid = '+out_grid+'; MagUnit = ' \
@@ -294,9 +298,9 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 +format(float(CR)+0.5-float(long0)/360.,'f')+'; InputFile = '\
                 +str(inputfile)+\
                 ';ASCIIFileCreationDate = '\
-                +time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
+                +time.strftime("%Y-%m-%dT%H:%M:%S")
         else:
-            line0 = 'MagnetogramType = '+magtype+'; InstrumentName = '\
+            StrHeader = 'MagnetogramType = '+magtype+'; InstrumentName = '\
                 +map_data+\
                 '; InputLatGrid = '+input_grid+'; OutputLatGrid = '+out_grid+\
                 '; MagUnit = '+bunit+'; InputMapResolution = '+str(nlo)+','\
@@ -305,36 +309,21 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                 format(float(CR)+0.5-float(long0)/360.,'f')+\
                 '; InputFile = "'+str(inputfile)+\
                 ';ASCIIFileCreationDate = '\
-                +time.strftime("%Y-%m-%dT%H:%M:%S")+'\n'
-        fid.write(line0)
-        line0 = '       0     '+str(CRnumber-int(CRnumber))+'      2       2       1 \n'
-        fid.write(line0)
-        fid.write('      '+str(nlong)+'     '+str(nlat)+'\n')
-        # Only adding the original longitude shift as read from the FITS file 
-        # and the CM of the CR
-        fid.write(str(long0) +'  '+str(int(CRnumber))+' \n') 
-        #longitude shift (important for GONG Hourly)
-        fid.write('Longitude Latitude Br LongitudeShift CarringtonRotation \n')
-        
-        for k in np.arange(nlat):
-            for l in np.arange(nlong):
-                if (BMax > 0.):
-                    line0 = str((l+0.5)*360./nlong) +' '+str(newlat[k])+ ' ' +\
-                        str(max([-BMax,min([BMax,newmap[k,l]])])) + ' \n'
-                else:
-                    # Phi grid is written out as cell centered 
-                    # similar to the latitude grid
-                    line0 = str((l+0.5)*360./nlong) + ' ' +str(newlat[k])+ ' '\
-                    + str(newmap[k,l]) + ' \n'                
-                fid.write(line0)
-    fid.close()
+                +time.strftime("%Y-%m-%dT%H:%M:%S")
+        NameVar = 'Longitude Latitude Br LongitudeShift CarringtonRotation'
+        if (BMax > 0.):
+            Data_C=np.zeros([nlat,nlong])
+            for k in np.arange(nlat):
+                for l in np.arange(nlong):
+                    Data_C[k,l]=max([-BMax,min([BMax,newmap[k,l]])])
+        else:
+            Data_C = newmap
+        outputfile = save_bats(outputfile,StrHeader,NameVar,[nlong, nlat],
+                               1,nParam, Param_I,Long_I,newlat,Data_C,CRnumber-int(CRnumber))
     g.close()
-    nParam = 2
-    Param_I = np.zeros(nParam)
-    Param_I[0] = long0
     Param_I[1] = CRnumber # Long Earth
     # Long and Lat in radians passed to GLSetup.py
-    Long_I = (pi/180.) * np.linspace(0.5*360./nlong, 359.5*360./nlong, nlong) 
+    Long_I = (pi/180.) * Long_I
     # in radians
     Lat_I = newlat * (pi/180.) # radians
     # Bmax = 1900
@@ -388,7 +377,7 @@ def read_hmi(nlat,nlon,mapgrid,DoHMI):
             elif(fnmatch.fnmatch(filename,'*Bp.fits')):
                 hmi_Bp=remap(filename,'hmi.out',nlat,nlon,mapgrid,0,1,-1,1)
 
-        pi = 3.141592653589793
+
         hmi_nParam = hmi_Br[2]
         hmi_ParamI = hmi_Br[3]
         hmi_LongI = hmi_Br[4] * 180./pi
@@ -698,6 +687,38 @@ def read_bats(inputfile):
                     Data_IV[j,i,iw] = Data_I[2+iw]
 
     return(nIndex_I, nVar, nParam, Param_I, Coord1_I, Coord2_I, Data_IV, Time)
+
+def save_bats(outputfile, StrHeader, NameVar, nIndex_I, nVar, nParam, Param_I,
+              Coord1_I, Coord2_I, Data_IV, Time):
+    nI = nIndex_I[0]
+    nJ = nIndex_I[1]
+    fid = open(outputfile,'w')
+    fid.write(StrHeader+'\n')
+    line0 = '       0     '+str(Time)+'      2      '
+    line0 = line0+str(nParam)+' '+str(nVar)+' \n'
+    fid.write(line0)
+    fid.write('      '+str(nI)+'     '+str(nJ)+'\n')
+    line0 =''
+    for i in np.arange(nParam):
+        line0 = line0+' '+str(Param_I[i])
+    fid.write(line0+' \n')
+    fid.write(NameVar+'\n')
+    if nVar==1:
+        for k in np.arange(nJ):
+            for l in np.arange(nI):
+                line0 = str(Coord1_I[l]) +' '+str(Coord2_I[k])+ ' '
+                line0 = line0+str(Data_IV[k,l]) + ' '
+                fid.write(line0 +' \n')
+    else:
+        for k in np.arange(nJ):
+            for l in np.arange(nI):
+                line0 = str(Coord1_I[l]) +' '+str(Coord2_I[k])+ ' '
+                for iw in np.arange(nVar):
+                    line0 = line0+str(Data_IV[k,l,iw]) + ' '
+                    fid.write(line0 +' \n')
+    fid.close()
+    return(outputfile)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter, description="""
