@@ -284,7 +284,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     nParam = 2
     Param_I = np.zeros(nParam)
     Param_I[0] = long0
-    Param_I[1] = int(CRnumber)
+    Param_I[1] = int(float(CRnumber))
     Long_I = np.linspace(0.5*360./nlong, 359.5*360./nlong, nlong)
     # The first line is arbitary
     if (DoHMI == 0):
@@ -319,7 +319,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         else:
             Data_C = newmap
         outputfile = save_bats(outputfile,StrHeader,NameVar,[nlong, nlat],
-                               1,nParam, Param_I,Long_I,newlat,Data_C,CRnumber-int(CRnumber))
+                               1,nParam, Param_I,Long_I,newlat,Data_C,float(CRnumber)-int(float(CRnumber)))
     g.close()
     Param_I[1] = CRnumber # Long Earth
     # Long and Lat in radians passed to GLSetup.py
