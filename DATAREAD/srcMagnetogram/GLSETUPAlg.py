@@ -465,7 +465,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       2*GLRadius/Distance*Rad2Deg))
    print (' Poloidal flux [1E21 Mx]: %6.2f'%(GL_poloidal))
    print ('-----------------------------------------')
-   FileId=open('CME.in','w')
+   FileId=open('CME.in','a')
    FileId.write("#CME \n")
    FileId.write("T                   UseCme \n")
    FileId.write("T                   DoAddFluxRope \n")
