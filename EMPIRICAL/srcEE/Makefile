@@ -44,6 +44,7 @@ LIBMAGNETOGRAM = ${LIBDIR}/libMAGNETOGRAM.a
 flux_rope_magnetogram.o : ${LIBSHARE} ${LIBTIMING} ${LIBMAGNETOGRAM} ${MY_LIB}
 
 FRM:	DEPEND
+	cd ${SHAREDIR}; make LIB
 	make ${BINDIR}/FRMAGNETOGRAM.exe
 
 ${BINDIR}/FRMAGNETOGRAM.exe: flux_rope_magnetogram.o
