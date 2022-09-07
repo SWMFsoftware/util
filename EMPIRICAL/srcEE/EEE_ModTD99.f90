@@ -254,7 +254,7 @@ contains
     R2 = sum(R_D**2)
     BcDotR  = sum(Bc_D*R_d)
     Z2= (BcDotR/Bc)**2
-    rPerp2  = R2 - Z2;   rPerp =  sqrt(rPerp2)
+    rPerp2  = R2 - Z2; rPerp =  sqrt(max(0.0,rPerp2))
     RPlus2 = Z2 +  (rInfty + rPerp)**2
     Poloidal_D = ( 2*BcDotR*R_D + (rInfty2 - R2)*Bc_D )/RPlus2
     Kappa2 = 4*rPerp*rInfty/RPlus2
