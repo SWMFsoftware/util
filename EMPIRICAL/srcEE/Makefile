@@ -23,25 +23,30 @@ OBJECTS = \
 	EEE_ModCms.o
 
 OBJECTS_EXE= flux_rope_magnetogram.o
+LIBSHARE  = ${LIBDIR}/libSHARE.a
+LIBMAGNETOGRAM = ${LIBDIR}/libMAGNETOGRAM.a
 
-DEPEND:
+DEPEND: ${LIBSHARE} ${LIBMAGNETOGRAM}
 	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS} ${OBJECTS_EXE}
 
-LIB:	DEPEND
+LIB:
 	make ${MY_LIB}
 	@echo
 	@echo ${MY_LIB} has been brought up to date.
 	@echo
 
-${MY_LIB}: ${OBJECTS}
+${MY_LIB}:  DEPEND ${OBJECTS}
 	rm -f ${MY_LIB}
 	${AR} ${MY_LIB} ${OBJECTS}
 
-LIBSHARE  = ${LIBDIR}/libSHARE.a
-LIBTIMING = ${LIBDIR}/libTIMING.a
-LIBMAGNETOGRAM = ${LIBDIR}/libMAGNETOGRAM.a
 
-flux_rope_magnetogram.o : ${LIBSHARE} ${LIBTIMING} ${LIBMAGNETOGRAM} ${MY_LIB}
+${LIBSHARE}:
+	cd ${SHAREDIR}; make LIB
+
+${LIBMAGNETOGRAM}:
+	cd ${MAGNETOGRAMDIR}; make LIB
+
+flux_rope_magnetogram.o : ${LIBSHARE} ${LIBMAGNETOGRAM} ${MY_LIB}
 
 FRM:	DEPEND
 	cd ${SHAREDIR}; make LIB
