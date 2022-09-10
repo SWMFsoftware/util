@@ -248,28 +248,6 @@ if __name__ == '__main__':
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI, IsPositionInput,
              UsePNDist, UseARArea, DoScaling, Time)
-   ##SHAPE INPUT PARAMETERS FOR THE CONCLUDING SESSION#########
-   # nLong   =    CC[0] 
-   # nLat    =  CC[1] 
-   # nParam  =  CC[2]
-   # Param_I =  CC[3]
-   # Long0     =  Param_I[0]
-   # LongEarth =  Param_I[1]
-   # xPositive =  Param_I[2]
-   # yPositive =  Param_I[3]
-   # xNegative =  Param_I[4]
-   # yNegative =  Param_I[5]
-   # XyARCenter_D = Param_I[6:8]
-   # nPIL        = (nParam - 8)//2
-   # xPIL_I      =  Param_I[8:8+nPIL]
-   # yPIL_I      =  Param_I[8+nPIL:nParam]
-   # Long_I      = CC[4]
-   # Lat_I       = CC[5]
-   # Br_C        =  CC[6]
-   # PSizeMap_C  =  CC[7]
-   # NSizeMap_C  =  CC[8]
-   # occPos      = CC[9]
-   # occNeg      = CC[10]
 
    FileId=open('runidl','w')
    FileId.write(';\n;\n')

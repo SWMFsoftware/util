@@ -555,7 +555,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    Param_I[8+nPIL:8+2*nPIL]=iYPIL_I
    nVar=5
    Data_IV=np.zeros([nLat,nLong,nVar])
-   NameVar='Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})\n'.format(nPIL)
+   NameVar='Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})'.format(nPIL)
    for k in np.arange(nLat):
       for l in np.arange(nLong):
          Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k,l]])])

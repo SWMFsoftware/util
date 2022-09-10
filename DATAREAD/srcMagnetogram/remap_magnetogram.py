@@ -319,7 +319,8 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         else:
             Data_C = newmap
         outputfile = save_bats(outputfile,StrHeader,NameVar,[nlong, nlat],
-                               1,nParam, Param_I,Long_I,newlat,Data_C,float(CRnumber)-int(float(CRnumber)))
+                               1,nParam, Param_I,Long_I,newlat,Data_C,
+                               float(CRnumber)-int(float(CRnumber)))
     g.close()
     Time=  CRnumber - Param_I[1] # Time since the CR starts
     # Long and Lat in radians passed to GLSetup.py
