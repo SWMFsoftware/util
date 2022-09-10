@@ -321,14 +321,14 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         outputfile = save_bats(outputfile,StrHeader,NameVar,[nlong, nlat],
                                1,nParam, Param_I,Long_I,newlat,Data_C,float(CRnumber)-int(float(CRnumber)))
     g.close()
-    Param_I[1] = CRnumber # Long Earth
+    Time=  CRnumber - Param_I[1] # Time since the CR starts
     # Long and Lat in radians passed to GLSetup.py
     Long_I = (pi/180.) * Long_I
     # in radians
     Lat_I = newlat * (pi/180.) # radians
     # Bmax = 1900
     return(nlong, nlat, nParam, Param_I, Long_I, Lat_I, newmap, out_grid, 
-           mapdate)
+           mapdate,Time)
 
 ###############CONSERVATIVE (ON SIN(THETA) UNIFORM GRID########
 def smooth(nLong, nLat, nSmooth, Br_C):
@@ -638,7 +638,7 @@ def read_bats(inputfile):
     """
     f = open(inputfile,'r')
     # Header line
-    string=f.readline()
+    StrHeader=f.readline()
     # Second line
     string=f.readline()
     array=string.split()
@@ -661,8 +661,8 @@ def read_bats(inputfile):
     Param_I=[float(x) for  x in string.split()]
     print('Param_I = '+str(Param_I))
     # Fifth line
-    string=f.readline()
-    print(string)
+    NameVar=f.readline()
+    print(NameVar)
     # Allocate data arrays
     Coord1_I = np.zeros(nIndex_I[0])
     Coord2_I = np.zeros(nIndex_I[1])
@@ -686,7 +686,7 @@ def read_bats(inputfile):
                 for iw in  np.arange(nVar):
                     Data_IV[j,i,iw] = Data_I[2+iw]
 
-    return(nIndex_I, nVar, nParam, Param_I, Coord1_I, Coord2_I, Data_IV, Time)
+    return(nIndex_I, nVar, nParam, Param_I, Coord1_I, Coord2_I, Data_IV, Time, StrHeader, NameVar)
 
 def save_bats(outputfile, StrHeader, NameVar, nIndex_I, nVar, nParam, Param_I,
               Coord1_I, Coord2_I, Data_IV, Time):
@@ -700,22 +700,22 @@ def save_bats(outputfile, StrHeader, NameVar, nIndex_I, nVar, nParam, Param_I,
     fid.write('      '+str(nI)+'     '+str(nJ)+'\n')
     line0 =''
     for i in np.arange(nParam):
-        line0 = line0+' '+str(Param_I[i])
+        line0 = line0+' {:5.1f}'.format(Param_I[i])
     fid.write(line0+' \n')
     fid.write(NameVar+'\n')
     if nVar==1:
         for k in np.arange(nJ):
             for l in np.arange(nI):
-                line0 = str(Coord1_I[l]) +' '+str(Coord2_I[k])+ ' '
-                line0 = line0+str(Data_IV[k,l]) + ' '
+                line0 = '{0:14.6f} {1:14.6f}'.format(Coord1_I[l],Coord2_I[k])
+                line0 = line0+' {:14.6e}'.format(Data_IV[k,l]) + ' '
                 fid.write(line0 +' \n')
     else:
         for k in np.arange(nJ):
             for l in np.arange(nI):
-                line0 = str(Coord1_I[l]) +' '+str(Coord2_I[k])+ ' '
+                line0 = '{0:14.6f} {1:14.6f}'.format(Coord1_I[l],Coord2_I[k])
                 for iw in np.arange(nVar):
-                    line0 = line0+str(Data_IV[k,l,iw]) + ' '
-                    fid.write(line0 +' \n')
+                    line0 = line0+' {:14.6e}'.format(Data_IV[k,l,iw])
+                fid.write(line0 +' \n')
     fid.close()
     return(outputfile)
 

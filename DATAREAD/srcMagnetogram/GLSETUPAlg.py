@@ -98,7 +98,7 @@ def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLong,Lat_I,Long_I,\
    LatCenter /= Flux  # in Radians
    # return the longitude and latitude of the weighted center in radians, 
    # area in radians^2, and the occupancy matrix for plotting
-   return(LatCenter,LonCenter,occ,Area) 
+   return(LatCenter,LonCenter,occ,Area)
 
 def calculate_index(Y, Y_I, n):
    # Calculate the index from an interpolated array
@@ -553,27 +553,19 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
                    LatNegIndex,iLonAR,iLatAR]
    Param_I[8:8+nPIL]=iXPIL_I
    Param_I[8+nPIL:8+2*nPIL]=iYPIL_I
-   FileId = open('AfterGLSETUP.out','w')
-    
-   FileId.write('After GLSETUP: Br[Gauss]'+'\n')
-   FileId.write(
-      '       0     '+str(Time)+'     2      %2d       5 \n'% nParam)
-   FileId.write('      '+str(nLong)+'     '+str(nLat)+'\n')
-   FileId.write(
-      ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(Long0,LongEarth,LonPosIndex,LatPosIndex,LonNegIndex,LatNegIndex,iLonAR,iLatAR))
-   for j in iXPIL_I:
-      FileId.write(' %4.0f'%float(j))
-   for j in iYPIL_I:
-      FileId.write(' %4.0f'%float(j))
-   FileId.write('\n')
-   FileId.write(
-      'Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})\n'.format(nPIL))
-   
+   nVar=5
+   Data_IV=np.zeros([nLat,nLong,nVar])
+   NameVar='Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})\n'.format(nPIL)
    for k in np.arange(nLat):
       for l in np.arange(nLong):
-         FileId.write("{0:6.1f} {1:6.1f} {2:14.6e} {3:14.6e} {4:14.6e} {5:3.1f} {6:3.1f}\n".format((180./cPi)*Long_I[l],(180./cPi)*Lat_I[k],max([-BMax,min([BMax,Br_C[k,l]])]),PSizeMap_C[k,l],NSizeMap_C[k,l], occPos[k,l], occNeg[k,l]))
-    
-   FileId.close()
+         Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k,l]])])
+         Data_IV[k,l,1]=PSizeMap_C[k,l]
+         Data_IV[k,l,2]=NSizeMap_C[k,l]
+         Data_IV[k,l,3]=occPos[k,l]
+         Data_IV[k,l,4]=occNeg[k,l]
+   FinalFile=rmag.save_bats('AfterGLSETUP.out', 'After GLSETUP: Br[Gauss]', 
+                            NameVar, [nLong,nLat], nVar, nParam, Param_I,
+                            Rad2Deg*Long_I,Rad2Deg*Lat_I, Data_IV, Time)
 
    return(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C,occPos,occNeg)
 

@@ -140,7 +140,7 @@ if __name__ == '__main__':
       Param_I      = cc[3]
       Long0        = Param_I[0] # Longitude of left edge
       Time         = cc[7]
-      LongEarth    = Param_I[1] + Time # CR number plus CRFraction
+      LongEarth    = Param_I[1]         # CR number
       Long_I       = cc[4]*Deg2Rad      # in radians
       Lat_I        = cc[5]*Deg2Rad      # in radians
       data         = cc[6]
@@ -150,7 +150,16 @@ if __name__ == '__main__':
          Br_C = data[:,:,0]
       if nSmooth > 2:
          Br_C = rmag.smooth(nLong,  nLat,  nSmooth, Br_C)
-      IdlFile = NameFile
+         StrHeader = cc[8]
+         NameVar   = cc[9]
+         if nVar==1:
+            data = Br_C
+         else:
+            data[:,:,0] = Br_C
+         IdlFile = rmag.save_bats('Smoothed.out',StrHeader, NameVar, [nLong,nLat], nVar, nParam, Param_I,
+                                  Long_I*Rad2Deg, Lat_I*Rad2Deg, data, Time)
+      else:
+         IdlFile = NameFile
    else:
       # fits magnetogram is read, remapped (if required) using
       # remap_magnetogram.py to fitsfile.out
@@ -165,7 +174,7 @@ if __name__ == '__main__':
       Long_I       = cc[4]      # in radians
       Lat_I        = cc[5]      # in radians
       Br_C         = cc[6]
-      Time         = LongEarth - int(LongEarth)
+      Time         = cc[9]
       if DoHMI:
          date         = cc[8]
          hmi_yymm = date.split("-")
@@ -204,7 +213,7 @@ if __name__ == '__main__':
       FileId=open('runidl1','w')
       FileId.write(';\n;\n')
       FileId.write(
-         "      GLSETUP1,file='"+IdlFile+"',/UseBATS ")
+         "      GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
    ########SHOW MAGNETOGRAM##########################
    # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)

@@ -1,4 +1,4 @@
-pro GLSETUP1, FILE=FILE, UseBATS=UseBATS
+pro GLSETUP1, FILE=FILE
 
 ;-----------------------------------------------------------------------
 ; NAME:
@@ -22,9 +22,8 @@ pro GLSETUP1, FILE=FILE, UseBATS=UseBATS
   device,decomposed=0
   !p.font=1
   PlotRadius =1.
-
 ;Read the magnetogram (fitsfile.out in BATSRUS format)
-  mag_info=read_magnetogram(file,PlotRadius,UseBATS)
+  mag_info=read_magnetogram(file,PlotRadius,1)
   nlat=mag_info.nlat
   nlon=mag_info.nlon
   longitude=mag_info.longitude
