@@ -29,13 +29,13 @@ LIBMAGNETOGRAM = ${LIBDIR}/libMAGNETOGRAM.a
 DEPEND: ${LIBSHARE} ${LIBMAGNETOGRAM}
 	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS} ${OBJECTS_EXE}
 
-LIB:
+LIB:	DEPEND
 	make ${MY_LIB}
 	@echo
 	@echo ${MY_LIB} has been brought up to date.
 	@echo
 
-${MY_LIB}:  DEPEND ${OBJECTS}
+${MY_LIB}: ${OBJECTS}
 	rm -f ${MY_LIB}
 	${AR} ${MY_LIB} ${OBJECTS}
 
