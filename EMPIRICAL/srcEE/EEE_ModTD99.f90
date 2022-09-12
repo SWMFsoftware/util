@@ -642,13 +642,12 @@ contains
          LongitudeCme, LatitudeCme, BAmbientApexSi_D
     use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
     use ModFieldGS, ONLY: BStrap_D
-    real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi, bQStrapping
+    real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi
 
     ! Rotational matrix of coordinate transformation:
     real :: Rotate_DD(3,3)
 
     ! MISC
-    real::qIncorrrect, qCorrect, bQStrapFactorNew
     character(len=*), parameter:: NameSub = 'init_TD99_parameters'
     !--------------------------------------------------------------------------
     Rtube = Rtube*Io2No_V(UnitX_)
@@ -823,7 +822,7 @@ contains
        ! Invert formula:
        ! bQStrapFraction*bQStrapping = 2*q*qDistance &
        !     *(qDistance**2+Rtube**2)**(-1.5)
-       q = bQStrapFraction*bQStrapping*(qDistance**2 + Rtube**2)**1.50/&
+       q = bQStrapFraction*bStrapping*(qDistance**2 + Rtube**2)**1.50/&
             (2*qDistance)
        if(iProc==0)then
           write(*,'(a)') prefix//&
