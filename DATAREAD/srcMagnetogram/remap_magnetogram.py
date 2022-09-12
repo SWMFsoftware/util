@@ -649,9 +649,9 @@ def read_bats(inputfile):
         exit()
     Time = float(array[1])
     print('Time = '+str(Time))
-    nParam = int(array[3])
+    nParam = int(float(array[3]))
     print('nParam = '+str(nParam))
-    nVar = int(array[4])
+    nVar = int(float(array[4]))
     print('nVar = '+str(nVar))
     # Third line
     string=f.readline()
@@ -696,7 +696,7 @@ def save_bats(outputfile, StrHeader, NameVar, nIndex_I, nVar, nParam, Param_I,
     fid = open(outputfile,'w')
     fid.write(StrHeader+'\n')
     line0 = '       0     '+str(Time)+'      2      '
-    line0 = line0+str(nParam)+' '+str(nVar)+' \n'
+    line0 = line0+' '+str(nParam)+' '+str(nVar)+' \n'
     fid.write(line0)
     fid.write('      '+str(nI)+'     '+str(nJ)+'\n')
     line0 =''
