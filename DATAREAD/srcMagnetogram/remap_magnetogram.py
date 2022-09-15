@@ -322,7 +322,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
                                1,nParam, Param_I,Long_I,newlat,Data_C,
                                float(CRnumber)-int(float(CRnumber)))
     g.close()
-    Time=  CRnumber - Param_I[1] # Time since the CR starts
+    Time=  float(CRnumber) - Param_I[1] # Time since the CR starts
     # Long and Lat in radians passed to GLSetup.py
     Long_I = (pi/180.) * Long_I
     # in radians
