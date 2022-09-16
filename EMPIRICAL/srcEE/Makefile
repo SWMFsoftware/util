@@ -56,7 +56,7 @@ FRM:	DEPEND
 ${BINDIR}/FRMAGNETOGRAM.exe: flux_rope_magnetogram.o
 	${LINK.f90} -o ${BINDIR}/FRMAGNETOGRAM.exe \
 		flux_rope_magnetogram.o \
-		-L${LIBDIR} -lSHARE -lEMPIRICALEE -lMAGNETOGRAM ${Lflag}
+		-L${LIBDIR} -lEMPIRICALEE -lMAGNETOGRAM -lSHARE ${Lflag}
 
 #######################################################################
 # Setting BLESS=YES or Y will copy the solution into the reference solution
