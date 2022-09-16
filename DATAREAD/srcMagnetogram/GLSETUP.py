@@ -115,7 +115,7 @@ if __name__ == '__main__':
        and xNegative !=999.):
       IsPositionInput = 1
       print('User input the x,y positions for Positive and Negative centers')
-      print('Input Weighted centers :',xPositive,yPositive,xNegative,yNegative)
+      print('Input centers :',xPositive,yPositive,xNegative,yNegative)
    else:
       IsPositionInput = 0
    
@@ -156,7 +156,8 @@ if __name__ == '__main__':
             data = Br_C
          else:
             data[:,:,0] = Br_C
-         IdlFile = rmag.save_bats('Smoothed.out',StrHeader, NameVar, [nLong,nLat], nVar, nParam, Param_I,
+         IdlFile = rmag.save_bats('Smoothed.out',StrHeader, NameVar,
+                                  [nLong,nLat], nVar, nParam, Param_I,
                                   Long_I*Rad2Deg, Lat_I*Rad2Deg, data, Time)
       else:
          IdlFile = NameFile
@@ -215,38 +216,50 @@ if __name__ == '__main__':
       FileId.write(
          "      GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
-   ########SHOW MAGNETOGRAM##########################
-   # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
-   # reads the cursor x,y indices for neg and pos. AR.
+      ########SHOW MAGNETOGRAM##########################
+      # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
+      # reads the cursor x,y indices for neg and pos. AR.
       ls = subprocess.Popen(["idl", "runidl1"],stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,text=True)
-   #################PROCESSING STDOUT################
+      #################PROCESSING STDOUT################
       stdout,stderr=ls.communicate()
       b=stdout[stdout.index('===')+4:len(stdout)]
       a=b.split() # x,y coordinates 
-   ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
+      ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
+       # In this case, the round of these values are in fact indexes
       xPositive = float(a[0])
       yPositive = float(a[1])
       xNegative = float(a[2])
       yNegative = float(a[3])
+     
+   else:
+      # The input locations are in degrees
+      print ("\n User input  Lon/Lat for Positive and negative spots:")
+      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
+            xPositive, yPositive,xNegative, yNegative))
+      # Convert coordinates in degrees to grid indexes
+      xPositive = GL.calculate_index(xPositive*Deg2Rad,Long_I,nLong)
+      yPositive = GL.calculate_index(yPositive*Deg2Rad,Lat_I, nLat)
+      xNegative = GL.calculate_index(xNegative*Deg2Rad,Long_I,nLong)
+      yNegative = GL.calculate_index(yNegative*Deg2Rad,Lat_I, nLat)
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
    nParam  = 6
    Param_I = np.zeros(nParam)
    Param_I[0] = Long0
    Param_I[1] = LongEarth
    # Below the x,y positions are equal to location of clicks OR 
-   # the location of weighted centers as input by the user, IsPositionInput =1
+   # the assumed locations of the spot centers as input by the user.
    # These are passed to GLSETUPALg.py and weighted centers are calculated
-   Param_I[2] = xPositive
-   Param_I[3] = yPositive
-   Param_I[4] = xNegative
-   Param_I[5] = yNegative
+   Param_I[2] = float(xPositive)
+   Param_I[3] = float(yPositive)
+   Param_I[4] = float(xNegative)
+   Param_I[5] = float(yNegative)
 
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
    CC=GL.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,
              CMESpeed,GLRadius,SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
-             Stretch, Distance, Helicity, DoHMI, IsPositionInput,
+             Stretch, Distance, Helicity, DoHMI,
              UsePNDist, UseARArea, DoScaling, Time)
 
    FileId=open('runidl','w')

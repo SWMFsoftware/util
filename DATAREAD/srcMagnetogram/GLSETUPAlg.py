@@ -26,8 +26,8 @@ def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLong,Lat_I,Long_I,\
                            IsUniformLat):
    LonIndex = round_my(X)
    LatIndex = round_my(Y)
-   print('\n Chosen Longitude, Latitude =',Long_I[LonIndex]*Rad2Deg,
-         Lat_I[LatIndex]*Rad2Deg)
+   print("\n Chosen Longitude = {0:7.3f}, Latitude= {1:7.3f} [deg]".format(
+      Long_I[LonIndex]*Rad2Deg,Lat_I[LatIndex]*Rad2Deg))
    #Occcupancy matrix
    occ = np.zeros([nLat,nLong])
    occ[LatIndex,LonIndex] = 1
@@ -112,10 +112,12 @@ def calculate_index(Y, Y_I, n):
 
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
-        Stretch, Distance, Helicity, DoHMI, IsPositionInput, UsePNDist, 
+        Stretch, Distance, Helicity, DoHMI, UsePNDist, 
         UseARArea, DoScaling, Time):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
+   # Pass the x, y indices of the clicks to calculate weighted center
+   # and their indices
    xPositive = Param_I[2]
    yPositive = Param_I[3]
    xNegative = Param_I[4]
@@ -133,18 +135,6 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    if Stretch == -1 :
       Stretch  = 0.6   #standard parameter
    
-   # Pass the x, y indices of the clicks to calculate weighted center
-   # and their indices
-
-   if IsPositionInput == 1:
-      print ("\n User input  Lon/Lat for Positive and negative spots:")
-      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f}".format(
-            xPositive, yPositive,xNegative, yNegative))
-      xPositive = calculate_index(xPositive*Deg2Rad,Long_I,nLong)
-      yPositive = calculate_index(yPositive*Deg2Rad,Lat_I, nLat)
-      xNegative = calculate_index(xNegative*Deg2Rad,Long_I,nLong)
-      yNegative = calculate_index(yNegative*Deg2Rad,Lat_I, nLat)
-
    # get weighted centers(Lon,Lat), occupancy matrix, Area of AR for
    # positive and negative regions
    [LatPos,LonPos,occPos,AreaPos] = \
