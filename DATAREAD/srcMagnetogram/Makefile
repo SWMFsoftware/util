@@ -123,7 +123,8 @@ OBJECTS_HARMONICS= \
 	ModMagHarmonics.o \
 	ModReadMagnetogram.o
 
-harmonics.o: ModReadMagnetogram.o ModMagHarmonics.o
+ModMagHarmonics.o: ModReadMagnetogram.o 
+harmonics.o: ModMagHarmonics.o
 
 ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
