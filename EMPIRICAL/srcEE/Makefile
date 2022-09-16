@@ -75,12 +75,13 @@ test_td22_check:
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_fields.out test_fields.ref > test_td22.diff)
 
-test_td22:
-	@echo test_td22 starting     >  test_td22.diff
+test_td22: DEPEND
+	@echo "test_td22_compile..." >  test_td22.diff
 	@make test_td22_exe	     >> test_td22.diff
-	@echo ./test_td22.exe        >> test_td22.diff
+	@echo "test_td22_run..."     >> test_td22.diff
 	-@(rm -f test_fields.out)
-	-@(./test_td22.exe > test_td22.diff)
+	-@(./test_td22.exe           >> test_td22.diff)
+	@echo "test_td22_check..."   >> test_td22.diff
 	-@(make test_td22_check)
 	@ls -l test_td22.diff
 #######################################################################
