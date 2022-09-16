@@ -111,13 +111,6 @@ if __name__ == '__main__':
             ' Default is using Active Region area to estimate GLRadius.')
       UseARArea = True
   
-   if (xPositive !=999. and yPositive !=999. and yNegative !=999.
-       and xNegative !=999.):
-      IsPositionInput = 1
-      print('User input the x,y positions for Positive and Negative centers')
-      print('Input centers :',xPositive,yPositive,xNegative,yNegative)
-   else:
-      IsPositionInput = 0
    
    # setting ouput grid if remapping is required
    grid_type = 'unspecified' # assumes the grid of the map
@@ -207,7 +200,8 @@ if __name__ == '__main__':
       CMESpeed = float(raw_input(
             'Please Input the Observed CME Speed (km/s): '))
 
-   if IsPositionInput == 0:
+   if (xPositive ==999. or yPositive ==999. or yNegative ==999.
+       or xNegative ==999.):
       print('Select the CME Source Region (POSITIVE) with the left button')
       print('Then select negative region with the right button')
 
@@ -226,12 +220,11 @@ if __name__ == '__main__':
       b=stdout[stdout.index('===')+4:len(stdout)]
       a=b.split() # x,y coordinates 
       ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
-       # In this case, the round of these values are in fact indexes
+       # In this case, these values once rounded are grid indexes
       xPositive = float(a[0])
       yPositive = float(a[1])
       xNegative = float(a[2])
       yNegative = float(a[3])
-     
    else:
       # The input locations are in degrees
       print ("\n User input  Lon/Lat for Positive and negative spots:")
