@@ -1,4 +1,5 @@
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan,
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 include ../../../Makefile.def
@@ -47,6 +48,8 @@ ${LIBMAGNETOGRAM}:
 	cd ${MAGNETOGRAMDIR}; make LIB
 
 flux_rope_magnetogram.o : ${LIBSHARE} ${LIBMAGNETOGRAM} ${MY_LIB}
+
+.NOTPARALLEL:
 
 FRM:	DEPEND
 	cd ${SHAREDIR}; make LIB
