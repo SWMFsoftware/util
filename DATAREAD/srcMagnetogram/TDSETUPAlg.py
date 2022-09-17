@@ -87,6 +87,12 @@ def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLon,Lat_I,Lon_I,\
       SizeMap_C[iLat,iLon]=Br_C[iLat,iLon]
    LonCenter /= Flux  # in Radians
    LatCenter /= Flux  # in Radians
+   if BrThreshold > 0. :
+      print("\n Flux from the positive spot={:6.2f} [Gs*Rs**2]".format(
+         Flux))
+   else:
+      print("\n Flux from the negative spot={:6.2f} [Gs*Rs**2]".format(
+         Flux))
    # return the longitude and latitude of the weighted center in radians, 
    # area in radians^2, and the occupancy matrix for plotting
    return(LatCenter,LonCenter,SizeMap_C,Flux, LatOcc, LonOcc)
@@ -219,7 +225,7 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
       '\n Negative Weighted Center indexes (lon,lat) =',
       LonNegIndex, LatNegIndex)
    print(
-      '\n Negative Weighted Center Lon={0:6.2f}, Lat={1:6.2f}=[deg]'.format(
+      '\n Negative Weighted Center Lon={0:6.2f}, Lat={1:6.2f} [deg]'.format(
          LonNeg*Rad2Deg,LatNeg*Rad2Deg))
 
    [LonAR,LatAR,Orientation,HalfDist] = TwoPointsOnSph(
