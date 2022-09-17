@@ -143,17 +143,18 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    LonPosIndex = calculate_index(LonPos,Long_I,nLong)
    LatPosIndex = calculate_index(LatPos,Lat_I, nLat)
 
-   print('\n Positive Weighted Center (lon,lat) =',\
-            LonPos*Rad2Deg, LatPos*Rad2Deg)
+   print(
+      '\n Positive Weighted Center Lon={0:6.2f}, Lat={1:6.2f} [deg]'.format(
+         LonPos*Rad2Deg, LatPos*Rad2Deg))
 
    [LatNeg,LonNeg,occNeg,AreaNeg] = \
        get_weighted_center(xNegative,yNegative,Br_C,-20.,\
                               nLat,nLong,Lat_I,Long_I,IsUniformLat)
    LonNegIndex = calculate_index(LonNeg,Long_I,nLong)
    LatNegIndex = calculate_index(LatNeg,Lat_I, nLat)
-
-   print('\n Negative Weighted Center (lon,lat) =',\
-            LonNeg*Rad2Deg,LatNeg*Rad2Deg)
+   print(
+      '\n Negative Weighted Center Lon={0:6.2f}, Lat={1:6.2f} [deg]'.format(
+         LonNeg*Rad2Deg,LatNeg*Rad2Deg))
 
    PointN_I=[LonNeg,LatNeg] # negative spot
    PointP_I=[LonPos,LatPos] # positive spot

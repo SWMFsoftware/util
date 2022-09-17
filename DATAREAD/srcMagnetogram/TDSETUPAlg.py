@@ -149,7 +149,7 @@ def TwoPointsOnSph(Lon1, Lat1, Lon2, Lat2):
     return(Lon,Lat,Orientation,HalfDist)
    
 def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, 
-        Helicity, IsPositionInput, Time):
+        Helicity, Time):
    Lon0     = Param_I[0]
    LonEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -179,15 +179,6 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    # Pass the x, y indices of the clicks to calculate weighted center
    # and their indices
 
-   if IsPositionInput == 1:
-      print ("\n User input  Lon/Lat for Positive and negative spots:")
-      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f}".format(
-            xPositive, yPositive,xNegative, yNegative))
-      xPositive = GL.calculate_index(xPositive*Deg2Rad,Lon_I,nLon)
-      yPositive = GL.calculate_index(yPositive*Deg2Rad,Lat_I, nLat)
-      xNegative = GL.calculate_index(xNegative*Deg2Rad,Lon_I,nLon)
-      yNegative = GL.calculate_index(yNegative*Deg2Rad,Lat_I, nLat)
-
    # get weighted centers(Lon,Lat), occupancy matrix, Area of AR for
    # positive and negative regions
    [LatPos,LonPos,PSizeMap_C,FluxP, LatP_I, LonP_I] = \
@@ -206,8 +197,9 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    LatPosIndex = GL.calculate_index(LatPos,Lat_I, nLat)
    print('\n Positive Weighted Center indexes (lon,lat) =',\
           LonPosIndex, LatPosIndex)
-   print('\n Positive Weighted Center (lon,lat) =',\
-            LonPos*Rad2Deg, LatPos*Rad2Deg)
+   print(
+      '\n Positive Weighted Center Lon={0:6.2f}, Lat={1:6.2f} [deg]'.format(
+         LonPos*Rad2Deg, LatPos*Rad2Deg))
 
    [LatNeg,LonNeg, NSizeMap_C,FluxN, LatN_I, LonN_I] = \
        get_weighted_center(xNegative,yNegative,Br_C,-20.,\
@@ -223,10 +215,12 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    
    LonNegIndex = GL.calculate_index(LonNeg,Lon_I,nLon)
    LatNegIndex = GL.calculate_index(LatNeg,Lat_I, nLat)
-   print('\n Negative Weighted Center indexes (lon,lat) =',\
-          LonNegIndex, LatNegIndex)
-   print('\n Negative Weighted Center (lon,lat) =',\
-            LonNeg*Rad2Deg,LatNeg*Rad2Deg)
+   print(
+      '\n Negative Weighted Center indexes (lon,lat) =',
+      LonNegIndex, LatNegIndex)
+   print(
+      '\n Negative Weighted Center Lon={0:6.2f}, Lat={1:6.2f}=[deg]'.format(
+         LonNeg*Rad2Deg,LatNeg*Rad2Deg))
 
    [LonAR,LatAR,Orientation,HalfDist] = TwoPointsOnSph(
       LonPos,LatPos,LonNeg,LatNeg)
@@ -234,7 +228,6 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
          LonAR*Rad2Deg, LatAR*Rad2Deg))
    print ("TD_Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
          Orientation*Rad2Deg, HalfDist*1.4))
-   exit()
    # Rectangular box  for active region
    LonARMin=min([LonNMin,LonPMin])
    LonARMin=max([LonARMin-2,0])
