@@ -105,9 +105,9 @@ def calculate_index(Y, Y_I, n):
    # Y   - lon/lat for which index in the lon/lat array needs to be calculated
    # Y_I - lon/lat array
    # n   - resolution of lon/lat array
-   X_I = np.linspace(0, n, n)  # array of data indices
-   Index = np.interp(Y, Y_I, X_I) # index of Y
-   Index = round_my(Index)
+   X_I = np.linspace(0, n-1, n)  # array of data indices
+   RealIndex = np.interp(Y, Y_I, X_I) # interpolated real value of index
+   Index = round_my(RealIndex)
    return(Index)
 
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
