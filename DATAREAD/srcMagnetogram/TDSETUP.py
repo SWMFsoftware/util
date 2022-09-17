@@ -8,6 +8,7 @@ import remap_magnetogram as rmag
 import numpy as np
 import argparse
 import TDSETUPAlg as TD
+import GLSETUPAlg as GL
 
 
 BMax = 1900.0
@@ -40,11 +41,12 @@ if __name__ == '__main__':
    UseCMEGrid  = args.CMEGrid
    nSmooth     = args.nSmooth
    Helicity    = args.Helicity
-   xPositive   = args.LonPosIn
-   yPositive   = args.LatPosIn
-   xNegative   = args.LonNegIn
-   yNegative   = args.LatNegIn
-
+   LonPosIn   = args.LonPosIn
+   LatPosIn   = args.LatPosIn
+   LonNegIn   = args.LonNegIn
+   LatNegIn   = args.LatNegIn
+   nLon = -1
+   nLat = -1
    IdlFile = 'fitsfile.out'
    UseBATS = False
    # Check if the file extension is .out
@@ -53,14 +55,6 @@ if __name__ == '__main__':
       print('\n File name '+NameFile+
             ' has extension .out, is treated as ASCII converted file')
       UseBATS = True
-  
-   if (xPositive !=999. and yPositive !=999. and yNegative !=999.
-       and xNegative !=999.):
-      IsPositionInput = 1
-      print('User input the x,y positions for Positive and Negative centers')
-      print('Input Weighted centers :',xPositive,yPositive,xNegative,yNegative)
-   else:
-      IsPositionInput = 0
    
    ##################END OF PARSER#####################
    #################SERVER SIDE, PYTHON################
@@ -69,15 +63,15 @@ if __name__ == '__main__':
    if UseBATS:
       cc =  rmag.read_bats(NameFile)
       nIndex_I     = cc[0]
-      nLong        = nIndex_I[0]
+      nLon        = nIndex_I[0]
       nLat         = nIndex_I[1]
       nVar         = cc[1]
       nParam       = cc[2]
       Param_I      = cc[3]
-      Long0        = Param_I[0] # Longitude of left edge
+      Lon0        = Param_I[0] # Longitude of left edge
       Time         = cc[7]
-      LongEarth    = Param_I[1]         # CR number
-      Long_I       = cc[4]*Deg2Rad      # in radians
+      LonEarth    = Param_I[1]         # CR number
+      Lon_I       = cc[4]*Deg2Rad      # in radians
       Lat_I        = cc[5]*Deg2Rad      # in radians
       data         = cc[6]
       if nVar ==1:
@@ -85,29 +79,30 @@ if __name__ == '__main__':
       else:
          Br_C = data[:,:,0]
       if nSmooth > 2:
-         Br_C = rmag.smooth(nLong,  nLat,  nSmooth, Br_C)
+         Br_C = rmag.smooth(nLon,  nLat,  nSmooth, Br_C)
          StrHeader = cc[8]
          NameVar   = cc[9]
          if nVar==1:
             data = Br_C
          else:
             data[:,:,0] = Br_C
-         IdlFile = rmag.save_bats('Smoothed.out',StrHeader, NameVar, [nLong,nLat], nVar, nParam, Param_I,
-                                  Long_I*Rad2Deg, Lat_I*Rad2Deg, data, Time)
+         IdlFile = rmag.save_bats('Smoothed.out',StrHeader, NameVar,
+                                  [nLon,nLat], nVar, nParam, Param_I,
+                                  Lon_I*Rad2Deg, Lat_I*Rad2Deg, data, Time)
       else:
          IdlFile = NameFile
    else:
       # fits magnetogram is read, remapped (if required) using
       # remap_magnetogram.py to fitsfile.out
-      cc = rmag.remap(NameFile, IdlFile, nlat, nlon, 'unspecified',
+      cc = rmag.remap(NameFile, IdlFile, nLat, nLon, 'unspecified',
                       0, nSmooth,BMax)
-      nLong        = cc[0]
+      nLon        = cc[0]
       nLat         = cc[1]
       nParam       = cc[2]
       Param_I      = cc[3]
-      Long0        = Param_I[0] # Longitude of left edge
-      LongEarth    = Param_I[1] # CR number of central meridian
-      Long_I       = cc[4]      # in radians
+      Lon0        = Param_I[0] # Longitude of left edge
+      LonEarth    = Param_I[1] # CR number of central meridian
+      Lon_I       = cc[4]      # in radians
       Lat_I        = cc[5]      # in radians
       Br_C         = cc[6]
       Time         = cc[9]
@@ -125,46 +120,56 @@ if __name__ == '__main__':
    ############END OF PYTHON FIRST SESSION##########
    ###IDL SESSION IN THE SWMF_GLSETUP/BROWSER SESSION IN EEGGL##
 
-   if IsPositionInput == 0:
+   if (LonPosIn ==999. or LatPosIn ==999. or LonNegIn ==999.
+       or LatNegIn ==999.):
       print('Select the CME Source Region (POSITIVE) with the left button')
       print('Then select negative region with the right button')
 
       FileId=open('runidl1','w')
       FileId.write(';\n;\n')
       FileId.write(
-         "      GLSETUP1,file='"+IdlFile+"' \n")
+         "      GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
-   ########SHOW MAGNETOGRAM##########################
-   # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
-   # reads the cursor x,y indices for neg and pos. AR.
+      ########SHOW MAGNETOGRAM##########################
+      # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
+      # reads the cursor x,y indices for neg and pos. AR.
       ls = subprocess.Popen(["idl", "runidl1"],stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,text=True)
-   #################PROCESSING STDOUT################
+      #################PROCESSING STDOUT################
       stdout,stderr=ls.communicate()
       b=stdout[stdout.index('===')+4:len(stdout)]
       a=b.split() # x,y coordinates 
-   ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
-      xPositive = float(a[0])
-      yPositive = float(a[1])
-      xNegative = float(a[2])
-      yNegative = float(a[3])
+      ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
+      LonPos = float(a[0])
+      LatPos = float(a[1])
+      LonNeg = float(a[2])
+      LatNeg = float(a[3])
+   else:
+      # The input locations are in degrees
+      print ("\n User input  Lon/Lat for Positive and negative spots:")
+      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
+            LonPosIn, LatPosIn,LonNegIn, LatNegIn))
+      # Convert coordinates in degrees to grid indexes
+      LonPos = GL.calculate_index(LonPosIn*Deg2Rad,Lon_I,nLon)
+      LatPos = GL.calculate_index(LatPosIn*Deg2Rad,Lat_I, nLat)
+      LonNeg = GL.calculate_index(LonNegIn*Deg2Rad,Lon_I,nLon)
+      LatNeg = GL.calculate_index(LatNegIn*Deg2Rad,Lat_I, nLat)
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
    nParam  = 6
    Param_I = np.zeros(nParam)
-   Param_I[0] = Long0
-   Param_I[1] = LongEarth
+   Param_I[0] = Lon0
+   Param_I[1] = LonEarth
    # Below the x,y positions are equal to location of clicks OR 
-   # the location of weighted centers as input by the user, IsPositionInput =1
-   # These are passed to TDSETUPALg.py and weighted centers are calculated
-   Param_I[2] = xPositive
-   Param_I[3] = yPositive
-   Param_I[4] = xNegative
-   Param_I[5] = yNegative
+   # the assumed locations of the spot centers as input by the user.
+   # These are passed to GLSETUPALg.py and weighted centers are calculated
+   Param_I[2] = float(LonPos)
+   Param_I[3] = float(LatPos)
+   Param_I[4] = float(LonNeg)
+   Param_I[5] = float(LatNeg)
 
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
-   CC=TD.Alg(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,UseCMEGrid,
-             Helicity, IsPositionInput,Time)
-   exit()
+   CC=TD.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,UseCMEGrid,
+             Helicity, Time)
    FileId=open('runidl','w')
    FileId.write(';\n;\n')
    FileId.write("GLSETUP2, file='AfterGLSETUP.out',/UseBATS \n")
