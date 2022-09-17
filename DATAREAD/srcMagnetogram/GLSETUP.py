@@ -79,8 +79,8 @@ if __name__ == '__main__':
    SizeFactor  = args.SizeFactor
    GLRadiusRange_I = args.GLRadiusRange
    UseCMEGrid  = args.CMEGrid
-   nlat        = args.nlat
-   nlon        = args.nlon
+   nLat        = args.nlat
+   nLon        = args.nlon
    i           = args.index
    nSmooth     = args.nSmooth
    Orientation = args.Orientation
@@ -157,7 +157,7 @@ if __name__ == '__main__':
    else:
       # fits magnetogram is read, remapped (if required) using
       # remap_magnetogram.py to fitsfile.out
-      cc = rmag.remap(NameFile, IdlFile, nlat, nlon, grid_type,
+      cc = rmag.remap(NameFile, IdlFile, nLat, nLon, grid_type,
                       i-1, nSmooth,BMax)
       nLon        = cc[0]
       nLat         = cc[1]
@@ -197,11 +197,11 @@ if __name__ == '__main__':
    ###IDL SESSION IN THE SWMF_GLSETUP/BROWSER SESSION IN EEGGL##
 
    if CMESpeed<= 0.0: 
-      CMESpeed = float(raw_input(
-            'Please Input the Observed CME Speed (km/s): '))
-
-   if (LonPosIn ==999. or LatPosIn ==999. or LatNegIn ==999.
-       or LonNegIn ==999.):
+      print("\n Please Input the Observed CME Speed (km/s). For example: ")
+      print("\n python3 GLSETUP.py fitsfile.fits -CMESpeed 600 ")
+      exit()
+   if (LonPosIn ==999. or LatPosIn ==999. or LonNegIn ==999.
+       or LatNegIn ==999.):
       print('Select the CME Source Region (POSITIVE) with the left button')
       print('Then select negative region with the right button')
 
