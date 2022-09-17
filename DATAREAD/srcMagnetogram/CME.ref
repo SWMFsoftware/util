@@ -1,11 +1,12 @@
+
 #CME 
 T                   UseCme 
 T                   DoAddFluxRope 
 337.50              LongitudeCme 
-24.00               LatitudeCme 
+23.30               LatitudeCme 
 167.31              OrientationCme 
 GL                  TypeCme 
-1.09                BStrength 
+0.94                BStrength 
 -1                  iHelicity 
 0.55                Radius 
 0.60                aStretch 
@@ -14,7 +15,7 @@ GL                  TypeCme
 #END 
 
 Angular Size            = 35.02
-Poloidal flux [1E21 Mx] =  0.54
+Poloidal flux [1E21 Mx] =  0.46
 Average HMI field components along PIL :
 Helicity: 
 Input Helicity                     : 0.00
