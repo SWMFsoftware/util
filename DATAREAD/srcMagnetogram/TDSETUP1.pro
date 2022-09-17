@@ -33,7 +33,12 @@ pro TDSETUP1, FILE=FILE
   sizemap_n= mag_info.blat_field
   neqpar =mag_info.neqpar
   eqpar  =mag_info.eqpar
-
+  xPositive = eqpar[2]
+  yPositive = eqpar[3]
+  xNegative = eqpar[4]
+  yNegative = eqpar[5]
+  xCenter   = eqpar[6]
+  yCenter   = eqpar[7]
 ;Display the magnetogram and let user interactively select the CME source region. The
 ;procedure to select is:
 ; 1. Click the CME source region of positive polarity with 'left' button of mouse
@@ -50,7 +55,7 @@ pro TDSETUP1, FILE=FILE
   br_field_show[index]=-20
   index=where(br_field gt 20)
   br_field_show[index]=20
-  window,2,xs=1200,ys=1200
+  window,2,xs=1200,ys=1200,xpos=400,ypos=400
   loadct,0
   contour,br_field_show,min=-20,max=20,charsize=3,$
           title='SWMF Input Magnetogram (R ='$
@@ -58,6 +63,10 @@ pro TDSETUP1, FILE=FILE
           ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
   
   loadct,39
+  plots,xPositive,yPositive,/data,psym=-2,color=250
+  plots,xNegative,yNegative,/data,psym=-2,color=100
+;plot center of the flux rope 
+  plots,xCenter,yCenter,/data,psym=-2,color=150
   ; Showing positive and negative spots
   contour,sizemap_p,/overplot,c_color=100
   contour,abs(sizemap_n),/overplot,c_color=200

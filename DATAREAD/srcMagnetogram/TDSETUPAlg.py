@@ -228,12 +228,39 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
       '\n Negative Weighted Center Lon={0:6.2f}, Lat={1:6.2f} [deg]'.format(
          LonNeg*Rad2Deg,LatNeg*Rad2Deg))
 
-   [LonAR,LatAR,Orientation,HalfDist] = TwoPointsOnSph(
+   [LonAR,LatAR,OrientationAR,HalfDist] = TwoPointsOnSph(
       LonPos,LatPos,LonNeg,LatNeg)
-   print ("TD_Longitude: {0:5.2f} TD_Latitude:{1:5.2f}".format(
+   # Major radius estimated from the distance between the spot centers
+   RadiusAR = HalfDist*1.4
+   print ("Mid point: Longitude: {0:5.2f} Latitude:{1:5.2f}".format(
          LonAR*Rad2Deg, LatAR*Rad2Deg))
-   print ("TD_Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
-         Orientation*Rad2Deg, HalfDist*1.4))
+   print ("Mid point: Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
+         OrientationAR*Rad2Deg, RadiusAR))
+
+   # Find center of the active region as the point on the line
+   # connecting the positive and negative center at which the MF is minimal
+   # (i.e as intersection of this with PIL,
+   # herewith PIL=Polarity Inversion Line
+   nProfile = max([abs(LonPosIndex - LonNegIndex),
+                   abs(LatPosIndex - LatNegIndex)]) + 1
+   BTmp = BMax + 1.0
+   for i in np.arange(nProfile):
+      LonProfile = LonPos+(
+         LonNeg - LonPos)*i/(nProfile - 1)
+      LatProfile = LatPos+(
+         LatNeg - LatPos)*i/(nProfile - 1)
+      IndexLon = GL.calculate_index(LonProfile,Lon_I,nLon)
+      IndexLat = GL.calculate_index(LatProfile,Lat_I,nLat)
+      AbsBr = abs(Br_C[IndexLat,IndexLon])
+      if (AbsBr < BTmp):
+         BTmp = AbsBr
+         iLonAR =IndexLon
+         iLatAR =IndexLat
+   LonAR  = Lon_I[iLonAR]  # in radians
+   LatAR  = Lat_I[iLatAR]  # in radians
+   print (
+      "Center for Active region: Lon={0:4.1f}, Lat={1:4.1f} [deg]:".format(
+         LonAR*Rad2Deg,LatAR*Rad2Deg))
    # Rectangular box  for active region
    LonARMin=min([LonNMin,LonPMin])
    LonARMin=max([LonARMin-2,0])
@@ -268,15 +295,14 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
          Dist2Min =max([min(Dist2N_I), min(Dist2P_I)])
          if Dist2Min<1.5*Ds2_C[k,l]:
             Dist2Min_C[k-LatARMin,l-LonARMin]=Ds2_C[k,l]/Dist2Min
-   # [LatPIL_I,LonPIL_I]=np.where(Dist2Min_C>0)
-   # nSizePIL=LatPIL_I.size
-   # print('Total number of PIL points=',nSizePIL)
-   nParam = 2
-   Param_I = np.zeros(nParam)
-   Param_I = [Lon0, LonEarth]
+
+   nParam = 8
+   Param_I = np.array(
+      [Lon0+LonARMin, LonEarth, LonPosIndex-LonARMin,LatPosIndex-LatARMin,
+       LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,iLatAR-LatARMin])
    nVar=4
    Data_IV=np.zeros([nLatShort,nLonShort,nVar])
-   NameVar='Longitude Latitude Br MapP MapN  PIL PIL Lon0 LonEarth'
+   NameVar='Longitude Latitude Br MapP MapN  PIL PIL Lon0 LonEarth xP yP xN yN xC yC'
    for k in np.arange(nLatShort):
       for l in np.arange(nLonShort):
          Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
@@ -310,37 +336,6 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    xNegative = float(a[2])
    yNegative = float(a[3])
    exit()
-   PointN_I=[LonNeg,LatNeg] # negative spot
-   PointP_I=[LonPos,LatPos] # positive spot
-
-   # Find center of the active region as the point on the line
-   # connecting the positive and negative center at which the MF is minimal
-   # (i.e as intersection of this with PIL,
-   # herewith PIL=Polarity Inversion Line
-   nProfile = max([GL.round_my(abs(LonPos - LonNeg)*Rad2Deg),
-                   GL.round_my(abs(LatPos-LatNeg)*Rad2Deg)]) + 1
-   LonProfile_C = np.zeros(nProfile)
-   LatProfile_C = np.zeros(nProfile)
-   BTmp = BMax + 1.0
-   for i in np.arange(nProfile):
-      LonProfile = LonPos+(
-         LonNeg - LonPos)*i/(nProfile - 1)
-      LonProfile_C[i] = LonProfile
-      LatProfile = LatPos+(
-         LatNeg - LatPos)*i/(nProfile - 1)
-      LatProfile_C[i] = LatProfile
-      IndexLon = GL.calculate_index(LonProfile,Lon_I,nLon)
-      IndexLat = GL.calculate_index(LatProfile,Lat_I, nLat)
-      AbsBr = abs(Br_C[IndexLat,IndexLon])
-      if (AbsBr < BTmp):
-         BTmp = AbsBr
-         IndexARCenter_D = [IndexLon,IndexLat]
-   iLonAR = IndexARCenter_D[0]
-   iLatAR = IndexARCenter_D[1]
-   LonAR  = Lon_I[iLonAR]  # in radians
-   LatAR  =  Lat_I[iLatAR]  # in radians
-   print ("Center for Active region(Lon,Lat in deg):" )
-   print ("{0:4.1f} {1:4.1f}".format(LonAR*Rad2Deg,LatAR*Rad2Deg))
    GL_Latitude  = LatAR * Rad2Deg
    GL_Longitude = LonAR * Rad2Deg
    if Lon0>0:
@@ -349,6 +344,8 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
          GL_Longitude-=360
    print ("GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
          GL_Longitude, GL_Latitude))
+   PointN_I=[LonNeg,LatNeg] # negative spot
+   PointP_I=[LonPos,LatPos] # positive spot
 
    AngularDistance = GL.get_angular_dist(PointN_I,PointP_I)
 
@@ -464,7 +461,8 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
       '       0     '+str(Time)+'     2      %2d       3 \n'% nParam)
    FileId.write('      '+str(nLon)+'     '+str(nLat)+'\n')
    FileId.write(
-      ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(Lon0,LonEarth,LonPosIndex,LatPosIndex,LonNegIndex,LatNegIndex,iLonAR,iLatAR))
+      ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(
+         Lon0,LonEarth,LonPosIndex,LatPosIndex,LonNegIndex,LatNegIndex,iLonAR,iLatAR))
 
    FileId.write('\n')
    FileId.write(
