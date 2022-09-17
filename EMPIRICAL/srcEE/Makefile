@@ -72,7 +72,7 @@ test_td22.o: test_td22.f90 ${LIBSHARE} ${MY_LIB}
 
 test_td22_exe: test_td22.o
 	${LINK.f90} -o test_td22.exe test_td22.o \
-		-L${LIBDIR} -lSHARE -lEMPIRICALEE ${Lflag}
+		-L${LIBDIR} -lEMPIRICALEE -lSHARE ${Lflag}
 
 test_td22_check:
 	-@(${DIFFNUM} -b -r=1e-7 \
