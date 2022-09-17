@@ -24,13 +24,17 @@ OBJECTS = \
 	EEE_ModCms.o
 
 OBJECTS_EXE= flux_rope_magnetogram.o
-LIBSHARE  = ${LIBDIR}/libSHARE.a
-LIBMAGNETOGRAM = ${LIBDIR}/libMAGNETOGRAM.a
 
-DEPEND: ${LIBSHARE} ${LIBMAGNETOGRAM}
+DEPEND:
 	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS} ${OBJECTS_EXE}
 
-LIB:	DEPEND
+LIBSHARE:
+	cd ${SHAREDIR}; make LIB
+
+LIBMAGNETOGRAM: LIBSHARE
+	cd ${MAGNETOGRAMDIR}; make LIB
+
+LIB:	DEPEND LIBMAGNETOGRAM
 	make ${MY_LIB}
 	@echo
 	@echo ${MY_LIB} has been brought up to date.
@@ -40,20 +44,9 @@ ${MY_LIB}: ${OBJECTS}
 	rm -f ${MY_LIB}
 	${AR} ${MY_LIB} ${OBJECTS}
 
-
-${LIBSHARE}:
-	cd ${SHAREDIR}; make LIB
-
-${LIBMAGNETOGRAM}:
-	cd ${MAGNETOGRAMDIR}; make LIB
-
-flux_rope_magnetogram.o : ${LIBSHARE} ${LIBMAGNETOGRAM} ${MY_LIB}
-
 .NOTPARALLEL:
 
-FRM:	DEPEND
-	cd ${SHAREDIR}; make LIB
-	cd ${MAGNETOGRAMDIR}; make LIB
+FRM:	LIB
 	make ${BINDIR}/FRMAGNETOGRAM.exe
 
 ${BINDIR}/FRMAGNETOGRAM.exe: flux_rope_magnetogram.o
@@ -67,8 +60,9 @@ BLESS=NO
 
 DIFFNUM = ${SCRIPTDIR}/DiffNum.pl -BLESS=${BLESS}
 
-test_td22.o: test_td22.f90 ${LIBSHARE} ${MY_LIB}
-	${COMPILE.f90} ${Cflag0} test_td22.f90
+# This should be in Makefile.RULES if needed
+#test_td22.o: test_td22.f90
+#	${COMPILE.f90} ${Cflag0} test_td22.f90
 
 test_td22_exe: test_td22.o
 	${LINK.f90} -o test_td22.exe test_td22.o \
@@ -78,7 +72,7 @@ test_td22_check:
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_fields.out test_fields.ref > test_td22.diff)
 
-test_td22: DEPEND
+test_td22: LIB
 	@echo "test_td22_compile..." >  test_td22.diff
 	@make test_td22_exe	     >> test_td22.diff
 	@echo "test_td22_run..."     >> test_td22.diff
