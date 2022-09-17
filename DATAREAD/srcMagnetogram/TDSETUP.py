@@ -25,8 +25,6 @@ if __name__ == '__main__':
                        'If nSmooth is ODD integer larger than 1, apply boxcar smoothing on the magnetic field')
    parser.add_argument('--CMEGrid',action='store_true', help=
                        'Output parameters of the refined CME grid')
-   parser.add_argument('-Helicity',type=int,default=0, help=
-                       'Use specified helicity')
    parser.add_argument('-LonPosIn',type=float,default=999.0, help=
                        'Longitude for positive spot center (Deg)')
    parser.add_argument('-LatPosIn',type=float,default=999.0, help=
@@ -40,7 +38,6 @@ if __name__ == '__main__':
    NameFile    = args.NameFile
    UseCMEGrid  = args.CMEGrid
    nSmooth     = args.nSmooth
-   Helicity    = args.Helicity
    LonPosIn   = args.LonPosIn
    LatPosIn   = args.LatPosIn
    LonNegIn   = args.LonNegIn
@@ -168,17 +165,10 @@ if __name__ == '__main__':
    Param_I[5] = float(LatNeg)
 
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
-   CC=TD.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,UseCMEGrid,
-             Helicity, Time)
-   FileId=open('runidl','w')
-   FileId.write(';\n;\n')
-   FileId.write("GLSETUP2, file='AfterGLSETUP.out',/UseBATS \n")
-   FileId.close()
-   ###FINAL SESSION: SHOW MAGNETOGRAM AND BIPOLAR STRUCTURE OF AR
-   subprocess.call(['idl','runidl'])
+   CC=TD.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,UseCMEGrid,Time)
    ###IF THE MASTER SCRIPT IS IN PYTHON, AND A CHILD PROCESS IS IN IDL
    #(1) THE TIME OF IDL SESSION SHOULD BE LIMITED (30 seconds or so) 
    #(2) WINDOWS SHOULD BE CLOSED 
    #(3) FINAL EXIT COMMAND MUST BE PRESENT IN THE IDL SCRIPT######
-   #print 'GLSETUP Session is closed. Bye!!!'
+   #print 'TDSETUP Session is closed. Bye!!!'
 ##############################################

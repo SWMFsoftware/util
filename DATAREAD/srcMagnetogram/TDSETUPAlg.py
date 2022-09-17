@@ -154,8 +154,7 @@ def TwoPointsOnSph(Lon1, Lat1, Lon2, Lat2):
 
     return(Lon,Lat,Orientation,HalfDist)
    
-def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, 
-        Helicity, Time):
+def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
    Lon0     = Param_I[0]
    LonEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -302,7 +301,7 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
        LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,iLatAR-LatARMin])
    nVar=4
    Data_IV=np.zeros([nLatShort,nLonShort,nVar])
-   NameVar='Longitude Latitude Br MapP MapN  PIL PIL Lon0 LonEarth xP yP xN yN xC yC'
+   NameVar='Longitude Latitude Br MapP MapN PIL Lon0 LonEarth xP yP xN yN xC yC'
    for k in np.arange(nLatShort):
       for l in np.arange(nLonShort):
          Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
@@ -366,18 +365,6 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    else:
       grid_type = 'sin(lat)'
 
-   if Helicity != 0 : # helicity input by user
-      iHelicity = Helicity
-      print('Using user input helicity = ', Helicity)
-   else:
-      # based on hemisphere
-      iHelicity = 1
-      if GL_Latitude > 0: 
-         iHelicity = -1
-      print('Helicity based on hemisphere: ',iHelicity)
-
-      iHelicity = -1
-      Depth=0
    #Recommended GL flux rope parameters
    ### TEMPORARY !!!!!
    AngularDistance = 0.2
@@ -418,26 +405,10 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    print (' Poloidal flux: negative: %6.2f'%(FluxN))
    FileId.close() 
 
-   if UseCMEGrid:
-      #Calculate the CME grid refinement parameters based on the flux rope
-      #location and size.                                                
+   #if UseCMEGrid:
+   #   #Calculate the CME grid refinement parameters based on the flux rope
+   #   #location and size.                                                
       
-      print ('==========================================')
-      print ('The Recommended Grid Refinement Parameters')
-      print ('==========================================')
-      print ('              R_Start: %6.2f'% (CMEbox_Start[0]))
-      print ('                R_End: %6.2f'% (CMEbox_End[0]))
-      print ('      Longitude_Start: %6.2f'% ( CMEbox_Start[1]))
-      print ('        Longitude_End: %6.2f'% ( CMEbox_End[1]))
-      print ('       Latitude_Start: %6.2f'% ( CMEbox_Start[2]))
-      print ('         Latitude_End: %6.2f'% ( CMEbox_End[2]))
-      print ('-----------------------------------------')
-      FileId=open('CME_AMR.in','w')
-      FileId.write("#AMRREGION \n")
-      FileId.write("CMEbox              NameRegion \n")
-      FileId.write(" \n")
-      FileId.write("#END \n")
-      FileId.close()
    #For comparison, make magnetogram of a flux rope field
    FileId=open('RunFRM','w')
    FileId.write('%-3d \n'%Lon0)
@@ -449,30 +420,4 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    FileId=open('RunFRM','r')
    subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
    FileId.close()
-   
-   nParam = 8
-   Param_I = np.zeros(nParam)
-   Param_I[0:8] = [Lon0,LonEarth,LonPosIndex,LatPosIndex,LonNegIndex,
-                   LatNegIndex,iLonAR,iLatAR]
-   FileId = open('AfterGLSETUP.out','w')
-    
-   FileId.write('After GLSETUP: Br[Gauss]'+'\n')
-   FileId.write(
-      '       0     '+str(Time)+'     2      %2d       3 \n'% nParam)
-   FileId.write('      '+str(nLon)+'     '+str(nLat)+'\n')
-   FileId.write(
-      ' {0:5.1f} {1:5.1f} {2:5.1f} {3:5.1f} {4:5.1f} {5:5.1f} {6:5.1f} {7:5.1f}'.format(
-         Lon0,LonEarth,LonPosIndex,LatPosIndex,LonNegIndex,LatNegIndex,iLonAR,iLatAR))
-
-   FileId.write('\n')
-   FileId.write(
-      'Longitude Latitude Br PMap NMap Lon0 LonEarth xP yP xN yN xC yC \n')
-   
-   for k in np.arange(nLat):
-      for l in np.arange(nLon):
-         FileId.write("{0:6.1f} {1:6.1f} {2:14.6e} {3:14.6e} {4:14.6e} \n".format((180./cPi)*Lon_I[l],(180./cPi)*Lat_I[k],max([-BMax,min([BMax,Br_C[k,l]])]),PSizeMap_C[k,l],NSizeMap_C[k,l]))
-    
-   FileId.close()
-
    return(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C)
-
