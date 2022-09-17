@@ -206,9 +206,8 @@ if __name__ == '__main__':
       print('Then select negative region with the right button')
 
       FileId=open('runidl1','w')
-      FileId.write(';\n;\n')
-      FileId.write(
-         "      GLSETUP1,file='"+IdlFile+"' ")
+      FileId.write('.r GLSETUP1\n')
+      FileId.write("GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
       ########SHOW MAGNETOGRAM##########################
       # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
@@ -256,7 +255,7 @@ if __name__ == '__main__':
              UsePNDist, UseARArea, DoScaling, Time)
 
    FileId=open('runidl','w')
-   FileId.write(';\n;\n')
+   FileId.write('.r GLSETUP2\n')
    FileId.write("GLSETUP2, file='AfterGLSETUP.out',/UseBATS \n")
    FileId.close()
    ###FINAL SESSION: SHOW MAGNETOGRAM AND BIPOLAR STRUCTURE OF AR
