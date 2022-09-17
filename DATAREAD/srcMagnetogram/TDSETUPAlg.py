@@ -270,13 +270,13 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid,
    Param_I = [Lon0, LonEarth]
    nVar=4
    Data_IV=np.zeros([nLatShort,nLonShort,nVar])
-   NameVar='Longitude Latitude Br PIL MapP MapN Lon0 LonEarth'
+   NameVar='Longitude Latitude Br MapP MapN  PIL PIL Lon0 LonEarth'
    for k in np.arange(nLatShort):
       for l in np.arange(nLonShort):
          Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
-         Data_IV[k,l,1]=Dist2Min_C[k,l]
-         Data_IV[k,l,2]=PSizeMap_C[k+LatARMin,l+LonARMin]
-         Data_IV[k,l,3]=NSizeMap_C[k+LatARMin,l+LonARMin]
+         Data_IV[k,l,1]=PSizeMap_C[k+LatARMin,l+LonARMin]
+         Data_IV[k,l,2]=NSizeMap_C[k+LatARMin,l+LonARMin]
+         Data_IV[k,l,3]=Dist2Min_C[k,l]
    FinalFile=rmag.save_bats('AfterGLSETUP.out', 'After GLSETUP: Br[Gauss]', 
                             NameVar, [nLonShort,nLatShort], nVar, nParam,
                             Param_I, Rad2Deg*Lon_I[LonARMin:LonARMax+1],

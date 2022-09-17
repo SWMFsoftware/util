@@ -29,6 +29,8 @@ pro TDSETUP1, FILE=FILE
   longitude=mag_info.longitude
   latitude=mag_info.latitude
   br_field=mag_info.br_field
+  sizemap_p= mag_info.blon_field
+  sizemap_n= mag_info.blat_field
   neqpar =mag_info.neqpar
   eqpar  =mag_info.eqpar
 
@@ -48,8 +50,7 @@ pro TDSETUP1, FILE=FILE
   br_field_show[index]=-20
   index=where(br_field gt 20)
   br_field_show[index]=20
-
-  window,2,xs=1200,ys=1200.*float(nlat)/float(nlon)
+  window,2,xs=1200,ys=1200
   loadct,0
   contour,br_field_show,min=-20,max=20,charsize=3,$
           title='SWMF Input Magnetogram (R ='$
@@ -57,6 +58,9 @@ pro TDSETUP1, FILE=FILE
           ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
   
   loadct,39
+  ; Showing positive and negative spots
+  contour,sizemap_p,/overplot,c_color=100
+  contour,abs(sizemap_n),/overplot,c_color=200
   !MOUSE.button = 0
   while(!MOUSE.button ne 1) do begin
      cursor,xPositive,yPositive,/data,/down
