@@ -59,8 +59,8 @@ contains
          KappaPrime2In) + CurrentE
     Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,    &
          KappaPrime2In=KappaPrime2In)
-    Amplitude_I(Toroidal_) = sqrt(Q2*&
-         (ToroidQ0AtU0 - Kappa3*toroid_q(0,KappaPrime2In=KappaPrime2In) )   )
+    Amplitude_I(Toroidal_) = sqrt(Q2*max(&
+         (ToroidQ0AtU0 - Kappa3*toroid_q(0,KappaPrime2In=KappaPrime2In)),0.0))
   end subroutine get_amplitude_int
   !============================================================================
 end module ModUniformCurrentFilament
