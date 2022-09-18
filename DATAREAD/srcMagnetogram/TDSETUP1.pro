@@ -11,11 +11,9 @@ pro TDSETUP1, FILE=FILE
 ; Mouse with left and right button
 ;
 ;
-; KEYWORDS: 
+; KEYWORD: 
 ;
-;   FILE = input magnetogram file (can be FITS or SWMF format).
-;   UseBATS = if set, will read BATS-R-US format (2D or 3D). Default
-;             will read FITS format.
+;   FILE = input zoomed magnetogram file 
 
 ;Setup the color mode and a better IDL font.
 
