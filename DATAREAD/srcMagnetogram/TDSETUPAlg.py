@@ -180,7 +180,7 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
       for k in np.arange(nLat):
          for l in np.arange(nLon):
             DsLat_C[k,l] = dSinLat/np.cos(Lat_I[k])
-            Ds2_C[k,l]   = DsLat_I[k,l]**2 + (np.cos(Lat_I[k])*dLon)**2
+            Ds2_C[k,l]   = DsLat_C[k,l]**2 + (np.cos(Lat_I[k])*dLon)**2
    # Pass the x, y indices of the clicks to calculate weighted center
    # and their indices
 
