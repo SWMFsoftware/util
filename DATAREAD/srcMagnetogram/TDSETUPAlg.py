@@ -229,12 +229,16 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
 
    [LonAR,LatAR,OrientationAR,HalfDist] = TwoPointsOnSph(
       LonPos,LatPos,LonNeg,LatNeg)
+   # Angles are converted to degrees:
+   LonAR *=Rad2Deg
+   LatAR *=Rad2Deg
+   OrientationAR *=Rad2Deg
    # Major radius estimated from the distance between the spot centers
    RadiusAR = HalfDist*1.4
-   print ("Mid point: Longitude: {0:5.2f} Latitude:{1:5.2f}".format(
-         LonAR*Rad2Deg, LatAR*Rad2Deg))
-   print ("Mid point: Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
-         OrientationAR*Rad2Deg, RadiusAR))
+   print ("Mid point: Longitude: {0:5.2f} Latitude:{1:5.2f} [deg]".format(
+         LonAR, LatAR))
+   print ("Orientation: {0:5.2f} [deg] Major Radius: {1:5.2f}".format(
+         OrientationAR, RadiusAR))
 
    # Find center of the active region as the point on the line
    # connecting the positive and negative center at which the MF is minimal
@@ -255,11 +259,11 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
          BTmp = AbsBr
          iLonAR =IndexLon
          iLatAR =IndexLat
-   LonAR  = Lon_I[iLonAR]  # in radians
-   LatAR  = Lat_I[iLatAR]  # in radians
+   LonAR  = Lon_I[iLonAR]*Rad2Deg  # in deg
+   LatAR  = Lat_I[iLatAR]*Rad2Deg  # in deg
    print (
       "Center for Active region: Lon={0:4.1f}, Lat={1:4.1f} [deg]:".format(
-         LonAR*Rad2Deg,LatAR*Rad2Deg))
+         LonAR,LatAR))
    # Rectangular box  for active region
    LonARMin=min([LonNMin,LonPMin])
    LonARMin=max([LonARMin-2,0])
@@ -298,7 +302,8 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
    nParam = 8
    Param_I = np.array(
       [Lon0+LonARMin, LonEarth, LonPosIndex-LonARMin,LatPosIndex-LatARMin,
-       LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,iLatAR-LatARMin])
+       LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,
+       iLatAR-LatARMin])
    nVar=4
    Data_IV=np.zeros([nLatShort,nLonShort,nVar])
    NameVar='Longitude Latitude Br MapP MapN PIL Lon0 LonEarth xP yP xN yN xC yC'
@@ -312,8 +317,8 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
                             NameVar, [nLonShort,nLatShort], nVar, nParam,
                             Param_I, Rad2Deg*Lon_I[LonARMin:LonARMax+1],
                             Rad2Deg*Lat_I[LatARMin:LatARMax+1], Data_IV, Time)
-   print('Select the CME Source Region (POSITIVE) with the left button')
-   print('Then select negative region with the right button')
+   print('Select the location for positive footpoint with the left button')
+   print('Then select negative  with the right button')
 
    FileId=open('runidl2','w')
    FileId.write(';\n;\n')
@@ -329,52 +334,86 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
    stdout,stderr=ls.communicate()
    b=stdout[stdout.index('===')+4:len(stdout)]
    a=b.split() # x,y coordinates 
-   ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
-   xPositive = float(a[0])
-   yPositive = float(a[1])
-   xNegative = float(a[2])
-   yNegative = float(a[3])
-   exit()
-   GL_Latitude  = LatAR * Rad2Deg
-   GL_Longitude = LonAR * Rad2Deg
-   if Lon0>0:
-      GL_Longitude +=Lon0
-      if GL_Longitude>=360:
-         GL_Longitude-=360
-   print ("GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
-         GL_Longitude, GL_Latitude))
-   PointN_I=[LonNeg,LatNeg] # negative spot
-   PointP_I=[LonPos,LatPos] # positive spot
-
-   AngularDistance = GL.get_angular_dist(PointN_I,PointP_I)
-
-
-   # GL_Orientation calculation
-   # Calculate the GL flux rope orientation from the two weighted points.
-   #r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex] - incorrect
-   r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
-   r1[0] *= np.cos(LonAR)
-   r1 /= np.sqrt(r1[0]**2+r1[1]**2)
-   r2=[1.0,0.0]
-   GL_Orientation=np.arccos(r1[0]*r2[0]+r1[1]*r2[1])*Rad2Deg
-   if r1[1] < 0:
-      # If sine of Orientation is negative
-      GL_Orientation=360-GL_Orientation  
-   if IsUniformLat :
-      grid_type = 'uniform'
+   ###### TAKE COORDINATES OF THE FR FOOTPOINTS #######
+   LonFPPos = Lon_I[GL.round_my(float(a[0])) + LonARMin]   # in radian
+   LatFPPos = Lat_I[GL.round_my(float(a[1])) + LatARMin]   # in radian
+   print(
+      "Positive footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
+         LonFPPos*Rad2Deg, LatFPPos*Rad2Deg))
+   LonFPNeg = Lon_I[GL.round_my(float(a[2])) + LonARMin]   # in radian
+   LatFPNeg = Lat_I[GL.round_my(float(a[3])) + LatARMin]   # in radian
+   print(
+      "Negative footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
+         LonFPNeg*Rad2Deg, LatFPNeg*Rad2Deg))
+   [LonFP,LatFP,OrientationFP,HalfDist] = TwoPointsOnSph(
+      LonFPPos,LatFPPos,LonFPNeg,LatFPNeg)
+   # Major radius estimated from the distance between the footpoints
+   RadiusFP = HalfDist
+   # Angles are converted to degrees:
+   LonFP *=Rad2Deg
+   LatFP *=Rad2Deg
+   OrientationFP *=Rad2Deg
+   print ("Filament center: Longitude: {0:5.2f} Latitude:{1:5.2f}".format(
+         LonFP, LatFP))
+   print ("Filament: Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
+         OrientationFP, RadiusFP))
+   # Now we need both to correct OrientationFP by +/- 90 deg depending on
+   # polarity, since Orientation has to determines the angle of x-axis for
+   # the coordinate system, in which the direction from positive to negative
+   # footpoints is parallel or antiparallel to y-axis
+   if OrientationAR < 180.0:
+      if(OrientationAR<OrientationFP and OrientationFP<OrientationAR+180):
+         iHelicity  = 1
+         OrientationFP  -=90
+         if(OrientationFP<0):
+            OreintationFP +=360
+      else:
+         iHelicity = -1
+         OrientationFP +=90
+         if(OrientationFP>360):
+            OrientationFP -=360
    else:
-      grid_type = 'sin(lat)'
+      if(OrientationAR-180<OrientationFP and OrientationFP<OrientationAR):
+         iHelicity = -1
+         OrientationFP +=90
+         if(OrientationFP>360):
+            OreintationFP -=360
+      else:
+         iHelicity  = 1
+         OrientationFP  -=90
+         if(OrientationFP<0):
+            OrientationFP +=360
+   print("Corrected FP orientation: {:6.2f}".format(OrientationFP),
+         " Helicity=",iHelicity)
+   if RadiusAR > RadiusFP:
+      TDLongitude = LonAR
+      TDLatitude  = LatAR
+      TDOrientation = OrientationAR
+      TDRadius    = RadiusAR
+      TDDepth     = 0.0
+      PointN_I=[LonNeg,LatNeg] # negative spot
+      PointP_I=[LonPos,LatPos] # positive spot
+      AngularDistance = GL.get_angular_dist(PointN_I,PointP_I)
+   else:
+      TDLongitude = LonFP
+      TDLatitude  = LatFP
+      TDOrientation = OrientationFP
+      TDRadius    = RadiusFP
+      TDDepth     = HalfDist**2/(1 + np.sqrt(1 - HalfDist**2))
+      AngularDistance = 2*math.asin(HalfDist)
+   if Lon0>0:
+      TDLongitude +=Lon0
+      if TDLongitude>=360:
+         TDLongitude-=360
 
-   #Recommended GL flux rope parameters
-   ### TEMPORARY !!!!!
-   AngularDistance = 0.2
+   #Recommended TD flux rope parameters
    print ('========================================')
-   print ('The Recommended GL FLux Rope Parameters')
+   print ('The Recommended TD FLux Rope Parameters')
    print ('========================================')
    print ('#CME')
-   print ('                Latitude: %6.2f'%(GL_Latitude))
-   print ('               Longitude: %6.2f'%(GL_Longitude))
-   print ('             Orientation: %6.2f'%(GL_Orientation))
+   print ('               Longitude: %6.2f'%(TDLongitude))
+   print ('                Latitude: %6.2f'%(TDLatitude))
+   print ('             Orientation: %6.2f'%(TDOrientation))
    print ('      Angular size [deg]: %6.2f'%(AngularDistance*Rad2Deg))
    print (' Poloidal flux: positive: %6.2f'%(FluxP))
    print (' Poloidal flux: negative: %6.2f'%(FluxN))
@@ -382,27 +421,27 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
    FileId=open('CME.in','a')
    FileId.write("#CME \n")
    FileId.write("T                   UseCme \n")
-   FileId.write("T                   DoAddFluxRope \n")
-   FileId.write("%-10.2f          LongitudeCme \n"% GL_Longitude)
-   FileId.write("%-10.2f          LatitudeCme \n"% GL_Latitude)
-   FileId.write("%-10.2f          OrientationCme \n"% GL_Orientation)
+   FileId.write("F                   DoAddFluxRope \n")
+   FileId.write("%-10.2f          LongitudeCme \n"% TDLongitude)
+   FileId.write("%-10.2f          LatitudeCme \n"% TDLatitude)
+   FileId.write("%-10.2f          OrientationCme \n"% TDOrientation)
    FileId.write("TD22                  TypeCme \n")
    FileId.write("%-+d                  iHelicity \n"% iHelicity)
-   FileId.write("%-10.2f	  RadiusMajor \n"%(AngularDistance))
-   FileId.write("%-10.2f	  RadiusMinor \n"%(0.35*AngularDistance))
-   FileId.write("%-10.2f	  Depth \n"%Depth)
+   FileId.write("%-10.2f	  RadiusMajor \n"%(TDRadius))
+   FileId.write("%-10.2f	  RadiusMinor \n"%(0.35*TDRadius))
+   FileId.write("%-10.2f	  Depth \n"%TDDepth)
    FileId.write("1.0e-3                 PlasmaBeta \n")
    FileId.write("5.0e5                 EjectaTemperature \n")
    FileId.write("readbstrap            TypeBStrap \n")
-   FileId.write("5.0                 BStrappingDim \n")
+   FileId.write("0.0                 bStrappingDim \n")
    FileId.write("none            TypeCharge \n")
    FileId.write(" \n")
    FileId.write("#END \n")
    FileId.write("\n")
    FileId.write("Angular Size            = %5.2f\n"%(AngularDistance
                                                      *Rad2Deg))
-   print (' Poloidal flux: positive: %6.2f'%(FluxP))
-   print (' Poloidal flux: negative: %6.2f'%(FluxN))
+   FileId.write(" Poloidal flux: positive: %6.2f"%(FluxP))
+   FileId.write(" Poloidal flux: negative: %6.2f"%(FluxN))
    FileId.close() 
 
    #if UseCMEGrid:
@@ -415,7 +454,7 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
    if IsUniformLat :
       FileId.write('uniform latitude \n')
    else:
-       FileId.write('sin(latitude) \n')
+      FileId.write('sin(latitude) \n')
    FileId.close()
    FileId=open('RunFRM','r')
    subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
