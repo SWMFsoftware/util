@@ -71,7 +71,7 @@ program magnetogram
   end do READPARAM
   iUnit  = io_unit_new()
   open(iUnit, file='RunFRM', STATUS='old', IOSTAT=iError)
-  if(iError==0)call make_frm_magnetogram
+  if(iError==0.and.DoAddFluxRope)call make_frm_magnetogram
   ! Start 3D plot and 2D slices
   call EEE_set_plot_range(nXY, nZ)
   if(nXY < 1 .and. nZ < 1)STOP
