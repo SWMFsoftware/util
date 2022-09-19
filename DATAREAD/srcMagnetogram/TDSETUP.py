@@ -119,10 +119,10 @@ if __name__ == '__main__':
    FileId=open('CME.in','w')
    if NameFile=='field_2d.out':
       FileId.write("#LOOKUPTABLE \n")
-      FileId.write("B0			NameTable \n")
-      FileId.write("load			NameCommand \n")
-      FileId.write("harmonics_bxyz.out		NameFile \n")
-      FileId.write("real4			TypeFile \n")
+      FileId.write("B0                  NameTable \n")
+      FileId.write("load	            NameCommand \n")
+      FileId.write("harmonics_bxyz.out	NameFile \n")
+      FileId.write("real4	            TypeFile \n")
    FileId.write("\n")
    FileId.close()
    #Info to the idl session is passed via the fitsfile.out file####
