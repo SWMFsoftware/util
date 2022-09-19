@@ -44,7 +44,7 @@ program magnetogram
   character(LEN=3)  :: TypeLatAxis
   character(LEN=100):: StringLine, NameCommand, NameVar, NameUnits
   character(LEN=*), parameter::  NameParam =&
-       '  LongitudeCme LatitudeCme OrientationCme', String3Gs = 'Gs Gs Gs'
+       '  LongitudeCme LatitudeCme OrientationCme DXyz', String3Gs = 'Gs Gs Gs'
   !----------------------------------------------------------------------------
 
   Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
