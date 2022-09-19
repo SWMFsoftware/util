@@ -35,7 +35,7 @@ program magnetogram
   real              :: Rotate_DD(3,3)
   ! Loop indexes    ::
   integer           :: i, j, k, iUnit, iError
-  integer           :: Long0, iLong
+  integer           :: Long0
   real              :: Longitude, Latitude
   real              :: Longitude_I(nLong), Latitude_I(nLat)
   real              :: BSurface_DC(3,nLong,nLat) = 0
@@ -125,7 +125,7 @@ program magnetogram
        NameVarIn = 'y z '//NameVar,&
        NameUnitsIn = 'Rs Rs '//NameUnits, &
        VarIn_VII = Var_VN(B1x_:B0z_,nXY+1,:,:),&
-       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme])
+       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme, DXyzPlot])
   call save_plot_file(&
        NameFile = 'FRM_y=0.out',&
        TypeFileIn = 'ascii',           &
@@ -136,7 +136,7 @@ program magnetogram
        NameVarIn = 'x z '//NameVar,&
        NameUnitsIn = 'Rs Rs '//NameUnits, &
        VarIn_VII = Var_VN(B1x_:B0z_,:,nXY+1,:),&
-       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme] )
+       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme, DXyzPlot] )
   call save_plot_file(&
        NameFile = 'FRM_z=0.out',&
        TypeFileIn = 'ascii',           &
@@ -147,7 +147,7 @@ program magnetogram
        NameVarIn = 'x y '//NameVar,&
        NameUnitsIn = 'Rs Rs '//NameUnits, &
        VarIn_VII = Var_VN(B1x_:B0z_,:,:,1),&
-       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme] )
+       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme, DXyzPlot] )
   call save_plot_file(&
        NameFile = 'FRM_3d.dat',      &
        TypeFileIn = 'tec',           &
@@ -158,7 +158,7 @@ program magnetogram
        NameVarIn = 'x y z '//NameVar,&
        NameUnitsIn = 'Rs Rs Rs '//NameUnits, &
        VarIn_VIII = Var_VN,&
-       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme])
+       ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme, DXyzPlot])
 contains
   !============================================================================
   subroutine  make_frm_magnetogram
@@ -174,10 +174,7 @@ contains
     write(*,'(a)')prefix//TypeLatAxis
     close(iUnit)
     do i = 1, nLong
-       ! Include the Phishift to correctly place the CME
-       iLong = i + Long0
-       iLong = 1 + modulo(iLong - 1, nLong)
-       Longitude_I(i) = iLong - 0.5
+       Longitude_I(i) = i - 0.5
     end do
     do i = 1, nLat
        select case(TypeLatAxis)
@@ -190,9 +187,10 @@ contains
     end do
 
     do j = 1,nLat
-       Latitude = Latitude_I(j) * cDegToRad
+       Latitude = Latitude_I(j)*cDegToRad
        do i = 1,nLong
-          Longitude = Longitude_I(i)*cDegToRad
+          ! Include the Phishift to correctly place the CME
+          Longitude = (Longitude_I(i) + Long0)*cDegToRad
           call rlonlat_to_xyz(1.0,Longitude,Latitude, Xyz_D)
           call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
                Time = 0.0, nStep  = 0, Iteration_Number=0)
@@ -202,6 +200,7 @@ contains
           BSurface_DC(:,i,j) = matmul(B_D, XyzRLonLat_DD)
        end do
     enddo
+    
     write(*,*)'Saving 2d Flux Rope output file'
     call save_plot_file(&
          NameFile = 'FRMagnetogram.out',&
