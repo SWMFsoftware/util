@@ -33,6 +33,14 @@ if __name__ == '__main__':
                        'Longitude for negative spot center (Deg)')
    parser.add_argument('-LatNegIn',type=float,default=999.0, help=
                        'Latitude for negative spot center (Deg)')
+   parser.add_argument('-LonFPPosIn',type=float,default=999.0, help=
+                       'Longitude for positive foot point of the FR (Deg)')
+   parser.add_argument('-LatFPPosIn',type=float,default=999.0, help=
+                       'Latitude for positive foot point of the FR (Deg)')
+   parser.add_argument('-LonFPNegIn',type=float,default=999.0, help=
+                       'Longitude for negative foot point of the FR (Deg)')
+   parser.add_argument('-LatFPNegIn',type=float,default=999.0, help=
+                       'Latitude for negative foot point of the FR (Deg)')
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
    NameFile    = args.NameFile
@@ -42,6 +50,10 @@ if __name__ == '__main__':
    LatPosIn   = args.LatPosIn
    LonNegIn   = args.LonNegIn
    LatNegIn   = args.LatNegIn
+   LonFPPosIn   = args.LonFPPosIn
+   LatFPPosIn   = args.LatFPPosIn
+   LonFPNegIn   = args.LonFPNegIn
+   LatFPNegIn   = args.LatFPNegIn
    nLon = -1
    nLat = -1
    IdlFile = 'fitsfile.out'
@@ -128,7 +140,7 @@ if __name__ == '__main__':
          "      GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
       ########SHOW MAGNETOGRAM##########################
-      # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
+      # GLSETUP1.pro is run, it reads the magnetogram IdlFile
       # reads the cursor x,y indices for neg and pos. AR.
       ls = subprocess.Popen(["idl", "runidl1"],stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,text=True)
@@ -165,7 +177,8 @@ if __name__ == '__main__':
    Param_I[5] = float(LatNeg)
 
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
-   CC=TD.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,UseCMEGrid,Time)
+   CC=TD.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,UseCMEGrid,Time,
+             LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn)
    ###IF THE MASTER SCRIPT IS IN PYTHON, AND A CHILD PROCESS IS IN IDL
    #(1) THE TIME OF IDL SESSION SHOULD BE LIMITED (30 seconds or so) 
    #(2) WINDOWS SHOULD BE CLOSED 

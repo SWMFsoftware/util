@@ -154,7 +154,8 @@ def TwoPointsOnSph(Lon1, Lat1, Lon2, Lat2):
 
     return(Lon,Lat,Orientation,HalfDist)
    
-def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
+def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
+        LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn):
    Lon0     = Param_I[0]
    LonEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -298,55 +299,73 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time):
          Dist2Min =max([min(Dist2N_I), min(Dist2P_I)])
          if Dist2Min<1.5*Ds2_C[k,l]:
             Dist2Min_C[k-LatARMin,l-LonARMin]=Ds2_C[k,l]/Dist2Min
-
-   nParam = 8
-   Param_I = np.array(
-      [Lon0+LonARMin, LonEarth, LonPosIndex-LonARMin,LatPosIndex-LatARMin,
-       LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,
-       iLatAR-LatARMin])
-   nVar=4
-   Data_IV=np.zeros([nLatShort,nLonShort,nVar])
-   NameVar='Longitude Latitude Br MapP MapN PIL Lon0 LonEarth xP yP xN yN xC yC'
-   for k in np.arange(nLatShort):
-      for l in np.arange(nLonShort):
-         Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
-         Data_IV[k,l,1]=PSizeMap_C[k+LatARMin,l+LonARMin]
-         Data_IV[k,l,2]=NSizeMap_C[k+LatARMin,l+LonARMin]
-         Data_IV[k,l,3]=Dist2Min_C[k,l]
-   FinalFile=rmag.save_bats('AfterGLSETUP.out', 'After GLSETUP: Br[Gauss]', 
-                            NameVar, [nLonShort,nLatShort], nVar, nParam,
-                            Param_I, Rad2Deg*Lon_I[LonARMin:LonARMax+1],
-                            Rad2Deg*Lat_I[LatARMin:LatARMax+1], Data_IV, Time)
-   print('Select the location for positive footpoint with the left button')
-   print('Then select negative  with the right button')
-
-   FileId=open('runidl2','w')
-   FileId.write(';\n;\n')
-   FileId.write(
-      "      TDSETUP1,file='"+FinalFile+"' \n")
-   FileId.close()
-   ########SHOW MAGNETOGRAM##########################
-   # GLSETUP1.pro is run, it reads the magnetogram(fitsfile.out)
-   # reads the cursor x,y indices for neg and pos. AR.
-   ls = subprocess.Popen(["idl", "runidl2"],stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT,text=True)
-   #################PROCESSING STDOUT################
-   stdout,stderr=ls.communicate()
-   b=stdout[stdout.index('===')+4:len(stdout)]
-   a=b.split() # x,y coordinates 
-   ###### TAKE COORDINATES OF THE FR FOOTPOINTS #######
-   LonFPPos = Lon_I[GL.round_my(float(a[0])) + LonARMin]   # in radian
-   LatFPPos = Lat_I[GL.round_my(float(a[1])) + LatARMin]   # in radian
+   if (LonFPPosIn ==999. or LatFPPosIn ==999. or LonFPNegIn ==999.
+       or LatFPNegIn ==999.):
+      nParam = 8
+      Param_I = np.array(
+         [Lon0+LonARMin, LonEarth, LonPosIndex-LonARMin,LatPosIndex-LatARMin,
+          LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,
+          iLatAR-LatARMin])
+      nVar=4
+      Data_IV=np.zeros([nLatShort,nLonShort,nVar])
+      NameVar='Longitude Latitude Br MapP MapN PIL'
+      NameVar=NameVar+' Lon0 LonEarth xP yP xN yN xC yC'
+      for k in np.arange(nLatShort):
+         for l in np.arange(nLonShort):
+            Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
+            Data_IV[k,l,1]=PSizeMap_C[k+LatARMin,l+LonARMin]
+            Data_IV[k,l,2]=NSizeMap_C[k+LatARMin,l+LonARMin]
+            Data_IV[k,l,3]=Dist2Min_C[k,l]
+      FinalFile=rmag.save_bats(
+         'ZoomMagnetogram.out', 'ZoomMagnetogram: Br[Gauss]',
+         NameVar, [nLonShort,nLatShort], nVar, nParam,
+         Param_I, Rad2Deg*Lon_I[LonARMin:LonARMax+1],
+         Rad2Deg*Lat_I[LatARMin:LatARMax+1], Data_IV, Time)
+      print(
+         'Select location of positive footpoint with the left button')
+      print('Then select negative  with the right button')
+      FileId=open('runidl2','w')
+      FileId.write(';\n;\n')
+      FileId.write(
+         "      TDSETUP1,file='"+FinalFile+"' \n")
+      FileId.close()
+      ########SHOW ZOOMED MAGNETOGRAM##########################
+      ls = subprocess.Popen(["idl", "runidl2"],stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,text=True)
+      #################PROCESSING STDOUT################
+      stdout,stderr=ls.communicate()
+      b=stdout[stdout.index('===')+4:len(stdout)]
+      a=b.split() # x,y coordinates
+      ###### TAKE COORDINATES OF THE FR FOOTPOINTS #######
+      LonPosIndex = GL.round_my(float(a[0])) + LonARMin
+      LatPosIndex = GL.round_my(float(a[1])) + LatARMin
+      LonNegIndex = GL.round_my(float(a[2])) + LonARMin
+      LatNegIndex = GL.round_my(float(a[3])) + LatARMin
+   else:
+      # The input locations are in degrees
+      print ("\n User input  Lon/Lat for positive and negative footpoints:")
+      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
+            LonFPPosIn, LatFPPosIn,LonFPNegIn, LatFPNegIn))
+      # Convert coordinates in degrees to grid indexes
+      LonPosIndex = GL.calculate_index(LonFPPosIn*Deg2Rad,Lon_I,nLon)
+      LatPosIndex = GL.calculate_index(LatFPPosIn*Deg2Rad,Lat_I, nLat)
+      LonNegIndex = GL.calculate_index(LonFPNegIn*Deg2Rad,Lon_I,nLon)
+      LatNegIndex = GL.calculate_index(LatFPNegIn*Deg2Rad,Lat_I, nLat)
+   LonFPPos = Lon_I[LonPosIndex]   # in radian
+   LatFPPos = Lat_I[LatPosIndex]   # in radian
    print(
       "Positive footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
          LonFPPos*Rad2Deg, LatFPPos*Rad2Deg))
-   LonFPNeg = Lon_I[GL.round_my(float(a[2])) + LonARMin]   # in radian
-   LatFPNeg = Lat_I[GL.round_my(float(a[3])) + LatARMin]   # in radian
+   LonFPNeg = Lon_I[LonNegIndex]   # in radian
+   LatFPNeg = Lat_I[LatNegIndex]   # in radian
    print(
       "Negative footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
          LonFPNeg*Rad2Deg, LatFPNeg*Rad2Deg))
    [LonFP,LatFP,OrientationFP,HalfDist] = TwoPointsOnSph(
       LonFPPos,LatFPPos,LonFPNeg,LatFPNeg)
+   # Save indexes of the central point, in case we need to repeat FP-search
+   iLonAR = GL.calculate_index(LonFP,Lon_I,nLon)
+   iLatAR = GL.calculate_index(LonFP,Lat_I,nLat)
    # Major radius estimated from the distance between the footpoints
    RadiusFP = HalfDist
    # Angles are converted to degrees:
