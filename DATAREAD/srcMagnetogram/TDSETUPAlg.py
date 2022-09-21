@@ -10,6 +10,7 @@ BMax = 1900.0
 cPi  = np.pi
 Rad2Deg = 180/cPi
 Deg2Rad = cPi/180
+a2r0Ratio =0.350   # Ratio of minor radius to major one. Can be  an input
 
 def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLon,Lat_I,Lon_I,\
                            IsUniformLat):
@@ -264,7 +265,7 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
    LatAR  = Lat_I[iLatAR]*Rad2Deg  # in deg
    print (
       "Center for Active region: Lon={0:4.1f}, Lat={1:4.1f} [deg]:".format(
-         LonAR,LatAR))
+         LonAR,LatAR),"  indexes=",iLonAR,iLatAR)
    # Rectangular box  for active region
    LonARMin=min([LonNMin,LonPMin])
    LonARMin=max([LonARMin-2,0])
@@ -299,183 +300,305 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
          Dist2Min =max([min(Dist2N_I), min(Dist2P_I)])
          if Dist2Min<1.5*Ds2_C[k,l]:
             Dist2Min_C[k-LatARMin,l-LonARMin]=Ds2_C[k,l]/Dist2Min
-   if (LonFPPosIn ==999. or LatFPPosIn ==999. or LonFPNegIn ==999.
-       or LatFPNegIn ==999.):
-      nParam = 8
-      Param_I = np.array(
-         [Lon0+LonARMin, LonEarth, LonPosIndex-LonARMin,LatPosIndex-LatARMin,
-          LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,
-          iLatAR-LatARMin])
-      nVar=4
-      Data_IV=np.zeros([nLatShort,nLonShort,nVar])
-      NameVar='Longitude Latitude Br MapP MapN PIL'
-      NameVar=NameVar+' Lon0 LonEarth xP yP xN yN xC yC'
-      for k in np.arange(nLatShort):
-         for l in np.arange(nLonShort):
-            Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
-            Data_IV[k,l,1]=PSizeMap_C[k+LatARMin,l+LonARMin]
-            Data_IV[k,l,2]=NSizeMap_C[k+LatARMin,l+LonARMin]
-            Data_IV[k,l,3]=Dist2Min_C[k,l]
-      FinalFile=rmag.save_bats(
-         'ZoomMagnetogram.out', 'ZoomMagnetogram: Br[Gauss]',
-         NameVar, [nLonShort,nLatShort], nVar, nParam,
-         Param_I, Rad2Deg*Lon_I[LonARMin:LonARMax+1],
-         Rad2Deg*Lat_I[LatARMin:LatARMax+1], Data_IV, Time)
-      print(
-         'Select location of positive footpoint with the left button')
-      print('Then select negative  with the right button')
-      FileId=open('runidl2','w')
-      FileId.write(';\n;\n')
-      FileId.write(
-         "      TDSETUP1,file='"+FinalFile+"' \n")
-      FileId.close()
-      ########SHOW ZOOMED MAGNETOGRAM##########################
-      ls = subprocess.Popen(["idl", "runidl2"],stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT,text=True)
-      #################PROCESSING STDOUT################
-      stdout,stderr=ls.communicate()
-      b=stdout[stdout.index('===')+4:len(stdout)]
-      a=b.split() # x,y coordinates
-      ###### TAKE COORDINATES OF THE FR FOOTPOINTS #######
-      LonPosIndex = GL.round_my(float(a[0])) + LonARMin
-      LatPosIndex = GL.round_my(float(a[1])) + LatARMin
-      LonNegIndex = GL.round_my(float(a[2])) + LonARMin
-      LatNegIndex = GL.round_my(float(a[3])) + LatARMin
-   else:
-      # The input locations are in degrees
-      print ("\n User input  Lon/Lat for positive and negative footpoints:")
-      print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
+   nParam = 8
+   nVar=4
+   Data_IV=np.zeros([nLatShort,nLonShort,nVar])
+   NameVar='Longitude Latitude Br MapP MapN PIL'
+   NameVar=NameVar+' Lon0 LonEarth xP yP xN yN xC yC'
+   for k in np.arange(nLatShort):
+      for l in np.arange(nLonShort):
+         Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k+LatARMin,l+LonARMin]])])
+         Data_IV[k,l,1]=PSizeMap_C[k+LatARMin,l+LonARMin]
+         Data_IV[k,l,2]=NSizeMap_C[k+LatARMin,l+LonARMin]
+         Data_IV[k,l,3]=Dist2Min_C[k,l]
+   Apex   = -1.
+   BStrap = -1.
+   while(Apex ==-1. or BStrap ==-1.):
+      if (LonFPPosIn ==999. or LatFPPosIn ==999. or LonFPNegIn ==999.
+          or LatFPNegIn ==999.):
+         Param_I = np.array(
+            [Lon0+LonARMin, LonEarth, LonPosIndex-LonARMin,LatPosIndex-LatARMin,
+             LonNegIndex-LonARMin,LatNegIndex-LatARMin,iLonAR-LonARMin,
+             iLatAR-LatARMin])
+         FinalFile=rmag.save_bats(
+            'ZoomMagnetogram.out', 'ZoomMagnetogram: Br[Gauss]',
+            NameVar, [nLonShort,nLatShort], nVar, nParam,
+            Param_I, Rad2Deg*Lon_I[LonARMin:LonARMax+1],
+            Rad2Deg*Lat_I[LatARMin:LatARMax+1], Data_IV, Time)
+         print(
+            'Select location of positive footpoint with the left button')
+         print('Then select negative  with the right button')
+         FileId=open('runidl2','w')
+         FileId.write(';\n')
+         FileId.write('.r GLSETUP1 \n')
+         FileId.write(
+            "      TDSETUP1,file='"+FinalFile+"' \n")
+         FileId.close()
+         ########SHOW ZOOMED MAGNETOGRAM##########################
+         ls = subprocess.Popen(["idl", "runidl2"],stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT,text=True)
+         #################PROCESSING STDOUT################
+         stdout,stderr=ls.communicate()
+         b=stdout[stdout.index('===')+4:len(stdout)]
+         a=b.split() # x,y coordinates
+         ###### TAKE COORDINATES OF THE FR FOOTPOINTS #######
+         LonPosIndex = GL.round_my(float(a[0])) + LonARMin
+         LatPosIndex = GL.round_my(float(a[1])) + LatARMin
+         LonNegIndex = GL.round_my(float(a[2])) + LonARMin
+         LatNegIndex = GL.round_my(float(a[3])) + LatARMin
+      else:
+         # The input locations are in degrees
+         print ("\n User input  Lon/Lat for positive and negative footpoints:")
+         print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
             LonFPPosIn, LatFPPosIn,LonFPNegIn, LatFPNegIn))
-      # Convert coordinates in degrees to grid indexes
-      LonPosIndex = GL.calculate_index(LonFPPosIn*Deg2Rad,Lon_I,nLon)
-      LatPosIndex = GL.calculate_index(LatFPPosIn*Deg2Rad,Lat_I, nLat)
-      LonNegIndex = GL.calculate_index(LonFPNegIn*Deg2Rad,Lon_I,nLon)
-      LatNegIndex = GL.calculate_index(LatFPNegIn*Deg2Rad,Lat_I, nLat)
-   LonFPPos = Lon_I[LonPosIndex]   # in radian
-   LatFPPos = Lat_I[LatPosIndex]   # in radian
-   print(
-      "Positive footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
-         LonFPPos*Rad2Deg, LatFPPos*Rad2Deg))
-   LonFPNeg = Lon_I[LonNegIndex]   # in radian
-   LatFPNeg = Lat_I[LatNegIndex]   # in radian
-   print(
-      "Negative footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
-         LonFPNeg*Rad2Deg, LatFPNeg*Rad2Deg))
-   [LonFP,LatFP,OrientationFP,HalfDist] = TwoPointsOnSph(
-      LonFPPos,LatFPPos,LonFPNeg,LatFPNeg)
-   # Save indexes of the central point, in case we need to repeat FP-search
-   iLonAR = GL.calculate_index(LonFP,Lon_I,nLon)
-   iLatAR = GL.calculate_index(LonFP,Lat_I,nLat)
-   # Major radius estimated from the distance between the footpoints
-   RadiusFP = HalfDist
-   # Angles are converted to degrees:
-   LonFP *=Rad2Deg
-   LatFP *=Rad2Deg
-   OrientationFP *=Rad2Deg
-   print ("Filament center: Longitude: {0:5.2f} Latitude:{1:5.2f}".format(
+         # Convert coordinates in degrees to grid indexes
+         LonPosIndex = GL.calculate_index(LonFPPosIn*Deg2Rad,Lon_I,nLon)
+         LatPosIndex = GL.calculate_index(LatFPPosIn*Deg2Rad,Lat_I, nLat)
+         LonNegIndex = GL.calculate_index(LonFPNegIn*Deg2Rad,Lon_I,nLon)
+         LatNegIndex = GL.calculate_index(LatFPNegIn*Deg2Rad,Lat_I, nLat)
+         LonFPPosIn = 999.
+         LatFPPosIn = 999.
+         LonFPNegIn = 999.
+         LatFPNegIn = 999.      
+      LonFPPos = Lon_I[LonPosIndex]   # in radian
+      LatFPPos = Lat_I[LatPosIndex]   # in radian
+      print(
+         "Positive footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
+            LonFPPos*Rad2Deg, LatFPPos*Rad2Deg))
+      LonFPNeg = Lon_I[LonNegIndex]   # in radian
+      LatFPNeg = Lat_I[LatNegIndex]   # in radian
+      print(
+         "Negative footpoint: Lon={0:6.2f},  Lat={1:6.2f} [deg]".format(
+            LonFPNeg*Rad2Deg, LatFPNeg*Rad2Deg))
+      [LonFP,LatFP,OrientationFP,HalfDist] = TwoPointsOnSph(
+         LonFPPos,LatFPPos,LonFPNeg,LatFPNeg)
+      # Save indexes of the central point, in case we need to repeat FP-search
+      iLonAR = GL.calculate_index(LonFP,Lon_I,nLon)
+      iLatAR = GL.calculate_index(LatFP,Lat_I,nLat)
+      # Major radius estimated from the distance between the footpoints
+      RadiusFP = HalfDist
+      # Angles are converted to degrees:
+      LonFP *=Rad2Deg
+      LatFP *=Rad2Deg
+      OrientationFP *=Rad2Deg
+      print ("Filament center: Longitude: {0:5.2f} Latitude:{1:5.2f}".format(
          LonFP, LatFP))
-   print ("Filament: Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
+      print ("Filament: Orientation: {0:5.2f} Major Radius: {1:5.2f}".format(
          OrientationFP, RadiusFP))
-   # Now we need both to correct OrientationFP by +/- 90 deg depending on
-   # polarity, since Orientation has to determines the angle of x-axis for
-   # the coordinate system, in which the direction from positive to negative
-   # footpoints is parallel or antiparallel to y-axis
-   if OrientationAR < 180.0:
-      if(OrientationAR<OrientationFP and OrientationFP<OrientationAR+180):
-         iHelicity  = 1
-         OrientationFP  -=90
-         if(OrientationFP<0):
-            OreintationFP +=360
+      # Now we need both to correct OrientationFP by +/- 90 deg depending on
+      # polarity, since Orientation has to determines the angle of x-axis for
+      # the coordinate system, in which the direction from positive to negative
+      # footpoints is parallel or antiparallel to y-axis
+      if OrientationAR < 180.0:
+         if(OrientationAR<OrientationFP and OrientationFP<OrientationAR+180):
+            iHelicity  = 1
+            OrientationFP  -=90
+            if(OrientationFP<0):
+               OreintationFP +=360
+         else:
+            iHelicity = -1
+            OrientationFP +=90
+            if(OrientationFP>360):
+               OrientationFP -=360
       else:
-         iHelicity = -1
-         OrientationFP +=90
-         if(OrientationFP>360):
-            OrientationFP -=360
-   else:
-      if(OrientationAR-180<OrientationFP and OrientationFP<OrientationAR):
-         iHelicity = -1
-         OrientationFP +=90
-         if(OrientationFP>360):
-            OreintationFP -=360
+         if(OrientationAR-180<OrientationFP and OrientationFP<OrientationAR):
+            iHelicity = -1
+            OrientationFP +=90
+            if(OrientationFP>360):
+               OreintationFP -=360
+         else:
+            iHelicity  = 1
+            OrientationFP  -=90
+            if(OrientationFP<0):
+               OrientationFP +=360
+      print("Corrected FP orientation: {:6.2f}".format(OrientationFP),
+            " Helicity=",iHelicity)
+      if RadiusAR > RadiusFP:
+         TDLongitude = LonAR
+         TDLatitude  = LatAR
+         TDOrientation = OrientationAR
+         TDRadius    = RadiusAR
+         TDDepth     = 0.0
+         PointN_I=[LonNeg,LatNeg] # negative spot
+         PointP_I=[LonPos,LatPos] # positive spot
+         AngularDistance = GL.get_angular_dist(PointN_I,PointP_I)
       else:
-         iHelicity  = 1
-         OrientationFP  -=90
-         if(OrientationFP<0):
-            OrientationFP +=360
-   print("Corrected FP orientation: {:6.2f}".format(OrientationFP),
-         " Helicity=",iHelicity)
-   if RadiusAR > RadiusFP:
-      TDLongitude = LonAR
-      TDLatitude  = LatAR
-      TDOrientation = OrientationAR
-      TDRadius    = RadiusAR
-      TDDepth     = 0.0
-      PointN_I=[LonNeg,LatNeg] # negative spot
-      PointP_I=[LonPos,LatPos] # positive spot
-      AngularDistance = GL.get_angular_dist(PointN_I,PointP_I)
+         TDLongitude = LonFP
+         TDLatitude  = LatFP
+         TDOrientation = OrientationFP
+         TDRadius    = RadiusFP
+         TDDepth     = HalfDist**2/(1 + np.sqrt(1 - HalfDist**2))
+         AngularDistance = 2*math.asin(HalfDist)
+      if Lon0>0:
+         TDLongitude +=Lon0
+         if TDLongitude>=360:
+            TDLongitude-=360
+
+      #Recommended TD flux rope parameters
+      print ('========================================')
+      print ('The Recommended TD FLux Rope Parameters')
+      print ('========================================')
+      print ('#CME')
+      print ('               Longitude: %6.2f'%(TDLongitude))
+      print ('                Latitude: %6.2f'%(TDLatitude))
+      print ('             Orientation: %6.2f'%(TDOrientation))
+      print ('      Angular size [deg]: %6.2f'%(AngularDistance*Rad2Deg))
+      print (' Poloidal flux: positive: %6.2f'%(FluxP))
+      print (' Poloidal flux: negative: %6.2f'%(FluxN))
+      print ('-----------------------------------------')
+      FileId=open('CME.in','w')
+      FileId.write("#LOOKUPTABLE \n")
+      FileId.write("B0                  NameTable \n")
+      FileId.write("load	            NameCommand \n")
+      FileId.write("harmonics_bxyz.out	NameFile \n")
+      FileId.write("real4	            TypeFile \n")
+      FileId.write("\n")
+      FileId.write("#CME \n")
+      FileId.write("T                   UseCme \n")
+      FileId.write("F                   DoAddFluxRope \n")
+      FileId.write("%-10.2f          LongitudeCme \n"% TDLongitude)
+      FileId.write("%-10.2f          LatitudeCme \n"% TDLatitude)
+      FileId.write("%-10.2f          OrientationCme \n"% TDOrientation)
+      FileId.write("TD22                TypeCme \n")
+      FileId.write("%-+d                  iHelicity \n"% iHelicity)
+      FileId.write("%-10.2f	    RadiusMajor \n"%(TDRadius))
+      FileId.write("%-10.2f	    RadiusMinor \n"%(a2r0Ratio*TDRadius))
+      FileId.write("%-10.2f	    Depth \n"%TDDepth)
+      FileId.write("1.0e-3              PlasmaBeta \n")
+      FileId.write("5.0e5               EjectaTemperature \n")
+      FileId.write("readbstrap          TypeBStrap \n")
+      FileId.write("0.0                 bStrappingDim \n")
+      FileId.write("none                TypeCharge \n")
+      FileId.write(" \n")
+      FileId.write("#END \n")
+      FileId.write("\n")
+      FileId.write("Angular Size            = %5.2f\n"%(AngularDistance
+                                                        *Rad2Deg))
+      FileId.write(" Poloidal flux: positive: %6.2f"%(FluxP))
+      FileId.write(" Poloidal flux: negative: %6.2f"%(FluxN))
+      FileId.close() 
+                                                    
+      # Get distribution of strapping field in the plane of filament
+      FileId=open('RunFRM','w')
+      FileId.write('%-3d \n'%Lon0)
+      if IsUniformLat :
+         FileId.write('uniform latitude \n')
+      else:
+         FileId.write('sin(latitude) \n')
+      FileId.close()
+      FileId=open('RunFRM','r')
+      subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
+      FileId.close()
+      FileId=open('runidl3','w')
+      FileId.write(';\n')
+      FileId.write('.r GLSETUP1 \n')
+      FileId.write(
+         "      TDSETUP2,file='FRM_x=0.out',radius={:4.2f} \n".format(
+            np.sqrt(TDRadius**2-TDDepth**2)))
+      FileId.close()
+      ########SHOW STRAPPING FIELD, CHOOSE APEX #####################
+      print('Now, you will see isolines of strapping field.\n')
+      print('If there is an isoline of strapping field, which:\n')
+      print('    -Looks like a part of circumference;\n')
+      print('    -Connects footpoints marked with two crosses,\n')
+      print('then, click on the apex of this isoline.\n')
+      print(
+         'This will become the toroidal magnetic axis of TD configuration\n')
+      print(
+         'Otherwise, click somewhere very far or very close to point 0,0\n')
+      print(
+         'You will be allowed to modify your choice of flux rope footpoints')
+      ls = subprocess.Popen(["idl", "runidl3"],stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,text=True)
+      stdout,stderr=ls.communicate()
+      if '+++' in stdout:
+         IndexOfApex = stdout.index('+++')
+         b=stdout[IndexOfApex+4:len(stdout)]
+         a=b.split() # x,y coordinates
+         ###### TAKE APEX  AND STRAPPING FIELD #######
+         Apex = float(a[0])
+         BStrap = float(a[1])
+         print('Apex={0:4.2f}, bStrappingDim={1:4.2f}'.format(Apex,BStrap))
    else:
-      TDLongitude = LonFP
-      TDLatitude  = LatFP
-      TDOrientation = OrientationFP
-      TDRadius    = RadiusFP
-      TDDepth     = HalfDist**2/(1 + np.sqrt(1 - HalfDist**2))
-      AngularDistance = 2*math.asin(HalfDist)
-   if Lon0>0:
-      TDLongitude +=Lon0
-      if TDLongitude>=360:
-         TDLongitude-=360
-
-   #Recommended TD flux rope parameters
-   print ('========================================')
-   print ('The Recommended TD FLux Rope Parameters')
-   print ('========================================')
-   print ('#CME')
-   print ('               Longitude: %6.2f'%(TDLongitude))
-   print ('                Latitude: %6.2f'%(TDLatitude))
-   print ('             Orientation: %6.2f'%(TDOrientation))
-   print ('      Angular size [deg]: %6.2f'%(AngularDistance*Rad2Deg))
-   print (' Poloidal flux: positive: %6.2f'%(FluxP))
-   print (' Poloidal flux: negative: %6.2f'%(FluxN))
-   print ('-----------------------------------------')
-   FileId=open('CME.in','a')
-   FileId.write("#CME \n")
-   FileId.write("T                   UseCme \n")
-   FileId.write("F                   DoAddFluxRope \n")
-   FileId.write("%-10.2f          LongitudeCme \n"% TDLongitude)
-   FileId.write("%-10.2f          LatitudeCme \n"% TDLatitude)
-   FileId.write("%-10.2f          OrientationCme \n"% TDOrientation)
-   FileId.write("TD22                TypeCme \n")
-   FileId.write("%-+d                  iHelicity \n"% iHelicity)
-   FileId.write("%-10.2f	    RadiusMajor \n"%(TDRadius))
-   FileId.write("%-10.2f	    RadiusMinor \n"%(0.35*TDRadius))
-   FileId.write("%-10.2f	    Depth \n"%TDDepth)
-   FileId.write("1.0e-3              PlasmaBeta \n")
-   FileId.write("5.0e5               EjectaTemperature \n")
-   FileId.write("readbstrap          TypeBStrap \n")
-   FileId.write("0.0                 bStrappingDim \n")
-   FileId.write("none                TypeCharge \n")
-   FileId.write(" \n")
-   FileId.write("#END \n")
-   FileId.write("\n")
-   FileId.write("Angular Size            = %5.2f\n"%(AngularDistance
-                                                     *Rad2Deg))
-   FileId.write(" Poloidal flux: positive: %6.2f"%(FluxP))
-   FileId.write(" Poloidal flux: negative: %6.2f"%(FluxN))
-   FileId.close() 
-
-   #if UseCMEGrid:
-   #   #Calculate the CME grid refinement parameters based on the flux rope
-   #   #location and size.                                                
+      # Now, we know:
+      # TDRadius - half of  distance between footpoints of the magnetic axis
+      # TDDepth  - depth of the midpoint between the footpoints
+      # Apex     - of  the toroidal magnetic axis
+      # We need to solve the radius, RInfty of the circumference (toroidal
+      # magnetic axis) passing through the footpoints and apex, and Depth
+      # of the center of the said magnetic axis, from the system of eqs:
+      #  RInfty = Apex + Depth
+      #  RInfty**2 =  TDRadius**2 +  (Depth - TDDepth)**2
+      # The solution of  this system  fo RInfty reads:
+      RInfty = 0.50*( TDRadius**2/(Apex + TDDepth) + (Apex + TDDepth) )
+      # Now,  calculate  Depth:
+      TDDepth = RInfty - Apex
+      # Expression, relating RInfty with major radius, R0, and minor radius, a
+      # RInfty**2 = R0**2 - a**2
+      # So that the major radius is:
+      TDRadius = RInfty/np.sqrt(1 - a2r0Ratio**2)
       
-   #For comparison, make magnetogram of a flux rope field
-   FileId=open('RunFRM','w')
-   FileId.write('%-3d \n'%Lon0)
-   if IsUniformLat :
-      FileId.write('uniform latitude \n')
-   else:
-      FileId.write('sin(latitude) \n')
-   FileId.close()
-   FileId=open('RunFRM','r')
-   subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
-   FileId.close()
+      #Recommended TD flux rope parameters
+      print ('========================================')
+      print ('The Recommended TD FLux Rope Parameters')
+      print ('========================================')
+      print ('#CME')
+      print ('               Longitude: %6.2f'%(TDLongitude))
+      print ('                Latitude: %6.2f'%(TDLatitude))
+      print ('             Orientation: %6.2f'%(TDOrientation))
+      print ('      Angular size [deg]: %6.2f'%(AngularDistance*Rad2Deg))
+      print (' Poloidal flux: positive: %6.2f'%(FluxP))
+      print (' Poloidal flux: negative: %6.2f'%(FluxN))
+      print ('-----------------------------------------')
+      FileId=open('CME.in','w')
+      FileId.write("#LOOKUPTABLE \n")
+      FileId.write("B0                  NameTable \n")
+      FileId.write("load	            NameCommand \n")
+      FileId.write("harmonics_bxyz.out	NameFile \n")
+      FileId.write("real4	            TypeFile \n")
+      FileId.write("\n")
+      FileId.write("#CME \n")
+      FileId.write("T                   UseCme \n")
+      FileId.write("T                   DoAddFluxRope \n")
+      FileId.write("%-10.2f          LongitudeCme \n"% TDLongitude)
+      FileId.write("%-10.2f          LatitudeCme \n"% TDLatitude)
+      FileId.write("%-10.2f          OrientationCme \n"% TDOrientation)
+      FileId.write("TD22                TypeCme \n")
+      FileId.write("%-+d                  iHelicity \n"% iHelicity)
+      FileId.write("%-10.2f	    RadiusMajor \n"%(TDRadius))
+      FileId.write("%-10.2f	    RadiusMinor \n"%(a2r0Ratio*TDRadius))
+      FileId.write("%-10.2f	    Depth \n"%TDDepth)
+      FileId.write("1.0e-3              PlasmaBeta \n")
+      FileId.write("5.0e5               EjectaTemperature \n")
+      FileId.write("readbstrap          TypeBStrap \n")
+      FileId.write("%-10.2f	     bStrappingDim \n"%BStrap)
+      FileId.write("none                TypeCharge \n")
+      FileId.write(" \n")
+      FileId.write("#END \n")
+      FileId.write("\n")
+      FileId.write("Angular Size            = %5.2f\n"%(AngularDistance
+                                                        *Rad2Deg))
+      FileId.write(" Poloidal flux: positive: %6.2f"%(FluxP))
+      FileId.write(" Poloidal flux: negative: %6.2f"%(FluxN))
+      FileId.close() 
+                                                    
+      # Get distribution of strapping field in the plane of filament
+      FileId=open('RunFRM','w')
+      FileId.write('%-3d \n'%Lon0)
+      if IsUniformLat :
+         FileId.write('uniform latitude \n')
+      else:
+         FileId.write('sin(latitude) \n')
+      FileId.close()
+      FileId=open('RunFRM','r')
+      subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
+      FileId.close()
+      FileId=open('runidl3','w')
+      FileId.write(';\n')
+      FileId.write('.r GLSETUP1 \n')
+      FileId.write(
+         "      TDSETUP2,file='FRM_x=0.out',radius={:4.2f} \n".format(
+            np.sqrt(TDRadius**2-TDDepth**2)))
+      FileId.close()
+      
    return(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C)
