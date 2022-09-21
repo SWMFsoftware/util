@@ -116,15 +116,6 @@ if __name__ == '__main__':
       Br_C         = cc[6]
       Time         = cc[9]
 
-   FileId=open('CME.in','w')
-   if NameFile=='field_2d.out':
-      FileId.write("#LOOKUPTABLE \n")
-      FileId.write("B0                  NameTable \n")
-      FileId.write("load	            NameCommand \n")
-      FileId.write("harmonics_bxyz.out	NameFile \n")
-      FileId.write("real4	            TypeFile \n")
-   FileId.write("\n")
-   FileId.close()
    #Info to the idl session is passed via the fitsfile.out file####
    ############END OF PYTHON FIRST SESSION##########
    ###IDL SESSION IN THE SWMF_GLSETUP/BROWSER SESSION IN EEGGL##
@@ -135,7 +126,8 @@ if __name__ == '__main__':
       print('Then select negative region with the right button')
 
       FileId=open('runidl1','w')
-      FileId.write(';\n;\n')
+      FileId.write(';\n')
+      FileId.write('.r GLSETUP1 \n')
       FileId.write(
          "      GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
@@ -183,5 +175,6 @@ if __name__ == '__main__':
    #(1) THE TIME OF IDL SESSION SHOULD BE LIMITED (30 seconds or so) 
    #(2) WINDOWS SHOULD BE CLOSED 
    #(3) FINAL EXIT COMMAND MUST BE PRESENT IN THE IDL SCRIPT######
-   #print 'TDSETUP Session is closed. Bye!!!'
+   print('TDSETUP Session is closed. Bye!!!')
+   exit()
 ##############################################
