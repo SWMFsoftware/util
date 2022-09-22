@@ -41,6 +41,10 @@ if __name__ == '__main__':
                        'Longitude for negative foot point of the FR (Deg)')
    parser.add_argument('-LatFPNegIn',type=float,default=999.0, help=
                        'Latitude for negative foot point of the FR (Deg)')
+   parser.add_argument('-a2r0Ratio',type=float,default=0.350, help=
+                       'Ratio of minor radius to major one. Can be  an input')
+   parser.add_argument('-ApexIn',type=float,default=-1., help=
+                       'Ratio of minor radius to major one. Can be  an input')
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
    NameFile    = args.NameFile
@@ -54,6 +58,8 @@ if __name__ == '__main__':
    LatFPPosIn   = args.LatFPPosIn
    LonFPNegIn   = args.LonFPNegIn
    LatFPNegIn   = args.LatFPNegIn
+   a2r0Ratio   = args.a2r0Ratio
+   ApexIn      = args.ApexIn
    nLon = -1
    nLat = -1
    IdlFile = 'fitsfile.out'
@@ -170,7 +176,7 @@ if __name__ == '__main__':
 
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
    CC=TD.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,UseCMEGrid,Time,
-             LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn)
+             LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn,a2r0Ratio,ApexIn)
    ###IF THE MASTER SCRIPT IS IN PYTHON, AND A CHILD PROCESS IS IN IDL
    #(1) THE TIME OF IDL SESSION SHOULD BE LIMITED (30 seconds or so) 
    #(2) WINDOWS SHOULD BE CLOSED 

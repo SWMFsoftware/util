@@ -115,7 +115,10 @@ pro TDSETUP1, FILE=FILE
 ;
 ; KEYWORD: 
 ;
-;   FILE = input zoomed magnetogram file 
+;   FILE = input zoomed magnetogram file
+; color 250 - positive Br (center of the spot, footpoint)
+; color 100 - negative Br (center of the spot, footpoint)
+; color 150 - central point (midpoint, or apex)
 
 ;Setup the color mode and a better IDL font.
 
@@ -155,12 +158,13 @@ pro TDSETUP1, FILE=FILE
   br_field_show[index]=-20
   index=where(br_field gt 20)
   br_field_show[index]=20
-  window,1,xs=1200,ys=1200,xpos=400,ypos=400
+  window,1,xs=800,ys=800,xpos=400,ypos=400
   loadct,0
   contour,br_field_show,min=-20,max=20,charsize=3,$
           title='SWMF Input Magnetogram (R ='$
           +strtrim(PlotRadius,2)+' Rs)',xtitle='Solar Longitude (Pixel)',$
-          ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
+          ytitle='Solar Latitude (Pixel)',/fill,nlevels=60,/iso,xstyle=1,$
+          ystyle=1
   
   loadct,39
   plots,xPositive,yPositive,/data,psym=-2,color=250,symsize=5,thick=3
@@ -197,7 +201,7 @@ pro TDSETUP1, FILE=FILE
   exit
 end
 
-pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS
+pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS, APEX=APEX
 
 ;-----------------------------------------------------------------------
 ; NAME:
@@ -213,12 +217,19 @@ pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS
 ; KEYWORD: 
 ;
 ;   FILE = input file with strapping field array (SWMF format).
+; color 250 - positive Br (center of the spot, footpoint)
+; color 100 - negative Br (center of the spot, footpoint)
+; color 150 - central point (midpoint, or apex)
   common getpict_param, filename
   common file_head
   common plot_data, grid, x, w
-
+; named indexes:
+  Bx_   =0               ; Strapping field component (horizontal) 
+  Bz_   =2               ; Vertical field Br
   filename = FILE
   read_data
+  DXyz  = eqpar[3]       ; Grid size
+  iXMid = (nx[0] - 1)/2  ; 0:iXMid -negative x, iXMid:2*iXMid - positive x
   strap_field=w(*,*,0)
   strap_field_show=strap_field
   index=where(strap_field lt 2)
@@ -232,8 +243,22 @@ pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS
   contour,strap_field_show,x(*,*,0),x(*,*,1),min=2,max=8,charsize=3,$
           title='Strapping field [Gs] Rs)',xtitle='y',$
           ytitle='Altitude',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
-  plots,-Radius,0.0,/data,psym=1,color=250,symsize=5,thick=3
-  plots,Radius,0.0,/data,psym=1,color=100,symsize=5,thick=3
+; left footpoint, x=-Radius, calculate x-index:
+  iX = iXMid - round(Radius/DXyz)
+; color with the sign  of radial field
+  if w(iX,0,Bz_) gt 0.0 then begin
+     plots,-Radius,0.0,/data,psym=1,color=250,symsize=5,thick=3   
+  endif else begin
+     plots,-Radius,0.0,/data,psym=1,color=100,symsize=5,thick=3
+  endelse
+; right footpoint, x=+Radius, calculate x-index:
+  iX = iXMid + round(Radius/DXyz)
+; color with the sign  of radial field
+  if w(iX,0,Bz_) gt 0.0 then begin
+     plots,Radius,0.0,/data,psym=1,color=250,symsize=5,thick=3   
+  endif else begin
+     plots,Radius,0.0,/data,psym=1,color=100,symsize=5,thick=3
+  endelse
   print, 'Now, you see isolines of strapping field.'
   print, 'If there is an isoline of strapping field, which:'
   print, '    -Looks like a part of circumference;'
@@ -241,21 +266,35 @@ pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS
   print, 'then click on the apex of this isoline.'
   print, 'This will become the toroidal magnetic axis of the TD configuration'
   print, 'Otherwise, click somewhere very far or very close to the point 0,0'
-  print, 'You will be able to modify your choice of the flux rope footpoints' 
+  print, 'You will be able to modify your choice of the flux rope footpoints'
+  if Apex gt 0.0 then begin
+     print, "User input: Apex=",Apex
+     plots,0.0,Apex,/data,psym=1,color=150,symsize=5,thick=3
+     ; calculate y-index of the apex
+     iY=round(Apex/DXyz)
+     BStrap=w(iXMid,iY,Bx_)
+     print, '+++'
+     print, Apex,BStrap
+     wait,2
+     wdelete,0
+     exit
+  endif
   !MOUSE.button = 0
   while(!MOUSE.button ne 1) do begin
      cursor,xApex,yApex,/data,/down
      if abs(xApex) gt Radius or yApex lt 0.05 or yApex gt Radius then begin
         print,'Failure, choose different foootpoints'   
      endif else begin
-        plots,0.0,yApex,/data,psym=1,color=175
-        BStrap=5.0  ; To be done!!!
+        plots,0.0,yApex,/data,psym=1,color=150,symsize=5,thick=3
+        ; calculate y-index of the apex
+        iY=round(yApex/DXyz)
+        BStrap=w(iXMid,iY,Bx_)
         print, '+++'
         print, yApex,BStrap
      endelse
   endwhile
   !mouse.button=0
-  wait,10
+  wait,2
   wdelete,0
   exit
 end

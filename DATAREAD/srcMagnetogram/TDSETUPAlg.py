@@ -10,7 +10,6 @@ BMax = 1900.0
 cPi  = np.pi
 Rad2Deg = 180/cPi
 Deg2Rad = cPi/180
-a2r0Ratio =0.350   # Ratio of minor radius to major one. Can be  an input
 
 def get_weighted_center(X,Y,Br_C,BrThreshold,nLat,nLon,Lat_I,Lon_I,\
                            IsUniformLat):
@@ -156,7 +155,7 @@ def TwoPointsOnSph(Lon1, Lat1, Lon2, Lat2):
     return(Lon,Lat,Orientation,HalfDist)
    
 def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
-        LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn):
+        LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn,a2r0Ratio,ApexIn):
    Lon0     = Param_I[0]
    LonEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -311,7 +310,7 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
          Data_IV[k,l,1]=PSizeMap_C[k+LatARMin,l+LonARMin]
          Data_IV[k,l,2]=NSizeMap_C[k+LatARMin,l+LonARMin]
          Data_IV[k,l,3]=Dist2Min_C[k,l]
-   Apex   = -1.
+   Apex   = ApexIn
    BStrap = -1.
    while(Apex ==-1. or BStrap ==-1.):
       if (LonFPPosIn ==999. or LatFPPosIn ==999. or LonFPNegIn ==999.
@@ -493,8 +492,8 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
       FileId.write(';\n')
       FileId.write('.r GLSETUP1 \n')
       FileId.write(
-         "      TDSETUP2,file='FRM_x=0.out',radius={:4.2f} \n".format(
-            np.sqrt(TDRadius**2-TDDepth**2)))
+         "TDSETUP2,file='FRM_x=0.out',radius={0:4.2f}, Apex={1:4.2f}\n".format(
+            TDRadius,Apex))
       FileId.close()
       ########SHOW STRAPPING FIELD, CHOOSE APEX #####################
       print('Now, you will see isolines of strapping field.\n')
@@ -592,13 +591,6 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
       FileId.close()
       FileId=open('RunFRM','r')
       subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
-      FileId.close()
-      FileId=open('runidl3','w')
-      FileId.write(';\n')
-      FileId.write('.r GLSETUP1 \n')
-      FileId.write(
-         "      TDSETUP2,file='FRM_x=0.out',radius={:4.2f} \n".format(
-            np.sqrt(TDRadius**2-TDDepth**2)))
       FileId.close()
       
    return(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C)
