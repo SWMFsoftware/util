@@ -37,6 +37,7 @@ DATAREAD/srcMagnetogram/adapt*
 DATAREAD/srcMagnetogram/runidl*
 DATAREAD/srcMagnetogram/runlog*
 DATAREAD/srcMagnetogram/RunFRM
+DATAREAD/srcMagnetogram/FRM_3d.dat
 
 EMPIRICAL/srcEE/*.exe
 
