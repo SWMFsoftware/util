@@ -296,14 +296,20 @@ subroutine EIE_FillLats(Lats, iOutputError)
   real, intent(in)  :: Lats(EIEi_HavenLats)
   integer, intent(out) :: iOutputError
 
-  integer :: iMlt
+  integer :: ii, iLat, iMlt
 
   iOutputError = 0
 
   do iMlt=1,EIEi_HavenMlts
+     ! Northern hemisphere lats:
      EIEr3_HaveLats(iMlt,:,1) = Lats
-  enddo
-
+     ! Southern hemisphere lats (flipped):
+     do iLat=1, EIEi_HavenLats
+        ii = EIEi_HavenLats - iLat + 1
+        EIEr3_HaveLats(iMlt,iLat,2) = 0 - Lats(ii)
+     enddo
+  end do
+  
 end subroutine EIE_FillLats
 
 !------------------------------------------------------------------------
@@ -323,10 +329,12 @@ subroutine EIE_FillMltsOffset(Mlts, iOutputError)
 
   iOutputError = 0
 
+  ! Set MLT for both hemispheres:
   do iLat=1,EIEi_HavenLats
-     EIEr3_HaveMlts(1,iLat,1) = Mlts(EIEi_HavenMlts-2)-360.0
-     EIEr3_HaveMlts(2:EIEi_HavenMlts,iLat,1) = Mlts
+     EIEr3_HaveMlts(1,iLat,1) = mod(Mlts(EIEi_HavenMlts-2) - 180.0, 360.0)
+     EIEr3_HaveMlts(2:EIEi_HavenMlts,iLat,1) = mod(Mlts + 180.0, 360.0)
+     EIEr3_HaveMlts(1,iLat,2) = mod(Mlts(EIEi_HavenMlts-2) - 180.0, 360.0)
+     EIEr3_HaveMlts(2:EIEi_HavenMlts,iLat,2) = mod(Mlts + 180.0, 360.0)
   enddo
 
 end subroutine EIE_FillMltsOffset
-
