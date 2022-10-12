@@ -104,7 +104,138 @@ subroutine UA_SetLats(LatsIn, iError)
 end subroutine UA_SetLats
 
 !----------------------------------------------------------------------
+subroutine EIE_UaFindPoint(LocIn, LocOut, iError)
+  ! Given a theta/phi pair, find a point within a spherical grid.
+  ! Similar to EIE_Library::EIE_FindPoint
+  ! but customized for UA/GITM-IE/Ridley_serial coupling.
 
+  ! INPUT: 
+  ! LocIn(1) = Phi
+  ! LocIn(2) = Theta
+  
+  ! OUTPUT:
+  ! LocOut(1) = Index of Block
+  ! LocOut(2) = Index of Longitude
+  ! LocOut(3) = Index of Latitude
+  ! LocOut(4) = Multiplication factor for Longitude
+  ! LocOut(5) = Multiplication factor for Latitude
+  ! iError: Error reporting (zero if success)
+
+  use ModErrors
+  use ModEIE_Interface
+
+  implicit none
+
+  real, dimension(2), intent(in)  :: LocIn
+  real, dimension(5), intent(out) :: LocOut
+  integer, intent(out) :: iError
+  real :: MLTIn, LatIn
+  integer :: j,i,iBLK
+
+  logical :: IsFound
+
+  LocOut = -1.0
+
+  iError = 0
+
+  ! Check to see if the point is even on the grid.
+  MLTIn = mod(LocIn(1),24.0)
+  LatIn = LocIn(2)
+  if (LatIn > 90.0) then
+     LatIn = 180.0 - LatIn
+     MLTIn = mod(MLTIn+12.0,24.0)
+  endif
+  
+  if (LatIn < -90.0) then
+     LatIn = -180.0 - LatIn
+     MLTIn = mod(MLTIn+12.0,24.0)
+  endif
+
+  if (MLTIn > 24.0 .or. MLTIn < 0 .or. LatIn > 90.0 .or. LatIn < -90.0) then
+     iError = ecPointOutofRange_
+     write(*,*) 'Rejected MLTIn and LatIn pairs: ',MLTIn,LatIn 
+     return
+  endif
+
+  iBLK = 1
+  do while (iBLK <= EIEi_HavenBLKs)
+     j = 1
+     do while (j <= EIEi_HavenMLTs)
+        i = 1
+        do while (i <= EIEi_HavenLats)
+
+           if (j == EIEi_HavenMLTs) then
+              !Stitching ends but not at 24 to 0 boundary
+              if (LatIn <  EIEr3_HaveLats(j,i,iBLK) .and. &
+                 LatIn >= EIEr3_HaveLats(j,i+1,iBLK) .and. &
+                 MLTIn <  EIEr3_HaveMLTs(1,i,iBLK)/360*24 .and. &   
+                 MLTIn >= EIEr3_HaveMLTs(j,i,iBLK)/360*24) then
+
+                 LocOut(1) = iBLK
+                 LocOut(2) = j
+                 LocOut(3) = i
+                 LocOut(4) = (MLTIn - EIEr3_HaveMLTs(j,i,iBLK)/360*24) / &
+                      (EIEr3_HaveMLTs(1,i,iBLK)/360*24 - &
+                       EIEr3_HaveMLTs(j,i,iBLK)/360*24)
+                 LocOut(5) = (LatIn - EIEr3_HaveLats(j,i,iBLK))/&
+                      (EIEr3_HaveLats(j,i+1,iBLK) - EIEr3_HaveLats(j,i,iBLK))
+
+                 iBLK = EIEi_HavenBLKs
+                 j = EIEi_HavenMLTs
+                 i = EIEi_HavenLats
+              end if
+              
+           else if (LatIn <  EIEr3_HaveLats(j,i,iBLK) .and. &
+                 LatIn >= EIEr3_HaveLats(j,i+1,iBLK) .and. &
+                 MLTIn <  EIEr3_HaveMLTs(j+1,i,iBLK)/360*24 + 24 .and. & 
+                 MLTIn >= EIEr3_HaveMLTs(j,i,iBLK)/360*24 .and. &
+                 EIEr3_HaveMLTs(j,i,iBLK)/360*24 > EIEr3_HaveMLTs(j+1,i,iBLK)/360*24) then ! bridging the 24 to 0 gap
+
+              LocOut(1) = iBLK
+              LocOut(2) = j
+              LocOut(3) = i
+              LocOut(4) = (MLTIn - EIEr3_HaveMLTs(j,i,iBLK)/360*24)/&
+                   (EIEr3_HaveMLTs(j+1,i,iBLK)/360*24 + 24 - &
+                    EIEr3_HaveMLTs(j,i,iBLK)/360*24)
+              LocOut(5) = (LatIn - EIEr3_HaveLats(j,i,iBLK))/&
+                          (EIEr3_HaveLats(j,i+1,iBLK)-EIEr3_HaveLats(j,i,iBLK))
+
+              iBLK = EIEi_HavenBLKs
+              j = EIEi_HavenMLTs
+              i = EIEi_HavenLats
+
+           else 
+              if (LatIn <  EIEr3_HaveLats(j,i,iBLK) .and. &
+                 LatIn >= EIEr3_HaveLats(j,i+1,iBLK) .and. &
+                 MLTIn <  EIEr3_HaveMLTs(j+1,i,iBLK)/360*24 .and. &
+                 MLTIn >= EIEr3_HaveMLTs(j,i,iBLK)/360*24) then
+
+                 LocOut(1) = iBLK
+                 LocOut(2) = j
+                 LocOut(3) = i
+                 LocOut(4) = (MLTIn - EIEr3_HaveMLTs(j,i,iBLK)/360*24)/&
+                      (EIEr3_HaveMLTs(j+1,i,iBLK)/360*24 - &
+                       EIEr3_HaveMLTs(j,  i,iBLK)/360*24)
+                 LocOut(5) = (LatIn - EIEr3_HaveLats(j,i,iBLK))/&
+                      (EIEr3_HaveLats(j,i+1,iBLK) - EIEr3_HaveLats(j,i,iBLK))
+
+              iBLK = EIEi_HavenBLKs
+              j = EIEi_HavenMLTs
+              i = EIEi_HavenLats
+              end if
+           end if
+           i = i + 1
+        enddo
+        j = j + 1
+     enddo
+
+     iBLK = iBLK + 1
+
+  enddo
+
+end subroutine EIE_UaFindPoint
+
+!----------------------------------------------------------------------
 subroutine UA_SetGrid(MLTsIn, LatsIn, iError)
   
   use ModErrors
@@ -153,7 +284,7 @@ subroutine UA_SetGrid(MLTsIn, LatsIn, iError)
            UAr1_Location(1) = mod((UAr2_NeedMLTs(j,i) + 24.0),24.0)
            UAr1_Location(2) = UAr2_NeedLats(j,i)
 
-           call EIE_FindPoint(UAr1_Location, EIEr1_Location, iError)
+           call EIE_UaFindPoint(UAr1_Location, EIEr1_Location, iError)
 
            if (iError == 0) then
               UAi3_InterpolationIndices(j,i,1:3) = EIEr1_Location(1:3)
@@ -164,9 +295,9 @@ subroutine UA_SetGrid(MLTsIn, LatsIn, iError)
            
         enddo
      enddo
-
+     
   endif
-
+  
 end subroutine UA_SetGrid
 
 !----------------------------------------------------------------------
@@ -236,11 +367,11 @@ subroutine UA_GetPotential(PotentialOut, iError)
   integer :: iMLT, iLat
   
   iError = 0
-
+  
   if (UAl_UseGridBasedEIE) then
 
      EIE_Value = EIEr3_HavePotential
-
+     
      call UA_GetValue(EIE_Value, ValueOut, Filler, iError)
 
      if (iError /= 0) then
@@ -280,7 +411,6 @@ subroutine UA_GetPotential(PotentialOut, iError)
         PotentialOut = ValueOut
      else
         write(*,*) 'error in UA_GetPotential (nongrid): ',cErrorCodes(iError)
-        stop
         PotentialOut = -1.0e32
      endif
 
