@@ -14,10 +14,11 @@ module EEE_ModMain
   public :: EEE_initialize
   public :: EEE_set_parameters
   public :: EEE_get_state_init
-  public :: EEE_get_state_BC
-  public :: EEE_get_B0
+  public :: EEE_get_state_bc
+  public :: EEE_get_b0
   public :: EEE_do_not_add_cme_again
   public :: EEE_set_plot_range
+
 contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
@@ -38,9 +39,9 @@ contains
        iComm = MPI_COMM_WORLD
     end if
     call MPI_COMM_RANK(iComm,iProc,iError)
-    if(present(TimeNow).and.StartTime < 0.0)then
-       StartTime = TimeNow
-       if(iProc==0)write(*,*) prefix,' StartTime=',StartTime,'[s]'
+    if(present(TimeNow) .and. tStartCme < 0.0)then
+       tStartCme = TimeNow
+       if(iProc==0)write(*,*) prefix,' tStartCme=',tStartCme,'[s]'
     end if
 
     g = gamma
@@ -108,10 +109,11 @@ contains
        ! To avoid repeated scaling in subsequent sessions
        DoNormalizeXyz = .false.
     end if
+
     DoInit = .true.
+
   end subroutine EEE_initialize
   !============================================================================
-
   subroutine EEE_set_parameters(NameCommand)
 
     use ModReadParam,     ONLY: read_var
@@ -123,7 +125,8 @@ contains
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
          UseTD22, LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
-         UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak
+         UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, &
+         tStartCme, tDecayCmeDim
     use ModNumConst,      ONLY: cDegToRad
     use ModCoordTransform, ONLY: lonlat_to_xyz
     use CON_axes,          ONLY: dLongitudeHgrDeg
@@ -135,10 +138,15 @@ contains
     character(len=*), parameter:: NameSub = 'EEE_set_parameters'
     !--------------------------------------------------------------------------
     select case(NameCommand)
+    case("#CMETIME")
+       call read_var("tStartCme", tStartCme)
     case("#CME")
        call read_var("UseCme", UseCme)
        if(UseCme)then
           call read_var("DoAddFluxRope",  DoAddFluxRope)
+          ! Reset tStartCme to -1 (say for a second CME)
+          if(DoAddFluxRope) tStartCme = -1.0
+          call read_var("tDecayCme",      tDecayCmeDim)
           call read_var("LongitudeCme",   LongitudeCme)
           call read_var("LatitudeCme",    LatitudeCme)
           ! Correct for Rotation
@@ -204,13 +212,10 @@ contains
 
   end subroutine EEE_set_parameters
   !============================================================================
-
-  subroutine EEE_get_state_BC(Xyz_D,     &
-       Rho, U_D, B_D, p,                 &
-       Time, nStep, Iteration_number)
+  subroutine EEE_get_state_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
     
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
-         UseCms, UseSpheromak
+         UseCms, UseSpheromak, tStartCme, tDecayCmeDim, Io2No_V, UnitT_
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
@@ -218,59 +223,63 @@ contains
 
     real, intent(in) :: Xyz_D(3), Time
     real, intent(out) :: Rho, U_D(3), B_D(3), p
-    integer, intent(in):: nstep, iteration_number
+    integer, intent(in):: nstep, nIter
 
+    ! Perturbations due to CME
     real :: Rho1, U1_D(3), B1_D(3), p1
-    !--------------------------------------------------------------------------
 
+    ! Coefficient for perturbations (less than 1 for decay)
+    real :: Coeff
+    !--------------------------------------------------------------------------
     ! initialize perturbed state variables
     Rho = 0.0; U_D = 0.0; B_D = 0.0; p = 0.0
 
     if(.not.UseCme) RETURN
 
+    ! linearly decay the perturbed magnetic field to 0 during tDecay time
+    Coeff = 1.0
+    if(tDecayCmeDim > 0.0) Coeff = max(0.0, &
+         1 - (Time - tStartCme)/(tDecayCmeDim*Io2No_V(UnitT_)))
+
     if (UseTD) then
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
-
-       Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
+       Rho = Rho + Coeff*Rho1; B_D = B_D + Coeff*B1_D; p = p + Coeff*p1
     end if
 
     if(UseGL)then
        ! Add Gibson & Low (GL98) flux rope
-       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D)
-       B_D = B_D + B1_D
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time) !! send Time
+       B_D = B_D + Coeff*B1_D
     endif
 
    if(UseSpheromak)then
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
-       B_D = B_D + B1_D; U_D = U_D + U1_D
+       B_D = B_D + Coeff*B1_D; U_D = U_D + Coeff*U1_D
     endif
 
     if(UseShearFlow)then
-       call get_shearflow(Xyz_D, Time, U1_D, iteration_number)
-
-       U_D = U_D + U1_D
+       call get_shearflow(Xyz_D, Time, U1_D, nIter)
+       U_D = U_D + Coeff*U1_D
     end if
 
     if(UseCms) call get_cms(Xyz_D, B_D)
 
   end subroutine EEE_get_state_BC
   !============================================================================
-
-  subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, iteration_number)
+  subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, nIter)
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
-         DoAddGL, UseCms, DoAddSpheromak, StartTime
+         DoAddGL, UseCms, DoAddSpheromak, tStartCme
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModCms,  ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3)
     real, intent(out) :: Rho, B_D(3), p
-    integer, intent(in) :: nStep, iteration_number
+    integer, intent(in) :: nStep, nIter
     real :: U_D(3)
     real :: Rho1, U1_D(3), B1_D(3), p1
     !--------------------------------------------------------------------------
-
     ! initialize perturbed state variables
     Rho = 0.0; U_D = 0.0; B_D = 0.0; p = 0.0
 
@@ -284,12 +293,12 @@ contains
 
     if(DoAddGL)then
        ! Add Gibson & Low (GL98) flux rope
-       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     end if
 
     if(DoAddSpheromak)then
-       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, StartTime)
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, tStartCme)
        Rho = Rho + Rho1; B_D = B_D + B1_D
        p = p + p1; U_D = U_D + U1_D
     end if
@@ -298,15 +307,15 @@ contains
   end subroutine EEE_get_state_init
   !============================================================================
   subroutine EEE_do_not_add_cme_again
-    !
+
     ! Designed to avoid repeatedly adding CME in subsequent sessions
-    !
+
     use EEE_ModCommonVariables, ONLY: DoAddFluxRope, &
          DoAddTD, DoAddGL, DoAddSpheromak
-
     !--------------------------------------------------------------------------
     DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false.
     DoAddSpheromak = .false.
+
   end subroutine EEE_do_not_add_cme_again
   !============================================================================
   subroutine EEE_set_plot_range(nXY, nZ)

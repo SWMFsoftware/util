@@ -9,7 +9,7 @@ module EEE_ModGL98
   use ModUtilities, ONLY: norm2 
 #endif
   use EEE_ModCommonVariables
-
+  
   implicit none
 
   SAVE
@@ -18,7 +18,8 @@ module EEE_ModGL98
 
   public :: set_parameters_gl98
   public :: get_gl98_fluxrope
-  public :: get_GL98_size
+  public :: get_gl98_size
+
   ! Local variables
 
   ! Geometric characteristics of the superimposed configuration:
@@ -83,9 +84,10 @@ module EEE_ModGL98
 contains
   !============================================================================
   subroutine init
-    use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
-    real :: Rotate_DD(3,3)
 
+    use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
+
+    real :: Rotate_DD(3,3)
     !--------------------------------------------------------------------------
     DoInit=.false.
 
@@ -94,9 +96,8 @@ contains
 
     ! The constant coefficient, Beta0 = -2.8723629148938019E-02
     ! This is Beta0 parameter for the GL particular configuration
-
     B0 = B0Dim*Io2No_V(UnitB_)
-
+    
     ! Relation between the cme_a1 parameter by Gibson-Low and B0
     ! B0 = - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2)*4*cPi
 
@@ -125,7 +126,7 @@ contains
        write(*,*) prefix, 'OrientationCme = ', OrientationCme,'[degrees]'
        if(UseSpheromak)then
            write(*,*) prefix, '>> Self-similar solution for spheromak <<'
-           write(*,*) prefix, 'Start time     = ',StartTime,'[s]'
+           write(*,*) prefix, 'Start time     = ',tStartCme,'[s]'
            write(*,*) prefix, 'CME speed      = ',uCmeSi*Si2Io_V(UnitU_),&
                 '[km/s]'
            write(*,*) prefix, 'is reached at R = ',&
@@ -135,12 +136,12 @@ contains
                    'The lowest CME point reaches the heliodistance of '// &
                    '1 Rs at time=',&
                    ((2*Radius - ApexHeight)/(1 + ApexHeight -2*Radius)&
-                   /(uCmeSi*rCmeApexInvSi) + StartTime)/3600,'[h]'
+                   /(uCmeSi*rCmeApexInvSi) + tStartCme)/3600,'[h]'
               write(*,'(a,f4.1,a)') prefix//&
                    'The lowest CME point reaches the heliodistance of '// &
                    '1.15 Rs at time=',&
                    ((0.15 + 2*Radius - ApexHeight)/(1 + ApexHeight -2*Radius)&
-                   /(uCmeSi*rCmeApexInvSi) + StartTime)/3600,'[h]'
+                   /(uCmeSi*rCmeApexInvSi) + tStartCme)/3600,'[h]'
            end if
         end if
        Write(*,*) prefix
@@ -186,25 +187,23 @@ contains
        call read_var('Radius',      Radius)        ![rSun]
        call read_var('Stretch',     Stretch)       ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
+       if(UseSpheromak)call read_var('uCmeSi', uCmeSi)  ![km/s]
+       
        rDistance1 = 1 + ApexHeight + Stretch - Radius
-       !
-       ! Save coordinates of the CME Apex...
+
+       ! position of the CME apex
        XyzCmeApexSi_D = DirCme_D*(1 + ApexHeight)
-       !
-       !...and center:
+
+       ! position of CME center
        XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*Radius
        DoNormalizeXyz = .true.
-       if(UseSpheromak)then
-          StartTime = -1.0
-          call read_var('uCmeSi', uCmeSi)  ![km/s]
-       end if
+
     case default
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
 
   end subroutine set_parameters_gl98
   !============================================================================
-
   subroutine get_gl98_fluxrope(XyzIn_D, Rho, p, b_D, u_D, TimeNow)
 
     ! Definition of Parameters used for the initial state
@@ -307,9 +306,7 @@ contains
     real :: R2CrossB0_D(3)
     real :: Alpha0R2
 
-    !
     ! Parameters of the self-similar expansion
-    !
     real :: Phi     ! 1 + Time*(U/r)
     real :: PhiInv  ! 1/Phi
     !--------------------------------------------------------------------------
@@ -320,7 +317,7 @@ contains
     eBoldR_D = XyzIn_D/r
     if(UseSpheromak)then
        ! Expansion factor for self-similar solution
-       Phi = 1 + (TimeNow - StartTime)*uCmeSi*rCmeApexInvSi
+       Phi = 1 + (TimeNow - tStartCme)*uCmeSi*rCmeApexInvSi
        PhiInv = 1/Phi
        ! Input argument for the self-similar solution
        r = r*PhiInv
@@ -397,6 +394,7 @@ contains
             u_D = XyzIn_D*PhiInv   & ! Inputs for self-similar solution
             *No2Si_V(UnitX_)       & ! Conversion to SI units
             *uCmeSi*rCmeApexInvSi    ! uCmeSi velocity is reached at the apex
+
     else
        b_D = 0; Rho = 0; p = 0
        if(present(u_D)) u_D = 0

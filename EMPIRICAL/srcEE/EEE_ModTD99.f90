@@ -427,7 +427,7 @@ module EEE_ModTD99
   use EEE_ModCommonVariables, ONLY: UseTD, UseTD14, UseTD22, DirCme_D, &
        No2Si_V, Si2No_V, Io2No_V, Io2Si_V, No2Io_V,                    &
        UnitB_, UnitRho_, UnitX_,  UnitU_, UnitP_, UnitTemperature_,    &
-       iProc, StartTime
+       iProc, tStartCme
   use ModHyperGeometric
   use ModConst, ONLY: cMu, cDegToRad, cRadToDeg, cPi
   use ModFieldGS, ONLY: set_filament_geometry, set_filament_field, &
@@ -618,12 +618,12 @@ contains
              UseStaticCharge = .true.
           case('cancelflux')
              UseDynamicStrapping = .true.
-             StartTime = -1.0
+             tStartCme = -1.0
              call read_var('UChargeX', UChargeX)
           case('moving')
              UseStaticCharge = .true.
              UseDynamicStrapping = .true.
-             StartTime = -1.0
+             tStartCme = -1.0
              call read_var('UChargeX', UChargeX)
           case default
              if(iProc==0)call CON_stop(&
@@ -841,7 +841,7 @@ contains
                *Si2No_V(UnitX_)                   ! To R_sun per s
           if(iProc==0)then
              write(*,'(a,es13.5,a)') prefix//&
-                  'StartTime = ',StartTime,'[s]'
+                  'tStartCme = ',tStartCme,'[s]'
              write(*,'(a,es13.5,a)') prefix//&
                   'Velocity of converging charges = ',&
                   UChargeX,'[R_s/s]'
@@ -1242,7 +1242,7 @@ contains
     BqField_D = - BqField_D
 
     ! When the time is long enough, the moving charges annihilate
-    if((TimeNow - StartTime)*UChargeX >= qDistance)then
+    if((TimeNow - tStartCme)*UChargeX >= qDistance)then
        BqField_D = BqField_D*No2Si_V(UnitB_)
        RETURN
     end if
@@ -1250,9 +1250,9 @@ contains
     ! Compute the locations, RMins_D and RPlus_D, of the two magnetic
     ! charges, -/+q::
     RPlusMoving_D  = Xyz_D - &
-         (RPlus_D  - (TimeNow - StartTime)*UChargeX*UnitX_D)
+         (RPlus_D  - (TimeNow - tStartCme)*UChargeX*UnitX_D)
     RMinusMoving_D = Xyz_D - &
-         (RMinus_D + (TimeNow - StartTime)*UChargeX*UnitX_D)
+         (RMinus_D + (TimeNow - tStartCme)*UChargeX*UnitX_D)
     RPlus  = norm2( RPlusMoving_D)
     RMinus = norm2(RMinusMoving_D)
     BqField_D = (BqField_D + &

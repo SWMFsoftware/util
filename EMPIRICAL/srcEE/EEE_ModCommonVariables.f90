@@ -52,6 +52,7 @@ module EEE_ModCommonVariables
 
   ! Use Gibbson-Law, Titov-Demoulin, spheromak flux ropes
   logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false.
+
   ! Use Titov-Demoulin 2014 or 2022
   logical:: UseTD14 = .false., UseTD22 = .false.
 
@@ -69,28 +70,34 @@ module EEE_ModCommonVariables
 
   ! CME location and orientation
   real :: LongitudeCme = 0.0, LatitudeCme = 0.0, OrientationCme = 0.0
-  !
+
   ! Direction vector from the heliocenter to the CME center:
   real :: DirCme_D(3) = 0.0
-  !
+
   ! Coordinate vectors of the CME center and apex
   logical :: DoNormalizeXyz = .false.
   real :: XyzCmeCenterSi_D(3) = 0.0, XyzCmeApexSi_D(3) = 0.0
   real :: rCmeApexInvSi = 0.0
+
   ! The AMBIENT magnetic field at these points
   real :: bAmbientCenterSi_D(3) = 0.0, bAmbientApexSi_D(3) = 0.0
 
-  !
-  ! Starting time when the dynamic strapping field starts to be applied
-  ! is stored, to calculate the effect of displacement of moving charges
-  real    :: StartTime = -1.0
+  ! Starting time of CME eruption
+  real    :: tStartCme = -1.0
+
+  ! Decay time of CME boundary conditions
+  real    :: tDecayCmeDim = -1.0, tDecayCme = -1.0
+
   logical :: DoInit = .true.
+
   ! Plotting options:
   ! Lineaar resolution, in terms of the unit of length.  For solar
   ! applications, the magnetogram resolution of 1 degree, corresponds
   ! to the linear resolution of about 1/60
   real, parameter :: DXyzPlot = 0.0150
+
   ! Extension of the plot domain in terms of  rreaal size of configuration
   real, parameter :: ExtensionFactor = 1.50
+
 end module EEE_ModCommonVariables
 !==============================================================================

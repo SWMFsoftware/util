@@ -21,7 +21,6 @@ module EEE_ModShearFlow
 
 contains
   !============================================================================
-
   subroutine set_parameters_shearflow(NameCommand)
 
     use ModReadParam, ONLY: read_var
@@ -63,8 +62,7 @@ contains
 
   end subroutine set_parameters_shearflow
   !============================================================================
-
-  subroutine get_shearflow(x_D,Time,U_D,iteration_number)
+  subroutine get_shearflow(x_D,Time,U_D,nIter)
 
     !DESCRIPTION:
     ! Boundary shear flow that conserves the radial magnetic flux
@@ -76,7 +74,7 @@ contains
 
     real, intent(in)  :: x_D(3), Time
     real, intent(out) :: U_D(3)
-    integer, intent(in) :: iteration_number
+    integer, intent(in) :: nIter
 
     real :: TimeProfile
     real :: R, Theta, Phi, Xy, SinTheta, CosTheta, SinPhi, CosPhi, UnitR_D(3)
@@ -159,7 +157,7 @@ contains
     U_D(2) = UTheta*CosTheta*SinPhi + UPhi*CosPhi
     U_D(3) =-UTheta*SinTheta
 
-    if(iteration_number == -1)then
+    if(nIter == -1)then
        U_D = FlowAmplitude*U_D
     else
        U_D = FlowAmplitude*U_D*TimeProfile
@@ -167,7 +165,6 @@ contains
 
   end subroutine get_shearflow
   !============================================================================
-
   real function shear_profile(R,Theta,Phi,Time,FullBr)
     use EEE_ModCommonVariables, ONLY: Si2No_V, UnitB_
     use EEE_ModGetB0,   ONLY: EEE_get_B0
@@ -202,6 +199,5 @@ contains
 
   end function shear_profile
   !============================================================================
-
 end module EEE_ModShearFlow
 !==============================================================================

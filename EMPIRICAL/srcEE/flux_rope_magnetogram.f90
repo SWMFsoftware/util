@@ -2,6 +2,7 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 program magnetogram
+
   use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
        EEE_set_plot_range
   use EEE_ModCommonVariables, ONLY:   Io2Si_V, Si2Io_V, Io2No_V, &
@@ -104,7 +105,7 @@ program magnetogram
                 [i  - 1  -  nXY, j - 1 - nXY, k -1] )
            if(DoAddFluxRope)then
               call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
-                   Time = 0.0, nStep  = 0, Iteration_Number=0)
+                   Time = 0.0, nStep  = 0, nIter=0)
               Var_VN(B1x_:B1z_,i,j,k) = matmul(B_D, Rotate_DD)
            end if
            if(iTableB0  > 0)then
@@ -193,7 +194,7 @@ contains
           Longitude = (Longitude_I(i) + Long0)*cDegToRad
           call rlonlat_to_xyz(1.0,Longitude,Latitude, Xyz_D)
           call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
-               Time = 0.0, nStep  = 0, Iteration_Number=0)
+               Time = 0.0, nStep  = 0, nIter=0)
           ! Convert to Br, BLon, BLat components
           XyzRLonLat_DD = rot_xyz_rlonlat(lon=Longitude, &
                lat=Latitude)
