@@ -460,6 +460,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    FileId.write("#CME \n")
    FileId.write("T                   UseCme \n")
    FileId.write("T                   DoAddFluxRope \n")
+   FileId.write("-1.0                tDecayCme \n")
    FileId.write("%-10.2f          LongitudeCme \n"% GL_Longitude)
    FileId.write("%-10.2f          LatitudeCme \n"% GL_Latitude)
    FileId.write("%-10.2f          OrientationCme \n"% GL_Orientation)
