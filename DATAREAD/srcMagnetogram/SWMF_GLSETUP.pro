@@ -698,6 +698,7 @@ pro SWMF_GLSETUP, FILE=FILE, UseBATS=UseBATS, PlotRadius=PlotRadius,   $
   printf,lun,'#CME'
   printf,lun,'T                       UseCME'
   printf,lun,'T                       DoAddFluxRope'
+  printf,lun,'-1.0                    tDecayCme'
   printf,lun,FORMAT='(F-6.2,5X,A25)',GL_Longitude,'LongitudeCme'
   printf,lun,FORMAT='(F-6.2,5X,A24)',GL_Latitude,'LatitudeCme'
   printf,lun,FORMAT='(F-6.2,5X,A27)',GL_Orientation,'OrientationCme'
