@@ -215,7 +215,7 @@ contains
   subroutine EEE_get_state_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
     
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
-         UseCms, UseSpheromak, tStartCme, tDecayCmeDim, Io2No_V, UnitT_,iProc
+         UseCms, UseSpheromak, tStartCme, tDecayCmeDim, Io2No_V, UnitT_
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
