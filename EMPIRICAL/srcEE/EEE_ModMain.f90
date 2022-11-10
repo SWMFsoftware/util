@@ -224,8 +224,7 @@ contains
     real, intent(in) :: Xyz_D(3), Time
     real, intent(out) :: Rho, U_D(3), B_D(3), p
     integer, intent(in):: nstep, nIter
-    integer :: nStepLast = -1.
-
+    
     ! Perturbations due to CME
     real :: Rho1, U1_D(3), B1_D(3), p1
 
@@ -240,7 +239,7 @@ contains
     ! linearly decay the perturbed magnetic field to 0 during tDecay time
     Coeff = 1.0
     if(tDecayCmeDim > 0.0) Coeff = max(0.0, &
-         1 - (Time - tStartCme)/(tDecayCmeDim)) !*Io2No_V(UnitT_)))
+         1 - (Time - tStartCme)/tDecayCmeDim)
 
     if (UseTD) then
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
@@ -251,12 +250,6 @@ contains
        ! Add Gibson & Low (GL98) flux rope
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time) !! send Time
        B_D = B_D + Coeff*B1_D
-       if (nStep > nStepLast) then
-          write(*,*)'Coeff = ',Coeff
-          write(*,*)
-          write(*,*)'Time, tStartCme, tDecayCme = ',Time, tStartCme, tDecayCmeDim !*Io2No_V(UnitT_)
-          nStepLast = nStep
-       end if
     end if
    if(UseSpheromak)then
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
