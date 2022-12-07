@@ -685,7 +685,14 @@ contains
 
     ! Computation of the portion of the flux rope current that is above
     ! the solar surface:
-    AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
+    if(UseTD22)then
+       ! More accurate formula for R_S = (1.0*Io2No_V(UnitX_))
+       AlphaRope = 2.0*acos((2.0*(1.0*Io2No_V(UnitX_))*Depth - Depth**2 &
+            -rInfty**2)/(2.0*( (1.0*Io2No_V(UnitX_)) - Depth)*rInfty))
+    else
+       ! Approximate formula at Depth<<R_S and rInfty<<R_S
+       AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
+    end if
     FootSepar  = Rtube*No2Si_V(UnitX_)*sin(0.5*AlphaRope)/1.0e6  ! in [Mm]
     if(iProc==0)then
        write(*,'(a,es13.5,a)') prefix//'Separation of flux rope ends is ',&
