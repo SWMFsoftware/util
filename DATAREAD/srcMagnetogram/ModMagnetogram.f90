@@ -3,7 +3,7 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModMagnetogram
 
-  use ModNumConst,       ONLY: cTwoPi, cRadToDeg, cDegToRad
+  use ModNumConst,       ONLY: cTwoPi, cRadToDeg, cDegToRad, cPi
   use CON_axes,          ONLY: dLongitudeHgrDeg
   use ModUtilities,      ONLY: CON_stop
   use ModCoordTransform, ONLY: rot_xyz_sph, rot_xyz_rlonlat, rot_matrix_z,&
@@ -98,6 +98,7 @@ contains
     type(TableType),  pointer :: Ptr
     real(Real4_), allocatable  :: Tmp_VIIIII(:,:,:,:,:,:)
     real, allocatable :: Magnetogram_VII(:,:,:)
+    real :: CosLat, OpenFluxNeg, OpenFluxPos
     real :: DX_D(3), Lon, Lat ! in degrees
     real :: XyzRLonLat_DD(3,3)
     integer :: iLon, iLat
@@ -143,12 +144,13 @@ contains
        call deallocate_harmonics_arrays
        if(iProc==0) then
           Ptr => Table_I(iTableB0)
-          allocate(Magnetogram_VII(3, nLon, nLat+1))
+          allocate(Magnetogram_VII(6, nLon, nLat+1))
           allocate(Tmp_VIIIII(3, nR+1, nLon+1,  nLat+1, 1, 1))
           Tmp_VIIIII = Ptr%Value4_VC
           ! Take the radial slice at the photospheric level,
           ! omit the strip at the longitude of 360 degrees:
-          Magnetogram_VII  =  real(Tmp_VIIIII(:,1,1:nLon,:,1,1))
+          Magnetogram_VII(1:3,:,:)  =  real(Tmp_VIIIII(:,1,1:nLon,:,1,1))
+          Magnetogram_VII(4:6,:,:)  =  real(Tmp_VIIIII(:,nR+1,1:nLon,:,1,1))
           DX_D = Ptr%DIndex_I
           do iLat  = 1, nLat + 1
              Lat = -90 + DX_D(3)*(iLat - 1)
@@ -157,26 +159,46 @@ contains
                 ! Convert to Br, BLon, BLat components
                 XyzRLonLat_DD = rot_xyz_rlonlat(lon=cDegToRad*Lon, &
                      lat= cDegToRad*Lat)
-                Magnetogram_VII(:, iLon, iLat) =            &
-                     matmul(Magnetogram_VII(:, iLon, iLat), &
+                Magnetogram_VII(1:3, iLon, iLat) =            &
+                     matmul(Magnetogram_VII(1:3, iLon, iLat), &
+                     XyzRLonLat_DD)
+                Magnetogram_VII(4:6, iLon, iLat) =            &
+                     matmul(Magnetogram_VII(4:6, iLon, iLat), &
                      XyzRLonLat_DD)
              end do
           end do
           ! Remesh from latitudinal nodes to pixels:
           Magnetogram_VII(:,:,1:nLat) = 0.5*(&
                Magnetogram_VII(:,:,1:nLat) + Magnetogram_VII(:,:,2:nLat+1))
+          OpenFluxPos = 0.0; OpenFluxNeg = 0.0
+          do iLat = 1, nLat
+             CosLat = cos(cDegToRad*(-90.0 + DX_D(3)*(iLat - 0.5)))
+             OpenFluxPos = OpenFluxPos + CosLat*sum(Magnetogram_VII(4,:,iLat),&
+                  MASK=Magnetogram_VII(4,:,iLat)>0.0)
+             OpenFluxNeg = OpenFluxNeg + CosLat*sum(Magnetogram_VII(4,:,iLat),&
+                  MASK=Magnetogram_VII(4,:,iLat)<0.0)
+          end do
+          ! Scaling factor:
+          OpenFluxPos = OpenFluxPos*cTwoPi*cPi/(nLon*nLat)*rSourceSurface**2
+          OpenFluxNeg = OpenFluxNeg*cTwoPi*cPi/(nLon*nLat)*rSourceSurface**2
+          write(*,'(a,f6.2,a,f4.1,a)')'Unsigned open flux =',&
+               OpenFluxPos - OpenFluxNeg,&
+               ' [Gs*R_s^2] at R_SS=', rSourceSurface,' [R_s]'
           call save_plot_file(NameFile = 'field_2d.out',  &
                nDimIn  = 2,                       &
                TimeIn = CRFraction,               &
-               ParamIn_I= [real(int(dLon)), real(nCR)], &
-               VarIn_VII= Magnetogram_VII(:,1:nLon,1:nLat), &
+               ParamIn_I= [real(int(dLon)),real(nCR),OpenFluxPos,OpenFluxNeg],&
+               VarIn_VII= Magnetogram_VII(1:4,1:nLon,1:nLat), &
                TypeFileIn    = 'ascii',           &
                CoordMinIn_D  = [  0.0 + dLon - int(dLon), -90.0 + 90.0/nLat], &
                CoordMaxIn_D  = [360.0 - 360.0/nLon + dLon - int(dLon),  &
                90.0 - 90.0/nLat ],&
                StringHeaderIn  = 'Created from '//trim(NameHarmonicsFile), &
-               NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
-               NameVarIn = 'Longitude Latitude Br BLon BLat Long0 CRNumber')
+               NameUnitsIn  = &
+               ' [deg] [deg] [Gs] [Gs] [Gs] [Gs] [Gs] [Gs]'//&
+               ' [deg] [] [Gs*R_s^2] [Gs*R_s^2]', &
+               NameVarIn = 'Longitude Latitude Br BLon BLat'//&
+               ' BrSS Long0 CRNumber OpenFluxPos OpenFluxNeg')
           deallocate(Magnetogram_VII)
           deallocate(Tmp_VIIIII)
           nullify(Ptr)
@@ -249,8 +271,11 @@ contains
                 ! Convert to Br, BLon, BLat components
                 XyzRLonLat_DD = rot_xyz_rlonlat(lon=cDegToRad*Lon, &
                      lat= cDegToRad*Lat)
-                Magnetogram_VII(:, iLon, iLat) =            &
-                     matmul(Magnetogram_VII(:, iLon, iLat), &
+                Magnetogram_VII(1:3, iLon, iLat) =            &
+                     matmul(Magnetogram_VII(1:3, iLon, iLat), &
+                     XyzRLonLat_DD)
+                Magnetogram_VII(4:6, iLon, iLat) =            &
+                     matmul(Magnetogram_VII(4:6, iLon, iLat), &
                      XyzRLonLat_DD)
              end do
           end do
