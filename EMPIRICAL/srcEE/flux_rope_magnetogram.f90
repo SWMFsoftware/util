@@ -4,9 +4,11 @@
 program magnetogram
 
   use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
-       EEE_set_plot_range
-  use EEE_ModCommonVariables, ONLY:   Io2Si_V, Si2Io_V, Io2No_V, &
-       No2Io_V, Si2No_V, No2Si_V, prefix, x_, y_, z_, DXyzPlot,  &
+       EEE_set_plot_range, EEE_initialize
+  use EEE_ModCommonVariables, ONLY:  & ! Io2Si_V, Si2Io_V, Io2No_V, &
+       ! No2Io_V, Si2No_V, No2Si_V,
+  !----------------------------------------------------------------------------
+       prefix, x_, y_, z_, DXyzPlot,  &
        LongitudeCme, LatitudeCme, OrientationCME, DoAddFluxRope, &
        DirCme_D
   use ModConst, ONLY: cPi, cTwoPi, cDegToRad, cRadToDeg
@@ -16,7 +18,7 @@ program magnetogram
   use ModUtilities, ONLY: CON_stop
   use ModCoordTransform, ONLY: rot_xyz_rlonlat, rlonlat_to_xyz, &
        rot_xyz_mercator, rot_matrix_z
-  use ModMpi, ONLY: MPI_COMM_SELF
+  use ModMpi, ONLY: MPI_COMM_SELF, MPI_init, MPI_finalize
   use ModMagnetogram, ONLY: iTableB0, init_magnetogram_lookup_table, &
        get_magnetogram_field
   use ModLookupTable, ONLY: read_lookup_table_param, get_lookup_table
@@ -48,8 +50,8 @@ program magnetogram
        '  LongitudeCme LatitudeCme OrientationCme DXyz', String3Gs = 'Gs Gs Gs'
   !----------------------------------------------------------------------------
 
-  Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
-  No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
+  ! Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
+  ! No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
 
   write(*,'(a)')prefix//'Reading CME.in'
   call read_file('CME.in', iCommIn = MPI_COMM_SELF)
@@ -71,8 +73,13 @@ program magnetogram
      end select
   end do READPARAM
   iUnit  = io_unit_new()
-  open(iUnit, file='RunFRM', STATUS='old', IOSTAT=iError)
-  if(iError==0.and.DoAddFluxRope)call make_frm_magnetogram
+  if(DoAddFluxRope)then
+     call MPI_init(iError)
+     call EEE_initialize(1.5e8, 1.5e6, &
+          gamma=5.0/3.0, iCommIn=MPI_COMM_SELF, TimeNow=0.0)
+     open(iUnit, file='RunFRM', STATUS='old', IOSTAT=iError)
+     if(iError==0)call make_frm_magnetogram
+  end if
   ! Start 3D plot and 2D slices
   call EEE_set_plot_range(nXY, nZ)
   if(nXY < 1 .and. nZ < 1)STOP
@@ -88,6 +95,7 @@ program magnetogram
      NameVar= 'b0x b0y b0z'//NameParam
      NameUnits = String3Gs
   elseif(DoAddFluxRope)then
+
      NameVar= 'b1x b1y b1z'//NameParam
      NameUnits = String3Gs
      allocate(Var_VN(B1x_:B1z_, 2*nXY+1, 2*nXY+1, nZ+1))
@@ -160,6 +168,7 @@ program magnetogram
        NameUnitsIn = 'Rs Rs Rs '//NameUnits, &
        VarIn_VIII = Var_VN,&
        ParamIn_I = [LongitudeCme, LatitudeCme, OrientationCme, DXyzPlot])
+  if(DoAddFluxRope)call MPI_finalize(iError)
 contains
   !============================================================================
   subroutine  make_frm_magnetogram
@@ -201,7 +210,7 @@ contains
           BSurface_DC(:,i,j) = matmul(B_D, XyzRLonLat_DD)
        end do
     enddo
-    
+
     write(*,*)'Saving 2d Flux Rope output file'
     call save_plot_file(&
          NameFile = 'FRMagnetogram.out',&
