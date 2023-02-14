@@ -1,47 +1,316 @@
 !  Copyright (C) 2002 Regents of the University of Michigan,
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-module  ModUniformCurrentFilament
+module ModExternalField
   use ModHyperGeometric, ONLY: toroid_p, toroid_q
   implicit none
-  PRIVATE  ! Except
+  ! Calculate amplitudes of n=0 totoidal harmonic field OUDSIDE the filament
   ! Named indexes for the field amplitudes
-  integer, parameter  ::  Axial_  = 1, Poloidal_ =  2, Toroidal_  = 3
+  integer, parameter  :: Axial_  = 1, Poloidal_ =  2, Toroidal_  = 3
+  ! For Kappa2 below this value the field is calculated as external:
+  real :: Kappa2ExtMax
+contains
+  !============================================================================
+  subroutine external_field(Kappa2In, Amplitude_I)
+    real, intent(in)    :: Kappa2In
+    real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
+    ! Eqs. 35
+    !--------------------------------------------------------------------------
+    Amplitude_I(Axial_)    =   toroid_p(0, Kappa2In = Kappa2In)
+    Amplitude_I(Poloidal_) = 3*toroid_p(1, Kappa2In = Kappa2In)
+    Amplitude_I(Toroidal_) = 0.0
+  end subroutine external_field
+  !============================================================================
+end module ModExternalField
+!==============================================================================
+module ModFormFactors
+  use ModHyperGeometric, ONLY: toroid_p, toroid_q
+  implicit none
+  ! 1/E^{(0)} and -1/E^{(1)}
+  real, parameter :: cFourThirds = 1.333333333333333333333, cFourFifths = 0.80
+  ! Compute functions needed to describe parabolic current aand its field.
+contains
+  !============================================================================
+  real function cothu(KappaPrime2In)
+    real, intent(in)     :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    cothu = 1 + 2*KappaPrime2In/(1 - KappaPrime2In)
+  end function cothu
+  !============================================================================
+  real function parabolic_current(CothU0, KappaPrime2In)
+    real, intent(in)     :: CothU0, KappaPrime2In
+    !--------------------------------------------------------------------------
+    parabolic_current = CothU0 - cothu(KappaPrime2In)
+  end function parabolic_current
+  !============================================================================
+  real function parabolic_current_e(CothU0, KappaPrime2In)
+    real, intent(in)     :: CothU0, KappaPrime2In
+    !--------------------------------------------------------------------------
+    parabolic_current_e = cFourThirds*CothU0 + cFourFifths*cothu(KappaPrime2In)
+  end function parabolic_current_e
+  !============================================================================
+  real function d_parabolic_current_e_du(KappaPrime2In)
+    real, intent(in)     :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    ! 1/(E^{(1)}*\sinh^2u)
+    d_parabolic_current_e_du = -cFourFifths*&
+         (4*KappaPrime2In/(1 - KappaPrime2In)**2)
+  end function d_parabolic_current_e_du
+  !============================================================================
+  real function norm_uni(KappaPrime2In)
+    real, intent(in)     :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    ! Norm_uni = -(1/(E^{(0))dQ^{-1}_{-1/2)(u_0)/du_0,  where
+    ! dQ^{-1}_{-1/2)(u_0)/du_0 = 3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
+    norm_uni= -cFourThirds*3*KappaPrime2In*sqrt(1-KappaPrime2In)&
+         *toroid_q(1,KappaPrime2In=KappaPrime2In)
+  end function norm_uni
+  !============================================================================
+end module ModFormFactors
+!==============================================================================
+module  ModUniformCurrent
+  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+       Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
+  use ModFormFactors
+  implicit none
+  PRIVATE  ! Except
   ! \kappa^\prime at the  boundary
   real :: KappaPrime0
+  real, parameter :: Eps = 0.0
+  ! Interpolate field at
+  ! KappaPrime0^2*(1 - Eps) < KappaPrime2 < KappaPrime0^2*(1 + Eps)
+  ! KappaPrime2Uniform < KappaPrime2 < 1 - Kappa2ExtMax
+  real :: KappaPrime2Uniform
+  ! Interpolated amplitudes
+  ! Amplitude_I = AmplitudeIniform_I + (AmplitudeExt_I - AmplitudeUniform)*&
+  ! (KappaPrime2 - KappaPrime2Uniform)/(2*Eps*KappPrime02)
+  real, dimension(Axial_:Toroidal_) :: AmplitudeUniform_I, DeltaAmplitude_I
   !
   ! Constant  factors  to calculate the internal field
   !
   real :: Q1            ! Eq. 36, constant field factor for uniform current
+  real :: CurrentFactor ! 1/Norm_{uni}
   real :: CurrentE      ! Constant current I_E
   !
   ! Constants determining toroidal field:
   !
   real  :: Q2           ! Eq. 49 constant  torroidl field factor
   real  :: ToroidQ0AtU0 ! Q^{-1}_{-1/2}(u_0)
+
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
-  public:: get_amplitude_int! Internal field amplitudes
+  public:: get_amplitude_int! Internal field amplitude
+  public:: current          ! Current ``density'', i, divided by I_tot
 contains
   !============================================================================
-  subroutine set_kappaprime0(KappaPrime0In, Kappa02)
+  subroutine set_kappaprime0(KappaPrime0In)
     real, intent(in)  :: KappaPrime0In
-    real, intent(out) :: Kappa02
-    real :: KappaPrime02, Kappa0,  Kappa03
+    real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
     !--------------------------------------------------------------------------
     KappaPrime0 = KappaPrime0In
     KappaPrime02 = KappaPrime0**2
     Kappa02 = 1 - KappaPrime02
     Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
+    Kappa2ExtMax = Kappa02 - Eps*KappaPrime02
+    KappaPrime2Uniform = KappaPrime02*(1 - Eps)
+
     ! Eq. 36, constant field factor for uniform current
     Q1 = 0.125*toroid_p(1,KappaPrime2In=KappaPrime02)/&
          (toroid_q(1,KappaPrime2In=KappaPrime02))
-    ! Constant current I_E
-    CurrentE = -1/(3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02))
+    CurrentFactor = 1/norm_uni(KappaPrime02)
+    ! Constant current I_E = 1/( (3/4)*Norm_Uni
+    CurrentE = cFourThirds*CurrentFactor
     ! Constants determining toroidal field:
     ! Eq. 49 constant  torroidl field factor
     Q2 = -6*Q1*CurrentE
     ! Q^{-1}_{-1/2}(u_0):
     ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
+    if(Eps > 0.0)then
+       call get_amplitude_int(&
+            KappaPrime2In=KappaPrime2Uniform, &
+            Amplitude_I  = AmplitudeUniform_I)
+       call external_field(&
+            Kappa2In = Kappa2ExtMax,&
+            Amplitude_I  = DeltaAmplitude_I)
+       ! Account for a difference in geometric factors in the definitions
+       ! of internal and external field amplitudes:
+       DeltaAmplitude_I = DeltaAmplitude_I*0.1250*&
+            Kappa2ExtMax*sqrt(Kappa2ExtMax)
+       ! Subtract internal solution, to find delta:
+       DeltaAmplitude_I = DeltaAmplitude_I - AmplitudeUniform_I
+       ! Divide by delta of KappaPrime2:
+       DeltaAmplitude_I = DeltaAmplitude_I/(2*Eps*KappaPrime02)
+    end if
+  end subroutine set_kappaprime0
+  !============================================================================
+  subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
+    real, intent(in)    :: KappaPrime2In
+    real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
+    !
+    ! Misc
+    !
+    real :: Kappa, Kappa2, Kappa3, ToroidQ0
+    !--------------------------------------------------------------------------
+    if(KappaPrime2In > KappaPrime2Uniform)then
+       ! Interpolate between external and internal solutions:
+       Amplitude_I = AmplitudeUniform_I + DeltaAmplitude_I*&
+            (KappaPrime2In - KappaPrime2Uniform)
+       RETURN
+    end if
+    Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
+    ToroidQ0 = Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
+    ! Eqs. 35
+    Amplitude_I(Axial_)    = Q1*ToroidQ0 + CurrentE
+    Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,    &
+         KappaPrime2In=KappaPrime2In)
+    Amplitude_I(Toroidal_) = sqrt(Q2*max(ToroidQ0AtU0 - ToroidQ0,0.0))
+  end subroutine get_amplitude_int
+  !============================================================================
+  real function current(KappaPrime2In)
+    real, intent(in)    :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    current = 1*CurrentFactor
+  end function current
+  !============================================================================
+end module ModUniformCurrent
+!==============================================================================
+module  ModParabolicCurrent
+  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+       Axial_, Poloidal_, Toroidal_, Kappa2ExtMax
+  use ModFormFactors
+  implicit none
+  PRIVATE  ! Except
+  ! \kappa^\prime at the  boundary
+  real :: KappaPrime0
+  !
+  ! Constant  factors  to calculate internal field
+  !
+  real :: CothU0           ! Value of coth(u_0)
+  real :: ToroidQ0AtU0     ! Q^{-1}_{-1/2}(u_0)
+  real :: DToroidQ0DuAtU0  ! dQ^{-1}_{-1/2}(u_0)/du_0
+  ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
+  real :: CurrentFactor
+  real :: Q1               ! Eq. ??, field factor for parabolic current
+
+  public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
+  public:: get_amplitude_int! Internal field amplitudes
+  public:: current          ! current profile
+contains
+  !============================================================================
+  subroutine set_kappaprime0(KappaPrime0In)
+    real, intent(in)  :: KappaPrime0In
+    real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
+    !--------------------------------------------------------------------------
+    KappaPrime0 = KappaPrime0In
+    KappaPrime02 = KappaPrime0**2
+
+    ! Calculate Coth(u_0)
+    CothU0 = cothu(KappaPrime2In=KappaPrime02)
+
+    Kappa02 = 1 - KappaPrime02;     Kappa2ExtMax = Kappa02
+    Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
+    ! Q^{-1}_{-1/2}(u_0):
+    ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
+    ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
+    DToroidQ0DuAtU0  = &
+         3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)
+    ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
+    CurrentFactor = 1/( ToroidQ0AtU0*                                   &
+         d_parabolic_current_e_du(KappaPrime2In=KappaPrime02)                &
+         - DToroidQ0DuAtU0*                                             &
+         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02) )
+
+    ! Eq. ??, constant field factor for parabolic current
+    Q1 = 0.125*toroid_p(0,KappaPrime2In=KappaPrime02)/                  &
+         (toroid_q(0,KappaPrime2In=KappaPrime02))                       &
+         -  parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02)*   &
+         CurrentFactor/ToroidQ0AtU0
+  end subroutine set_kappaprime0
+  !============================================================================
+  subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
+    real, intent(in)    :: KappaPrime2In
+    real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
+    !
+    ! Misc
+    !
+    real :: Kappa, Kappa2, Kappa3, ToroidQ0, DToroidQ0Du
+    !--------------------------------------------------------------------------
+    Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
+
+    ToroidQ0 = Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
+    ! Eqs. 35
+    Amplitude_I(Axial_)    = Q1*ToroidQ0 + CurrentFactor*               &
+         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+    DToroidQ0Du  = &
+         3*KappaPrime2In*Kappa*toroid_q(1,KappaPrime2In=KappaPrime2In)
+    Amplitude_I(Poloidal_) = (Q1*DToroidQ0Du + CurrentFactor*           &
+         d_parabolic_current_e_du(KappaPrime2In=KappaPrime2In))              &
+         *Kappa2/KappaPrime2In
+    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, -0.4*CurrentFactor**2*     &
+         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)**2 +   &
+         Q1*CurrentFactor*(ToroidQ0*                                    &
+         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In) -      &
+         cFourThirds*(DToroidQ0Du - DToroidQ0DuAtU0))  ))
+  end subroutine get_amplitude_int
+  !============================================================================
+  real function current(KappaPrime2In)
+    real, intent(in)    :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    current = CurrentFactor* &
+         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+  end function current
+  !============================================================================
+end module ModParabolicCurrent
+!==============================================================================
+module  ModMergedCurrentFilament
+  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+       Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
+  use ModFormFactors
+  implicit none
+  PRIVATE  ! Except
+  ! \kappa^\prime at the  boundary
+  real :: KappaPrime0
+  !
+  ! Constant  factors  to calculate internal field
+  !
+  real :: CothU0        ! Value of coth(u_0)
+  real :: ToroidQ0AtU0  ! Q^{-1}_{-1/2}(u_0)
+  real :: DToroidQ0DuAtU0
+  real :: CurrentFactor ! 1/( Q^{-1}_{-1/2}(u_0)di_E(u_0)/du_0 - i_E(u_0)dQ/du)
+  real :: Q3            ! Eq. ??, field factor for uniform current
+  !
+  ! Constants determining toroidal field:
+  !
+  ! real  :: Q2           ! Eq. 49 constant  torroidl field factor
+
+  public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
+  public:: get_amplitude_int! Internal field amplitudes
+  public:: current          ! current profile
+contains
+  !============================================================================
+  subroutine set_kappaprime0(KappaPrime0In)
+    real, intent(in)  :: KappaPrime0In
+    real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
+    !--------------------------------------------------------------------------
+    KappaPrime0 = KappaPrime0In
+    KappaPrime02 = KappaPrime0**2
+
+    ! Calculate Coth(u_0)
+    CothU0 = cothu(KappaPrime2In=KappaPrime02)
+
+    Kappa02 = 1 - KappaPrime02;     Kappa2ExtMax = Kappa02
+    Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
+    ! Q^{-1}_{-1/2}(u_0):
+    ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
+    CurrentFactor = 1/(ToroidQ0AtU0*                                    &
+         d_parabolic_current_e_du(KappaPrime2In=KappaPrime02)                &
+         -3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)* &
+         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02) )
+
+    ! Eq. ??, constant field factor for uniform current
+    Q3 = 0.125*toroid_p(0,KappaPrime2In=KappaPrime02)/                  &
+         (toroid_q(0,KappaPrime2In=KappaPrime02))                       &
+         -  parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02)*   &
+         CurrentFactor/ToroidQ0AtU0
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
@@ -55,40 +324,47 @@ contains
     Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
 
     ! Eqs. 35
-    Amplitude_I(Axial_)    = Q1*Kappa3*toroid_q(0,KappaPrime2In = &
-         KappaPrime2In) + CurrentE
-    Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,    &
-         KappaPrime2In=KappaPrime2In)
-    Amplitude_I(Toroidal_) = sqrt(Q2*max(&
-         (ToroidQ0AtU0 - Kappa3*toroid_q(0,KappaPrime2In=KappaPrime2In)),0.0))
+    Amplitude_I(Axial_)    = Q3*Kappa3*toroid_q(0,KappaPrime2In =       &
+         KappaPrime2In) + CurrentFactor*                                &
+         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+    Amplitude_I(Poloidal_) = 3*Q3*Kappa3*toroid_q(1,                    &
+         KappaPrime2In=KappaPrime2In) + CurrentFactor*                  &
+         d_parabolic_current_e_du(KappaPrime2In=KappaPrime2In)*Kappa2        &
+         /KappaPrime2In
+    Amplitude_I(Toroidal_) = 0.0
   end subroutine get_amplitude_int
   !============================================================================
-end module ModUniformCurrentFilament
+  real function current(KappaPrime2In)
+    real, intent(in)    :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    current = CurrentFactor* &
+         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+  end function current
+  !============================================================================
+end module ModMergedCurrentFilament
 !==============================================================================
-module  ModSurfaceCurrentFilament
-  use ModHyperGeometric, ONLY: toroid_p, toroid_q
+module  ModSurfaceCurrent
+  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+       Axial_, Poloidal_, Toroidal_, Kappa2ExtMax
   implicit none
   PRIVATE  ! Except
-  ! Named indexes for the field amplitudes
-  integer, parameter  ::  Axial_  = 1, Poloidal_ =  2, Toroidal_  = 3
   ! \kappa^\prime at the  boundary
   real :: KappaPrime0
   !
   ! Constant  factor  to calculate the internal field
   !
-  real, public :: Q0        ! Eq. 31, constant field factor for surface current
+  real :: Q0        ! Eq. 31, constant field factor for surface current
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitudes
 contains
   !============================================================================
-  subroutine set_kappaprime0(KappaPrime0In, Kappa02)
+  subroutine set_kappaprime0(KappaPrime0In)
     real, intent(in)  :: KappaPrime0In
-    real, intent(out) :: Kappa02
     real :: KappaPrime02
     !--------------------------------------------------------------------------
     KappaPrime0  = KappaPrime0In
     KappaPrime02 = KappaPrime0**2
-    Kappa02      = 1 - KappaPrime02
+    Kappa2ExtMax      = 1 - KappaPrime02
     ! Eq. 31, constant field factor for surface current
     Q0 = 0.125*toroid_p(0, KappaPrime2In=KappaPrime02)/&
        toroid_q(0,KappaPrime2In=KappaPrime02)
@@ -112,43 +388,50 @@ contains
     Amplitude_I(Toroidal_) = 0.0
   end subroutine get_amplitude_int
   !============================================================================
-end module ModSurfaceCurrentFilament
+end module ModSurfaceCurrent
 !==============================================================================
 module ModCurrentFilament
-  use ModUniformCurrentFilament, ONLY: uniform_current_field=>get_amplitude_int
-  use ModSurfaceCurrentFilament, ONLY: surface_current_field=>get_amplitude_int
+  use ModUniformCurrent, ONLY: &
+       uniform_current_field=>get_amplitude_int, uniform_current=>current
+  use ModSurfaceCurrent, ONLY: &
+       surface_current_field=>get_amplitude_int
+  use ModParabolicCurrent,    ONLY: &
+       parabolic_current_field=>get_amplitude_int, parabolic_current=>current
+  use ModExternalField,          ONLY: Kappa2ExtMax, external_field, &
+       Axial_, Poloidal_, Toroidal_
   implicit none
   !
-  ! Radius of torooidal  maagnetic axis
+  ! Radius of toroidal  maagnetic axis and its square
   !
   real  :: rInfty, rInfty2
-  ! Named indexes for the field amplitudes
-  integer, parameter  ::  Axial_  = 1, Poloidal_ =  2, Toroidal_  = 3
-  ! \kappa^2 and \kappa^Prime at the  boundary
-  real :: Kappa02, KappaPrime0
+  ! \kappa^Prime at the  boundary
+  real :: KappaPrime0
   !
   ! Logicals determining if we use manufactured  current distrributions
   ! 1. Uniform current form-factor:
   logical :: UseUniformCurrent = .false.
   ! 2. Surface current form-factor
   logical :: UseSurfaceCurrent = .false.
-  ! Inductunce  coefficient; in the SI units this is the ratio of the total
-  ! inductance of the filament normaalized by \mu_0 R_\infty
+  ! 3. Parabolic current formfactor
+  logical :: UseParabolicCurrent = .false.
+  ! Inductunce  coefficient; the ratio of the total inductance of the filament
+  ! in the SI units ormalized by \mu_0 R_\infty
   real :: Inductance
 contains
   !============================================================================
   subroutine set_filament_geometry(rMinor, rMajor)
-    use ModUniformCurrentFilament, ONLY: set_uniform_current=>set_kappaprime0
-    use ModSurfaceCurrentFilament, ONLY: set_surface_current=>set_kappaprime0
+    use ModUniformCurrent, ONLY: set_uniform_current=>set_kappaprime0
+    use ModSurfaceCurrent, ONLY: set_surface_current=>set_kappaprime0
+    use ModParabolicCurrent,    ONLY: set_parabolic_current=>set_kappaprime0
     use ModHypergeometric, ONLY: l0_ext_inductance
 
     real, intent(in) :: rMinor, rMajor
     !--------------------------------------------------------------------------
     rInfty2 = rMajor**2 -  rMinor**2; rInfty = sqrt(rInfty2)
     KappaPrime0 = rMinor/(rMajor + rInfty)
-    Kappa02  = -1.0
+    Kappa2ExtMax  = -1.0
     if(UseUniformCurrent)then
-       call set_uniform_current(KappaPrime0, Kappa02)
+       call set_uniform_current(KappaPrime0)
        ! Calculate inductance depending on the choice of the current form-factor
        ! Inductance includes external and internal field iductances as well as
        ! the torooidal field inductance:
@@ -156,31 +439,25 @@ contains
        Inductance = l0_ext_inductance(KappaPrime0**2) + 0.250 + 0.50
     end if
     if(UseSurfaceCurrent)then
-       call set_surface_current(KappaPrime0, Kappa02)
+       call set_surface_current(KappaPrime0)
        ! Only external inductance matters:
        Inductance = l0_ext_inductance(KappaPrime0**2)
     end if
-    if(Kappa02 <= 0.0) then
+    if(UseParabolicCurrent)then
+       call set_parabolic_current(KappaPrime0)
+       ! Only external inductance matters:
+       Inductance = l0_ext_inductance(KappaPrime0**2)
+    end if
+    if(Kappa2ExtMax <= 0.0) then
        ! With no foorm-factor, the field is always external, since for any
        ! \kappa one has \kappa^2 < Kappa_0^2=1
-       Kappa02 = 1.0; rInfty = rMajor; rInfty2  = rInfty**2
+       Kappa2ExtMax = 1.0; rInfty = rMajor; rInfty2  = rInfty**2
        ! Approximate formula expressed in terms of a/R0 ratio
        Inductance =  log(8.0*rMajor/rMinor) - 1.250
        ! Set \kappa^\prime = a/(2R_0)
        KappaPrime0 = 0.5* rMinor / rMajor
     end if
   end subroutine set_filament_geometry
-  !============================================================================
-  subroutine external_field(Kappa2In, Amplitude_I)
-    use ModHyperGeometric, ONLY: toroid_p, toroid_q
-    real, intent(in)    :: Kappa2In
-    real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
-    !--------------------------------------------------------------------------
-    ! Eqs. 35
-    Amplitude_I(Axial_)    =   toroid_p(0, Kappa2In = Kappa2In)
-    Amplitude_I(Poloidal_) = 3*toroid_p(1, Kappa2In = Kappa2In)
-    Amplitude_I(Toroidal_) = 0.0
-  end subroutine external_field
   !============================================================================
 end module ModCurrentFilament
 !==============================================================================
@@ -189,6 +466,7 @@ module ModFieldGS
   use ModUtilities, ONLY: norm2
 #endif
   use ModCurrentFilament
+  use ModNumConst,       ONLY:  cTwoPi
   implicit none
   ! Magnitude of the magnetic field at the center of filament:
   real, private :: Bc      ! In SI, Bc = \mu_0 I / (2 R_\infty)
@@ -199,9 +477,6 @@ module ModFieldGS
   ! the toridal magnetic field, which may be either positive or negative
   ! everywhere
   integer, private :: iHelicity
-  !  Strapping field. Its action on the filament current balances
-  !  the hoop force.
-  real :: BStrap_D(3)
 contains
   !============================================================================
   subroutine set_filament_field(iHelicityIn, BcIn_D)
@@ -217,8 +492,6 @@ contains
     iHelicity = iHelicityIn
     Bc_D = BcIn_D
     Bc = norm2(Bc_D)
-    ! With the earlier calculated inductance, determine the strapping field:
-    BStrap_D = - (Inductance / cTwoPi)*Bc_D ! Eq. 57 in GS22
   end subroutine set_filament_field
   !============================================================================
   subroutine get_filament_field(R_D, B_D, BetaIn, BPhiOut)
@@ -258,7 +531,7 @@ contains
     RPlus2 = Z2 +  (rInfty + rPerp)**2
     Poloidal_D = ( 2*BcDotR*R_D + (rInfty2 - R2)*Bc_D )/RPlus2
     Kappa2 = 4*rPerp*rInfty/RPlus2
-    if(Kappa2 <= Kappa02) then
+    if(Kappa2 <= Kappa2ExtMax) then
        ! external field
        call external_field(Kappa2, Amplitude_I)
        CommonFactor = (sqrt(rInfty2/RPlus2))**3
@@ -283,7 +556,7 @@ contains
        B_D = CommonFactor*(Bc_D*Amplitude_I(Axial_)    + &
             Poloidal_D*Amplitude_I(Poloidal_) + &
             (BPhi / rPerp)*cross_product(Bc_D, R_D) )
-       if(present(BPhiOut)) BPhiOut = CommonFactor*BPhi
+       if(present(BPhiOut)) BPhiOut = CommonFactor*BPhi*Bc
     end if
   end subroutine get_filament_field
   !============================================================================
@@ -291,12 +564,14 @@ contains
     use ModPlotFile
     integer, parameter :: nStep = 400
     integer, parameter :: AxialS_ = 1, PoloidalS_ = 2, &
-         AxialU_ = 3, PoloidalU_ = 4, ToroidalU_ = 5
+         AxialU_ = 3, PoloidalU_ = 4, ToroidalU_ = 5,  &
+         AxialP_ = 1, PoloidalP_ = 2, ToroidalP_ = 3
     real   , parameter :: DeltaKappaPrime = 0.00050
     integer            :: iLoop
     real               :: R0, a, Amplitude_I(Axial_:Toroidal_), &
          KappaPrime, KappaPrime2, Kappa2, Kappa3
     real :: Var_VI(AxialS_:ToroidalU_,nStep), Coord_I(nSTep)
+    real :: Current_VI(2,nStep)
     ! Loop variables
     integer:: i, j
     ! Number of points = (2N+1)*(2N+1)
@@ -309,48 +584,64 @@ contains
     real, parameter :: DGrid = ZMax/N
     real, parameter :: LCharge = 0.7
     real :: QCharge
-    real :: R_D(3)
+    real :: R_D(3), BStrap_D(3)
     ! Internal field
     ! Parameters on the plasma filament surface at which \kappa^\prime_0 = 0.1
     !--------------------------------------------------------------------------
-    UseUniformCurrent = .true.;  UseSurfaceCurrent = .true.
-    a  = 0.20/0.990;  R0 = 1.010/0.990
+    a  = 0.20/0.990;  R0 = 1.010/0.990; Current_VI = 0.0
+    UseUniformCurrent = .true.;  UseSurfaceCurrent = .false.
     call set_filament_geometry(a, R0)
-    do iLoop = 1, nStep/2
+    do iLoop = 1, nStep
        !
        ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
        KappaPrime     = iLoop*DeltaKappaPrime
        Coord_I(iLoop) = KappaPrime
-       !
-       ! For surface curent
-       !
-       call surface_current_field(KappaPrime2In = KappaPrime**2, &
-            Amplitude_I=Amplitude_I)
-       Var_VI(AxialS_,iLoop)    = Amplitude_I(Axial_)
-       Var_VI(PoloidalS_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
-       !
-       ! Internal field from the uniform current
-       !
-       call uniform_current_field(KappaPrime2In = KappaPrime**2, &
-            Amplitude_I=Amplitude_I)
-       ! Eqs. 35
-       Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
-       Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
-       Var_VI(ToroidalU_,iLoop) = Amplitude_I(Toroidal_)
-    end do
-    ! External magnetic field
-    do iLoop = 1 + nStep/2, nStep
-       KappaPrime = iLoop*DeltaKappaPrime
        Kappa2     = 1 - KappaPrime**2
-       Kappa3 = sqrt(Kappa2)*Kappa2
+       if(Kappa2<=Kappa2ExtMax)then
+          Kappa3 = sqrt(Kappa2)*Kappa2
+          call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
+          Var_VI(AxialU_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
+          Var_VI(PoloidalU_,iLoop) = 0.125*Kappa3*KappaPrime*&
+               Amplitude_I(Poloidal_)
+          Var_VI(ToroidalU_,iLoop) = 0.0
+
+       else
+          !
+          ! Internal field from the uniform current
+          !
+          call uniform_current_field(KappaPrime2In = KappaPrime**2, &
+            Amplitude_I=Amplitude_I)
+          ! Eqs. 35
+          Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
+          Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
+          Var_VI(ToroidalU_,iLoop) = Amplitude_I(Toroidal_)
+          Current_VI(1,iLoop) = uniform_current(KappaPrime**2)
+       end if
+    end do
+    UseUniformCurrent = .false.;  UseSurfaceCurrent = .true.
+    call set_filament_geometry(a, R0)
+    do iLoop = 1, nStep
+       !
+       ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
+       KappaPrime     = iLoop*DeltaKappaPrime
        Coord_I(iLoop) = KappaPrime
-       call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
-       ! Eqs. 27
-       Var_VI(AxialS_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
-       Var_VI(AxialU_,iLoop)    = Var_VI(AxialS_,iLoop)
-       Var_VI(PoloidalS_,iLoop) = 0.125*Kappa3*KappaPrime*Amplitude_I(Poloidal_)
-       Var_VI(PoloidalU_,iLoop) = Var_VI(PoloidalS_,iLoop)
-       Var_VI(ToroidalU_,iLoop) = 0.0
+       Kappa2     = 1 - KappaPrime**2
+       if(Kappa2<=Kappa2ExtMax)then
+          Kappa3 = sqrt(Kappa2)*Kappa2
+          call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
+          Var_VI(AxialS_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
+          Var_VI(PoloidalS_,iLoop) = 0.125*Kappa3*KappaPrime*&
+               Amplitude_I(Poloidal_)
+       else
+          !
+          ! Internal field from the uniform current
+          !
+          call surface_current_field(KappaPrime2In = KappaPrime**2, &
+            Amplitude_I=Amplitude_I)
+          ! Eqs. 35
+          Var_VI(AxialS_,iLoop)    = Amplitude_I(Axial_)
+          Var_VI(PoloidalS_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
+       end if
     end do
     call save_plot_file(NameFile='test_fields.out', &
          TypeFileIn='ascii'                     ,&
@@ -359,7 +650,49 @@ contains
          StringFormatIn = '(6es18.10)'          ,&
          Coord1In_I = Coord_I                   ,&
          VarIn_VI = Var_VI(AxialS_:ToroidalU_,1:nStep))
-    UseUniformCurrent = .true.;  UseSurfaceCurrent = .false.
+    UseSurfaceCurrent = .false.;  UseParabolicCurrent = .true.
+    call set_filament_geometry(a, R0)
+    do iLoop = 1, nStep
+       !
+       ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
+       KappaPrime     = iLoop*DeltaKappaPrime
+       Coord_I(iLoop) = KappaPrime
+       Kappa2     = 1 - KappaPrime**2
+       if(Kappa2<=Kappa2ExtMax)then
+          Kappa3 = sqrt(Kappa2)*Kappa2
+          call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
+          Var_VI(AxialP_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
+          Var_VI(PoloidalP_,iLoop) = 0.125*Kappa3*KappaPrime*&
+               Amplitude_I(Poloidal_)
+          Var_VI(ToroidalP_,iLoop) = 0.0
+       else
+          !
+          ! Internal field from the parabolic current
+          !
+          call parabolic_current_field(KappaPrime2In = KappaPrime**2, &
+            Amplitude_I=Amplitude_I)
+          ! Eqs. 35
+          Var_VI(AxialP_,iLoop)    = Amplitude_I(Axial_)
+          Var_VI(PoloidalP_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
+          Var_VI(ToroidalP_,iLoop) = Amplitude_I(Toroidal_)
+          Current_VI(2,iLoop) = parabolic_current(KappaPrime**2)
+       end if
+    end do
+    call save_plot_file(NameFile='currents.out', &
+         TypeFileIn='ascii'                     ,&
+         NameVarIn=&
+         'kappa_prime Uniform Parabolic',             &
+         StringFormatIn = '(3es18.10)'          ,&
+         Coord1In_I = Coord_I                   ,&
+         VarIn_VI = Current_VI)
+    call save_plot_file(NameFile='test_parabolic.out', &
+         TypeFileIn='ascii'                     ,&
+         NameVarIn=&
+         'kappa_prime AxialP PoloidalP ToroidalP', &
+         StringFormatIn = '(4es18.10)'          ,&
+         Coord1In_I = Coord_I                   ,&
+         VarIn_VI = Var_VI(AxialP_:ToroidalP_,1:nStep))
+    UseUniformCurrent = .true.;  UseParabolicCurrent = .false.
     ! Set rInfty = 1 and KappaPrime  = 0.1
     call set_filament_geometry(0.20 / 0.990, 1.01 / 0.990)
     call set_filament_field(+1, [1.0, 0.0, 0.0])
@@ -377,6 +710,7 @@ contains
          StringFormatIn = '(6F12.5)',&
          VarIn_VII = Field_DII )
     ! Test the strapped field:
+    BStrap_D =  - (Inductance/cTwoPi)*Bc_D
     do j = -N, N
        do i = -N, N
           Field_DII(:, i, j) = Field_DII(:, i, j) + BStrap_D
@@ -429,7 +763,7 @@ module EEE_ModTD99
        UnitB_, UnitRho_, UnitX_,  UnitU_, UnitP_, UnitTemperature_,    &
        iProc, tStartCme
   use ModHyperGeometric
-  use ModConst, ONLY: cMu, cDegToRad, cRadToDeg, cPi
+  use ModConst, ONLY: cMu, cDegToRad, cRadToDeg, cPi, cTwoPi
   use ModFieldGS, ONLY: set_filament_geometry, set_filament_field, &
        get_filament_field, KappaPrime0, UseUniformCurrent, Inductance, rInfty
   implicit none
@@ -641,7 +975,7 @@ contains
     use EEE_ModCommonVariables, ONLY: prefix, OrientationCme,  &
          LongitudeCme, LatitudeCme, BAmbientApexSi_D
     use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
-    use ModFieldGS, ONLY: BStrap_D
+    ! use ModFieldGS, ONLY: BStrap_D
     real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi
 
     ! Rotational matrix of coordinate transformation:
@@ -654,7 +988,10 @@ contains
     aTube = aTube*Io2No_V(UnitX_)
     Depth = Depth*Io2No_V(UnitX_)
     if(UseTD22) UseUniformCurrent = .true.
+    ! Improved computation of inductance
     if(.not.UseTD14)call set_filament_geometry(aTube, Rtube)
+    ! Account for finite beta for TD22:
+    if(UseTD22)Inductance = Inductance + PlasmaBeta/(1 + PlasmaBeta)
     if (iProc==0) then
        write(*,'(a)') prefix
        if(UseTD14)then
@@ -662,7 +999,7 @@ contains
                '    Twisted Flux Rope Model by Titov, 2014.     '
        elseif(UseTD22)then
           write(*,'(a)') prefix//&
-               ' Finite-Beta Twisted Flux Rope Derived from GS Equqtion, 2022.'
+               ' Finite-Beta Twisted Flux Rope Derived from GS Equation, 2022.'
        else
           write(*,'(a)') prefix//&
                '    Twisted Flux Rope Model by Titov & Demoulin, 1999.     '
@@ -687,8 +1024,13 @@ contains
     ! the solar surface:
     if(UseTD22)then
        ! More accurate formula for R_S = (1.0*Io2No_V(UnitX_))
-       AlphaRope = 2.0*acos((2.0*(1.0*Io2No_V(UnitX_))*Depth - Depth**2 &
-            -rInfty**2)/(2.0*( (1.0*Io2No_V(UnitX_)) - Depth)*rInfty))
+       if(rInfty>=Depth)then
+          AlphaRope = 2.0*acos((2.0*(1.0*Io2No_V(UnitX_))*Depth - Depth**2 &
+               -rInfty**2)/(2.0*( (1.0*Io2No_V(UnitX_)) - Depth)*rInfty))
+       else
+          ! Only valid for testing the entire loop
+          AlphaRope = cTwoPi
+       end if
     else
        ! Approximate formula at Depth<<R_S and rInfty<<R_S
        AlphaRope  = 2.0*acos(Depth/Rtube)                 ! in [rad]
@@ -812,8 +1154,8 @@ contains
        write(*,'(a)') prefix
     end if
 
-    LInduct = cMu*(0.5*AlphaRope/cPi)*Rtube*No2Si_V(UnitX_)*&
-         (Inductance + log(1 - Depth/Rtube) - 0.50)    ! in [H]
+    LInduct = cMu*(AlphaRope/cTwoPi)*Rtube*No2Si_V(UnitX_)*&
+         Inductance    ! in [H]
     WFRope  = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
 
     if(iProc==0)then
