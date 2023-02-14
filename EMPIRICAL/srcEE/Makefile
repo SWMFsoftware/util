@@ -71,16 +71,18 @@ test_td22_exe: test_td22.o
 test_td22_check:
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_fields.out test_fields.ref > test_td22.diff)
+	-@(${DIFFNUM} -b -r=1e-7 \
+		test_parabolic.out test_parabolic.ref > test_td22.diff)
+	@ls -l test_td22.diff
 
 test_td22: LIB
 	@echo "test_td22_compile..." >  test_td22.diff
 	@make test_td22_exe	     >> test_td22.diff
 	@echo "test_td22_run..."     >> test_td22.diff
-	-@(rm -f test_fields.out)
+	-@(rm -f test_fields.out test_parabolic.out)
 	-@(./test_td22.exe           >> test_td22.diff)
 	@echo "test_td22_check..."   >> test_td22.diff
 	-@(make test_td22_check)
-	@ls -l test_td22.diff
 #######################################################################
 
 clean: cleanfiles
