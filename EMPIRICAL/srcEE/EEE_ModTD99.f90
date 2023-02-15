@@ -24,7 +24,7 @@ contains
 end module ModExternalField
 !==============================================================================
 module ModFormFactors
-  use ModHyperGeometric, ONLY: toroid_p, toroid_q
+  use ModHyperGeometric, ONLY: toroid_q
   implicit none
   ! 1/E^{(0)} and -1/E^{(1)}
   real, parameter :: cFourThirds = 1.333333333333333333333, cFourFifths = 0.80
@@ -59,12 +59,34 @@ contains
   !============================================================================
   real function norm_uni(KappaPrime2In)
     real, intent(in)     :: KappaPrime2In
-    !--------------------------------------------------------------------------
+    real :: DToroidQ0DuAtU0  ! dQ^{-1}_{-1/2}(u_0)/du_0
     ! Norm_uni = -(1/(E^{(0))dQ^{-1}_{-1/2)(u_0)/du_0,  where
     ! dQ^{-1}_{-1/2)(u_0)/du_0 = 3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
-    norm_uni= -cFourThirds*3*KappaPrime2In*sqrt(1-KappaPrime2In)&
+    !--------------------------------------------------------------------------
+    DToroidQ0DuAtU0 = 3*KappaPrime2In*sqrt(1-KappaPrime2In)&
          *toroid_q(1,KappaPrime2In=KappaPrime2In)
+    norm_uni= -cFourThirds*DToroidQ0DuAtU0
   end function norm_uni
+  !============================================================================
+  real function norm_par(CothU0, KappaPrime2In)
+    real, intent(in)     :: CothU0, KappaPrime2In
+    real :: Kappa, Kappa2
+    real :: ToroidQ0AtU0     ! Q^{-1}_{-1/2}(u_0)
+    real :: DToroidQ0DuAtU0  ! dQ^{-1}_{-1/2}(u_0)/du_0
+    !--------------------------------------------------------------------------
+    Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2)
+    ! Q^{-1}_{-1/2}(u_0):
+    ToroidQ0AtU0 = Kappa2*Kappa*toroid_q(0,KappaPrime2In=KappaPrime2In)
+    ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
+    DToroidQ0DuAtU0  = &
+         3*KappaPrime2In*Kappa*toroid_q(1,KappaPrime2In=KappaPrime2In)
+    ! Norm_par = Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du
+    norm_par= ToroidQ0AtU0*                                             &
+         d_parabolic_current_e_du(KappaPrime2In=KappaPrime2In)          &
+         - DToroidQ0DuAtU0*                                             &
+         parabolic_current_e(CothU0=CothU0,                             &
+         KappaPrime2In=KappaPrime2In)
+  end function norm_par
   !============================================================================
 end module ModFormFactors
 !==============================================================================
@@ -76,9 +98,9 @@ module  ModUniformCurrent
   PRIVATE  ! Except
   ! \kappa^\prime at the  boundary
   real :: KappaPrime0
-  real, parameter :: Eps = 0.0
+  real :: Eps = 0.0
   ! Interpolate field at
-  ! KappaPrime0^2*(1 - Eps) < KappaPrime2 < KappaPrime0^2*(1 + Eps)
+  ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
   ! KappaPrime2Uniform < KappaPrime2 < 1 - Kappa2ExtMax
   real :: KappaPrime2Uniform
   ! Interpolated amplitudes
@@ -102,16 +124,19 @@ module  ModUniformCurrent
   public:: current          ! Current ``density'', i, divided by I_tot
 contains
   !============================================================================
-  subroutine set_kappaprime0(KappaPrime0In)
+  subroutine set_kappaprime0(KappaPrime0In,EpsIn)
     real, intent(in)  :: KappaPrime0In
+    real, optional, intent(in) :: EpsIn
     real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
     !--------------------------------------------------------------------------
+    Eps = 0.0
+    if(present(EpsIn)) Eps = EpsIn
     KappaPrime0 = KappaPrime0In
     KappaPrime02 = KappaPrime0**2
     Kappa02 = 1 - KappaPrime02
     Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
-    Kappa2ExtMax = Kappa02 - Eps*KappaPrime02
-    KappaPrime2Uniform = KappaPrime02*(1 - Eps)
+    Kappa2ExtMax = Kappa02 - 2*Eps*KappaPrime02
+    KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
 
     ! Eq. 36, constant field factor for uniform current
     Q1 = 0.125*toroid_p(1,KappaPrime2In=KappaPrime02)/&
@@ -138,7 +163,7 @@ contains
        ! Subtract internal solution, to find delta:
        DeltaAmplitude_I = DeltaAmplitude_I - AmplitudeUniform_I
        ! Divide by delta of KappaPrime2:
-       DeltaAmplitude_I = DeltaAmplitude_I/(2*Eps*KappaPrime02)
+       DeltaAmplitude_I = DeltaAmplitude_I/(4*Eps*KappaPrime02)
     end if
   end subroutine set_kappaprime0
   !============================================================================
@@ -214,10 +239,7 @@ contains
     DToroidQ0DuAtU0  = &
          3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)
     ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
-    CurrentFactor = 1/( ToroidQ0AtU0*                                   &
-         d_parabolic_current_e_du(KappaPrime2In=KappaPrime02)                &
-         - DToroidQ0DuAtU0*                                             &
-         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02) )
+    CurrentFactor = 1/norm_par(CothU0=CothU0,KappaPrime2In=KappaPrime02)
 
     ! Eq. ??, constant field factor for parabolic current
     Q1 = 0.125*toroid_p(0,KappaPrime2In=KappaPrime02)/                  &
@@ -261,7 +283,7 @@ contains
   !============================================================================
 end module ModParabolicCurrent
 !==============================================================================
-module  ModMergedCurrentFilament
+module  ModMergedCurrent
   use ModExternalField, ONLY: toroid_p, toroid_q,   &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
   use ModFormFactors
@@ -269,9 +291,15 @@ module  ModMergedCurrentFilament
   PRIVATE  ! Except
   ! \kappa^\prime at the  boundary
   real :: KappaPrime0
+  real :: Eps = 0.0
+  ! Parabolic current at
+  ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
+  ! KappaPrime2Uniform < KappaPrime2 < 1 - Kappa2ExtMax
+  real :: KappaPrime2Uniform
   !
   ! Constant  factors  to calculate internal field
   !
+  real :: DeltaInv
   real :: CothU0        ! Value of coth(u_0)
   real :: ToroidQ0AtU0  ! Q^{-1}_{-1/2}(u_0)
   real :: DToroidQ0DuAtU0
@@ -287,25 +315,33 @@ module  ModMergedCurrentFilament
   public:: current          ! current profile
 contains
   !============================================================================
-  subroutine set_kappaprime0(KappaPrime0In)
+  subroutine set_kappaprime0(KappaPrime0In,EpsIn)
     real, intent(in)  :: KappaPrime0In
+    real, optional, intent(in) :: EpsIn
     real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
     !--------------------------------------------------------------------------
+    Eps = 0.0
+    if(present(EpsIn)) Eps = EpsIn
     KappaPrime0 = KappaPrime0In
     KappaPrime02 = KappaPrime0**2
-
-    ! Calculate Coth(u_0)
-    CothU0 = cothu(KappaPrime2In=KappaPrime02)
-
-    Kappa02 = 1 - KappaPrime02;     Kappa2ExtMax = Kappa02
+    Kappa02 = 1 - KappaPrime02
     Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
+    Kappa2ExtMax = Kappa02 - 2*Eps*KappaPrime02
+    KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
+
+    ! 1/(coth u^-_0 - coth u^+_0)
+    DeltaInv = 1/(cothu(KappaPrime2In=1 - Kappa2ExtMax)&
+         -cothu(KappaPrime2In=KappaPrime2Uniform))
+    ! Calculate Coth(u_0)
+    CothU0 = cothu(KappaPrime2In=1 - Kappa2ExtMax)
+
     ! Q^{-1}_{-1/2}(u_0):
     ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
-    CurrentFactor = 1/(ToroidQ0AtU0*                                    &
-         d_parabolic_current_e_du(KappaPrime2In=KappaPrime02)                &
-         -3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)* &
-         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02) )
-
+    CurrentFactor = 1/(DeltaInv*norm_par(CothU0 = CothU0, &
+         KappaPrime2In=1 - Kappa2ExtMax)  - &
+         DeltaInv*norm_par(CothU0 = CothU0, &
+         KappaPrime2In=KappaPrime2Uniform) +             &
+         norm_uni(KappaPrime2In=KappaPrime2Uniform))
     ! Eq. ??, constant field factor for uniform current
     Q3 = 0.125*toroid_p(0,KappaPrime2In=KappaPrime02)/                  &
          (toroid_q(0,KappaPrime2In=KappaPrime02))                       &
@@ -337,11 +373,15 @@ contains
   real function current(KappaPrime2In)
     real, intent(in)    :: KappaPrime2In
     !--------------------------------------------------------------------------
-    current = CurrentFactor* &
-         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+    if(KappaPrime2In > KappaPrime2Uniform)then
+       current = DeltaInv*CurrentFactor* &
+            parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+    else
+       current = 1*CurrentFactor
+    end if
   end function current
   !============================================================================
-end module ModMergedCurrentFilament
+end module ModMergedCurrent
 !==============================================================================
 module  ModSurfaceCurrent
   use ModExternalField, ONLY: toroid_p, toroid_q,   &
@@ -397,6 +437,8 @@ module ModCurrentFilament
        surface_current_field=>get_amplitude_int
   use ModParabolicCurrent,    ONLY: &
        parabolic_current_field=>get_amplitude_int, parabolic_current=>current
+  use ModMergedCurrent,    ONLY: merged_current=>current ! &
+       ! parabolic_current_field=>get_amplitude_int, parabolic_current=>current
   use ModExternalField,          ONLY: Kappa2ExtMax, external_field, &
        Axial_, Poloidal_, Toroidal_
   implicit none
@@ -414,24 +456,36 @@ module ModCurrentFilament
   logical :: UseSurfaceCurrent = .false.
   ! 3. Parabolic current formfactor
   logical :: UseParabolicCurrent = .false.
+  ! 4. Merged profile of parabolic (near the boundary) and uniform current
+  logical :: UseMergedCurrent = .false.
   ! Inductunce  coefficient; the ratio of the total inductance of the filament
   ! in the SI units ormalized by \mu_0 R_\infty
   real :: Inductance
 contains
   !============================================================================
-  subroutine set_filament_geometry(rMinor, rMajor)
+  subroutine set_filament_geometry(rMinor, rMajor, EpsIn)
     use ModUniformCurrent, ONLY: set_uniform_current=>set_kappaprime0
     use ModSurfaceCurrent, ONLY: set_surface_current=>set_kappaprime0
-    use ModParabolicCurrent,    ONLY: set_parabolic_current=>set_kappaprime0
+    use ModParabolicCurrent, ONLY: set_parabolic_current=>set_kappaprime0
+    use ModMergedCurrent,  ONLY: set_merged_current=>set_kappaprime0
     use ModHypergeometric, ONLY: l0_ext_inductance
 
     real, intent(in) :: rMinor, rMajor
+    real, optional, intent(in):: EpsIn
     !--------------------------------------------------------------------------
     rInfty2 = rMajor**2 -  rMinor**2; rInfty = sqrt(rInfty2)
     KappaPrime0 = rMinor/(rMajor + rInfty)
     Kappa2ExtMax  = -1.0
     if(UseUniformCurrent)then
-       call set_uniform_current(KappaPrime0)
+       call set_uniform_current(KappaPrime0,EpsIn)
+       ! Calculate inductance depending on the choice of the current form-factor
+       ! Inductance includes external and internal field iductances as well as
+       ! the torooidal field inductance:
+       !                      external               internal  toroidal
+       Inductance = l0_ext_inductance(KappaPrime0**2) + 0.250 + 0.50
+    end if
+    if(UseMergedCurrent)then
+       call set_merged_current(KappaPrime0,EpsIn)
        ! Calculate inductance depending on the choice of the current form-factor
        ! Inductance includes external and internal field iductances as well as
        ! the torooidal field inductance:
@@ -571,7 +625,9 @@ contains
     real               :: R0, a, Amplitude_I(Axial_:Toroidal_), &
          KappaPrime, KappaPrime2, Kappa2, Kappa3
     real :: Var_VI(AxialS_:ToroidalU_,nStep), Coord_I(nSTep)
-    real :: Current_VI(2,nStep)
+    ! Currents:
+    integer, parameter :: Uniform_=1, Parabolic_ = 2, Merged_ = 3
+    real :: Current_VI(Uniform_:Merged_,nStep)
     ! Loop variables
     integer:: i, j
     ! Number of points = (2N+1)*(2N+1)
@@ -615,7 +671,7 @@ contains
           Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
           Var_VI(ToroidalU_,iLoop) = Amplitude_I(Toroidal_)
-          Current_VI(1,iLoop) = uniform_current(KappaPrime**2)
+          Current_VI(Uniform_,iLoop) = uniform_current(KappaPrime**2)
        end if
     end do
     UseUniformCurrent = .false.;  UseSurfaceCurrent = .true.
@@ -675,14 +731,28 @@ contains
           Var_VI(AxialP_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalP_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
           Var_VI(ToroidalP_,iLoop) = Amplitude_I(Toroidal_)
-          Current_VI(2,iLoop) = parabolic_current(KappaPrime**2)
+          Current_VI(Parabolic_,iLoop) = parabolic_current(KappaPrime**2)
        end if
     end do
-    call save_plot_file(NameFile='currents.out', &
+    UseParabolicCurrent = .false.;  UseMergedCurrent = .true.
+    call set_filament_geometry(a, R0,0.1)
+    do iLoop = 1, nStep
+       !
+       ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
+       KappaPrime     = iLoop*DeltaKappaPrime
+       Coord_I(iLoop) = KappaPrime
+       Kappa2     = 1 - KappaPrime**2
+       if(Kappa2<=Kappa2ExtMax)then
+          CYCLE
+       else
+          Current_VI(Merged_,iLoop) = merged_current(KappaPrime**2)
+       end if
+    end do
+    call save_plot_file(NameFile='test_currents.out', &
          TypeFileIn='ascii'                     ,&
          NameVarIn=&
-         'kappa_prime Uniform Parabolic',             &
-         StringFormatIn = '(3es18.10)'          ,&
+         'kappa_prime Uniform Parabolic Merged', &
+         StringFormatIn = '(4es18.10)'          ,&
          Coord1In_I = Coord_I                   ,&
          VarIn_VI = Current_VI)
     call save_plot_file(NameFile='test_parabolic.out', &
@@ -693,6 +763,7 @@ contains
          Coord1In_I = Coord_I                   ,&
          VarIn_VI = Var_VI(AxialP_:ToroidalP_,1:nStep))
     UseUniformCurrent = .true.;  UseParabolicCurrent = .false.
+    UseMergedCurrent = .false.
     ! Set rInfty = 1 and KappaPrime  = 0.1
     call set_filament_geometry(0.20 / 0.990, 1.01 / 0.990)
     call set_filament_field(+1, [1.0, 0.0, 0.0])
