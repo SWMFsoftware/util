@@ -235,11 +235,11 @@ contains
     ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
          toroid_q(0,KappaPrime2In=KappaPrime2Ext)
     ! Eq. ??, constant field factor for parabolic current
-    Q01 = q_0(KappaPrime2In=KappaPrime2Ext)                                   &
-         - parabolic_current_e(CothU0,KappaPrime2Ext)*CurrentFactor/          &
+    Q01 = q_0(KappaPrime2Ext)                                                &
+         - parabolic_current_e(CothU0,KappaPrime2Ext)*CurrentFactor/         &
          ToroidQ0U0Minus
-     ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
-    DPsiMinusJEOverDu0Minus  = Q01*                                           &
+    ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
+    DPsiMinusJEOverDu0Minus  = Q01*                                          &
          3*KappaPrime2Ext*KappaExtMax*toroid_q(1,KappaPrime2In=KappaPrime2Ext)
   end subroutine set_kappaprime0
   !============================================================================
@@ -289,12 +289,16 @@ module  ModMergedCurrent
   !
   ! Constant  factors  to calculate internal field
   !
-  real :: DeltaInv
-  real :: CothU0        ! Value of coth(u_0)
-  real :: ToroidQ0U0  ! Q^{-1}_{-1/2}(u_0)
+  real :: CothU0        ! Value of coth(u^-_0)
+  real :: DeltaInv      ! 1/(coth(u^-_0) - coth(u^+_0))
+  ! Two contributions to the normalization integrals, for u^-_0 and u^+_0
+  real :: NormMinus, NormPlus
+  ! Q01*dQ^{-1}_{-1/2}(u^-_0)/du^-_0+1/8*NormPlus*dP^{-1}_{-1/2}(u^-_0)/du^-_0
+  real :: DPsiMinusJEOverDu0Minus    
   real :: DToroidQ0DuU0
   real :: CurrentFactor ! 1/( Q^{-1}_{-1/2}(u_0)di_E(u_0)/du_0 - i_E(u_0)dQ/du)
-  real :: Q01            ! Eq. ??, field factor for uniform current
+  real :: CurrentE      ! Uniform current
+  real :: Q01           ! Eq. ??, field factor for uniform current
   !
   ! Constants determining toroidal field:
   !
@@ -308,31 +312,51 @@ contains
   subroutine set_kappaprime0(KappaPrime0In,EpsIn)
     real, intent(in)  :: KappaPrime0In
     real, optional, intent(in) :: EpsIn
-    real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
+    ! \kappa^\prime^2 at the  boundary
+    real :: KappaPrime02
+    ! At the boundary of the external field region
+    real :: KappaPrime2Ext, KappaExtMax
+    ! At the boundary of the uniform current region:
+    real :: Kappa2Uniform, KappaUniform
+    real  :: ToroidQ0U0Minus ! Q^{-1}_{-1/2}(u^-_0)
+    real  :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
     !--------------------------------------------------------------------------
     Eps = 0.0
     if(present(EpsIn)) Eps = EpsIn
     KappaPrime02 = KappaPrime0In**2
-    Kappa02 = 1 - KappaPrime02
-    Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
-    Kappa2ExtMax = Kappa02 - 2*Eps*KappaPrime02
+    ! External boundary
+    KappaPrime2Ext = (1 + 2*Eps)*KappaPrime02
+    Kappa2ExtMax = 1 - KappaPrime2Ext
+    KappaExtMax  = sqrt(Kappa2ExtMax)
+    ! Boundary of the uniform current region
     KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
+    Kappa2Uniform = 1 - KappaPrime2Uniform
+    KappaUniform = sqrt(Kappa2Uniform)
+    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*&
+         toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
 
-    ! 1/(coth u^-_0 - coth u^+_0)
-    DeltaInv = 1/(cothu(KappaPrime2In=1 - Kappa2ExtMax)&
-         -cothu(KappaPrime2In=KappaPrime2Uniform))
     ! Calculate Coth(u_0)
-    CothU0 = cothu(KappaPrime2In=1 - Kappa2ExtMax)
-
+    CothU0 = cothu(KappaPrime2Ext)
+    ! 1/(coth u^-_0 - coth u^+_0)
+    DeltaInv = 1/(CothU0 - cothu(KappaPrime2Uniform))
+    ! Different contributions to the normalization integral
+    NormMinus = DeltaInv*norm_par(CothU0,KappaPrime2Ext)
+    NormPlus  = - DeltaInv*norm_par(CothU0,KappaPrime2Uniform) +        &
+         norm_uni(KappaPrime2Uniform)
+    ! Normalization factor for currents:
+    CurrentFactor = 1/(NormMinus + NormPlus)
+    ! Normalize currents contributing to the normalization integrals
+    NormPlus = CurrentFactor*NormPlus; NormMinus = CurrentFactor*NormMinus
+    ! Uniform current
+    CurrentE = cFourThirds*CurrentFactor
     ! Q^{-1}_{-1/2}(u_0):
-    ToroidQ0U0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
-    CurrentFactor = 1/(DeltaInv*norm_par(CothU0,1 - Kappa2ExtMax)     - &
-         DeltaInv*norm_par(CothU0,KappaPrime2Uniform) +                 &
-         norm_uni(KappaPrime2Uniform))
+    ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
+         toroid_q(0,KappaPrime2In=KappaPrime2Ext)
+
     ! Eq. ??, constant field factor for uniform current
-    Q01 = q_0(KappaPrime2In=KappaPrime02)                               &
-         -  parabolic_current_e(CothU0,KappaPrime02)*                   &
-         CurrentFactor/ToroidQ0U0
+    Q01 = q_0(KappaPrime2In=KappaPrime2Ext)*NormMinus                    &
+         -  parabolic_current_e(CothU0,KappaPrime2Ext)*DeltaInv*         &
+         CurrentFactor/ToroidQ0U0Minus
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
