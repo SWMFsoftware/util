@@ -114,7 +114,7 @@ module  ModUniformCurrent
   !
   ! Constants determining toroidal field:
   !
-  real  :: PsiMinusJEO  ! Eq. 49 constant  torroidal field factor
+  real  :: PsiMinusJEUOPlus
 
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitude
@@ -130,8 +130,8 @@ contains
     real :: KappaPrime2Ext, KappaExtMax
     ! At the boundary of the uniform current region:
     real :: Kappa2Uniform, KappaUniform
-    real  :: ToroidQ0U0Minus ! Q^{-1}_{-1/2}(u^-_0)
-    real  :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
+    real :: ToroidQ0U0Minus ! Q^{-1}_{-1/2}(u^-_0)
+    real :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
     !--------------------------------------------------------------------------
     Eps = 0.0
     if(present(EpsIn)) Eps = EpsIn
@@ -152,9 +152,7 @@ contains
     CurrentE = cFourThirds*CurrentFactor
     Q1 = q_0(KappaPrime2uniform) - CurrentE/ToroidQ0U0Plus
     ! Constants determining toroidal field:
-    ! Eq. 49 constant  torroidl field factor
-    PsiMinusJEO = Q1*ToroidQ0U0Plus
-    ! Q^{-1}_{-1/2}(u_0):
+    PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
     if(Eps > 0.0)then
        RETURN
     end if
@@ -179,7 +177,7 @@ contains
     Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,    &
          KappaPrime2In=KappaPrime2In)
     Amplitude_I(Toroidal_) = sqrt(8*max(0.0, &
-         CurrentFactor*(PsiMinusJE - PsiMinusJEO)))
+         CurrentFactor*(PsiMinusJE - PsiMinusJEUOPlus)))
   end subroutine get_amplitude_int
   !============================================================================
   real function current(KappaPrime2In)
@@ -293,16 +291,19 @@ module  ModMergedCurrent
   real :: DeltaInv      ! 1/(coth(u^-_0) - coth(u^+_0))
   ! Two contributions to the normalization integrals, for u^-_0 and u^+_0
   real :: NormMinus, NormPlus
-  ! Q01*dQ^{-1}_{-1/2}(u^-_0)/du^-_0+1/8*NormPlus*dP^{-1}_{-1/2}(u^-_0)/du^-_0
-  real :: DPsiMinusJEOverDu0Minus    
-  real :: DToroidQ0DuU0
-  real :: CurrentFactor ! 1/( Q^{-1}_{-1/2}(u_0)di_E(u_0)/du_0 - i_E(u_0)dQ/du)
+  ! Normalization coefficient for current
+  real :: CurrentFactor 
   real :: CurrentE      ! Uniform current
-  real :: Q01           ! Eq. ??, field factor for uniform current
+  !
+  ! Field factors
+  real :: Q01           ! Field factor for parabolic current
+  real :: Q1            ! Field factor for uniform current
   !
   ! Constants determining toroidal field:
   !
-  ! real  :: Q2           ! Eq. 49 constant  torroidl field factor
+  real :: DPsiMinusJEOverDu0Minus   ! For parabolic current    
+  real :: PsiMinusJEUOPlus          ! For uniform current
+  real :: Toroidal2                 ! b^2(u^+_0)
 
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitudes
@@ -318,8 +319,9 @@ contains
     real :: KappaPrime2Ext, KappaExtMax
     ! At the boundary of the uniform current region:
     real :: Kappa2Uniform, KappaUniform
-    real  :: ToroidQ0U0Minus ! Q^{-1}_{-1/2}(u^-_0)
-    real  :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
+    real :: ToroidQ0U0Minus ! Q^{-1}_{-1/2}(u^-_0)
+    real :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
+    real :: Amplitude_I(Axial_:Toroidal_)
     !--------------------------------------------------------------------------
     Eps = 0.0
     if(present(EpsIn)) Eps = EpsIn
@@ -332,8 +334,6 @@ contains
     KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
     Kappa2Uniform = 1 - KappaPrime2Uniform
     KappaUniform = sqrt(Kappa2Uniform)
-    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*&
-         toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
 
     ! Calculate Coth(u_0)
     CothU0 = cothu(KappaPrime2Ext)
@@ -357,6 +357,15 @@ contains
     Q01 = q_0(KappaPrime2In=KappaPrime2Ext)*NormMinus                    &
          -  parabolic_current_e(CothU0,KappaPrime2Ext)*DeltaInv*         &
          CurrentFactor/ToroidQ0U0Minus
+    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*&
+         toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
+    Q1 = Q01 + NormPlus*q_0(KappaPrime2Uniform) +                        &
+         (parabolic_current_e(CothU0,KappaPrime2Uniform)*DeltaInv*       &
+         CurrentFactor - CurrentE)/ToroidQ0U0Plus
+    ! Constants determining toroidal field:
+    PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
+    call get_amplitude_int(1.0000003*KappaPrime2Uniform,Amplitude_I)
+    Toroidal2 = Amplitude_I(Toroidal_)**2
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
@@ -365,18 +374,31 @@ contains
     !
     ! Misc
     !
-    real :: Kappa, Kappa2, Kappa3
+    real :: Kappa, Kappa2, Kappa3, PsiMinusJE, DPsiMinusJEOverDu
     !--------------------------------------------------------------------------
     Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
-
-    ! Eqs. 35
-    Amplitude_I(Axial_)    = Q01*Kappa3*toroid_q(0,KappaPrime2In =      &
-         KappaPrime2In) + CurrentFactor*                                &
-         parabolic_current_e(CothU0,KappaPrime2In)
-    Amplitude_I(Poloidal_) = 3*Q01*Kappa3*toroid_q(1,                   &
-         KappaPrime2In=KappaPrime2In) + CurrentFactor*                  &
-         d_parabolic_current_e_du(KappaPrime2In)*Kappa2/KappaPrime2In
-    Amplitude_I(Toroidal_) = 0.0
+    if(KappaPrime2In > KappaPrime2Uniform)then
+       PsiMinusJE = Kappa3*(Q01*toroid_q(0,KappaPrime2In = KappaPrime2In) +  &
+            0.125*NormPlus*toroid_p(0,KappaPrime2In = KappaPrime2In) )
+       Amplitude_I(Axial_)    = PsiMinusJE + CurrentFactor*DeltaInv*         &
+            parabolic_current_e(CothU0,KappaPrime2In) 
+       DPsiMinusJEOverDu  =  3*KappaPrime2In*Kappa*(                         &
+            Q01*toroid_q(1,KappaPrime2In=KappaPrime2In) +                    &
+            0.125*NormPlus*toroid_p(1,KappaPrime2In = KappaPrime2In) )
+       Amplitude_I(Poloidal_) = (DPsiMinusJEOverDu + CurrentFactor*DeltaInv* &
+            d_parabolic_current_e_du(KappaPrime2In))*Kappa2/KappaPrime2In
+       Amplitude_I(Toroidal_) = sqrt(8*max(0.0, -0.4*(CurrentFactor*DeltaInv*&
+            parabolic_current(CothU0,KappaPrime2In))**2 + DeltaInv*          &
+            CurrentFactor*(PsiMinusJE*parabolic_current(CothU0,KappaPrime2In)&
+            - cFourThirds*(DPsiMinusJEOverDu - DPsiMinusJEOverDu0Minus))  ))
+    else
+       PsiMinusJE = Q1*Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
+       Amplitude_I(Axial_)    = PsiMinusJE + CurrentE
+       Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,                      &
+            KappaPrime2In=KappaPrime2In)
+       Amplitude_I(Toroidal_) = sqrt(Toroidal2 + 8*max(0.0,                  &
+            CurrentFactor*(PsiMinusJE - PsiMinusJEUOPlus)))
+    end if
   end subroutine get_amplitude_int
   !============================================================================
   real function current(KappaPrime2In)
