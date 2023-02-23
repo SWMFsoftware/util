@@ -27,7 +27,7 @@ module ModFormFactors
   use ModHyperGeometric, ONLY: toroid_q, toroid_p
   implicit none
   ! 1/E^{(0)} and -1/E^{(1)}
-  real, parameter :: cFourThirds = 1.333333333333333333333, cFourFifths = 0.80
+  real, parameter :: cFourThirds = 1.3333333333333333, cFourFifths = 0.80
   ! Compute functions needed to describe parabolic current aand its field.
 contains
   !============================================================================
@@ -100,8 +100,6 @@ module  ModUniformCurrent
   use ModFormFactors
   implicit none
   PRIVATE  ! Except
-  ! \kappa^\prime at the  boundary
-  real :: KappaPrime0
   real :: Eps = 0.0
   ! Interpolate field at
   ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
@@ -126,23 +124,32 @@ contains
   subroutine set_kappaprime0(KappaPrime0In,EpsIn)
     real, intent(in)  :: KappaPrime0In
     real, optional, intent(in) :: EpsIn
-    real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
+    ! \kappa^\prime^2 at the  boundary
+    real :: KappaPrime02
+    ! At the boundary of the external field region
+    real :: KappaPrime2Ext, KappaExtMax
+    ! At the boundary of the uniform current region:
+    real :: Kappa2Uniform, KappaUniform
     real  :: ToroidQ0AtU0 ! Q^{-1}_{-1/2}(u_0)
     !--------------------------------------------------------------------------
     Eps = 0.0
     if(present(EpsIn)) Eps = EpsIn
-    KappaPrime0 = KappaPrime0In
-    KappaPrime02 = KappaPrime0**2
-    Kappa02 = 1 - KappaPrime02
-    Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
-    Kappa2ExtMax = Kappa02 - 2*Eps*KappaPrime02
+    KappaPrime02 = KappaPrime0In**2
+    ! External boundary
+    KappaPrime2Ext = (1 + 2*Eps)*KappaPrime02
+    Kappa2ExtMax = 1 - KappaPrime2Ext
+    KappaExtMax  = sqrt(Kappa2ExtMax)
+    ! Boundary of the uniform current region
     KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
-    ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
+    Kappa2Uniform = 1 - KappaPrime2Uniform
+    KappaUniform = sqrt(Kappa2Uniform)
+    ToroidQ0AtU0 = Kappa2Uniform*KappaUniform*&
+         toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
     ! Eq. 36, constant field factor for uniform current
-    CurrentFactor = 1/norm_uni(KappaPrime02)
+    CurrentFactor = 1/norm_uni(KappaPrime2Uniform)
     ! Constant current I_E = 1/( (3/4)*Norm_Uni
     CurrentE = cFourThirds*CurrentFactor
-    Q1 = q_0(KappaPrime02) - CurrentE/ToroidQ0AtU0
+    Q1 = q_0(KappaPrime2uniform) - CurrentE/ToroidQ0AtU0
     ! Constants determining toroidal field:
     ! Eq. 49 constant  torroidl field factor
     PsiMinusJEO = Q1*ToroidQ0AtU0
@@ -188,8 +195,6 @@ module  ModParabolicCurrent
   use ModFormFactors
   implicit none
   PRIVATE  ! Except
-  ! \kappa^\prime at the  boundary
-  real :: KappaPrime0
   !
   ! Constant  factors  to calculate internal field
   !
@@ -209,8 +214,7 @@ contains
     real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
     real :: ToroidQ0AtU0     ! Q^{-1}_{-1/2}(u_0)
     !--------------------------------------------------------------------------
-    KappaPrime0 = KappaPrime0In
-    KappaPrime02 = KappaPrime0**2
+    KappaPrime02 = KappaPrime0In**2
 
     ! Calculate Coth(u_0)
     CothU0 = cothu(KappaPrime2In=KappaPrime02)
@@ -267,8 +271,6 @@ module  ModMergedCurrent
   use ModFormFactors
   implicit none
   PRIVATE  ! Except
-  ! \kappa^\prime at the  boundary
-  real :: KappaPrime0
   real :: Eps = 0.0
   ! Parabolic current at
   ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
@@ -300,8 +302,7 @@ contains
     !--------------------------------------------------------------------------
     Eps = 0.0
     if(present(EpsIn)) Eps = EpsIn
-    KappaPrime0 = KappaPrime0In
-    KappaPrime02 = KappaPrime0**2
+    KappaPrime02 = KappaPrime0In**2
     Kappa02 = 1 - KappaPrime02
     Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
     Kappa2ExtMax = Kappa02 - 2*Eps*KappaPrime02
