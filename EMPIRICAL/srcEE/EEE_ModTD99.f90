@@ -353,11 +353,15 @@ contains
     ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
          toroid_q(0,KappaPrime2In=KappaPrime2Ext)
 
-    ! Eq. ??, constant field factor for uniform current
+    ! Constant field factor for parabolic current
     Q01 = q_0(KappaPrime2In=KappaPrime2Ext)*NormMinus                    &
          -  parabolic_current_e(CothU0,KappaPrime2Ext)*DeltaInv*         &
          CurrentFactor/ToroidQ0U0Minus
-    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*&
+    ! Constant for toroidal field and parabolic current
+    DPsiMinusJEOverDu0Minus  =  3*KappaPrime2Ext*KappaExtMax*(           &
+         Q01*toroid_q(1,KappaPrime2In=KappaPrime2Ext) +                  &
+         0.125*NormPlus*toroid_p(1,KappaPrime2In = KappaPrime2Ext) )
+    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*                         &
          toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
     Q1 = Q01 + NormPlus*q_0(KappaPrime2Uniform) +                        &
          (parabolic_current_e(CothU0,KappaPrime2Uniform)*DeltaInv*       &
@@ -467,8 +471,8 @@ module ModCurrentFilament
        surface_current_field=>get_amplitude_int
   use ModParabolicCurrent,    ONLY: &
        parabolic_current_field=>get_amplitude_int, parabolic_current=>current
-  use ModMergedCurrent,    ONLY: merged_current=>current ! &
-       ! parabolic_current_field=>get_amplitude_int, parabolic_current=>current
+  use ModMergedCurrent,    ONLY: merged_current=>current, &
+       ld_current_field=>get_amplitude_int
   use ModExternalField,          ONLY: Kappa2ExtMax, external_field, &
        Axial_, Poloidal_, Toroidal_
   implicit none
@@ -648,16 +652,17 @@ contains
     use ModPlotFile
     integer, parameter :: nStep = 400
     integer, parameter :: AxialS_ = 1, PoloidalS_ = 2, &
-         AxialU_ = 3, PoloidalU_ = 4, ToroidalU_ = 5,  &
-         AxialP_ = 1, PoloidalP_ = 2, ToroidalP_ = 3
+         AxialU_ = 3, PoloidalU_ = 4,  &
+         AxialP_ = 1, PoloidalP_ = 2, AxialLD_ = 3, PoloidalLD_=4
     real   , parameter :: DeltaKappaPrime = 0.00050
     integer            :: iLoop
     real               :: R0, a, Amplitude_I(Axial_:Toroidal_), &
          KappaPrime, KappaPrime2, Kappa2, Kappa3
-    real :: Var_VI(AxialS_:ToroidalU_,nStep), Coord_I(nSTep)
+    real :: Var_VI(AxialS_:PoloidalU_,nStep), Coord_I(nSTep)
     ! Currents:
     integer, parameter :: Uniform_=1, Parabolic_ = 2, Merged_ = 3
     real :: Current_VI(Uniform_:Merged_,nStep)
+    real :: Toroidal_VI(Uniform_:Merged_,nStep)
     ! Loop variables
     integer:: i, j
     ! Number of points = (2N+1)*(2N+1)
@@ -674,7 +679,7 @@ contains
     ! Internal field
     ! Parameters on the plasma filament surface at which \kappa^\prime_0 = 0.1
     !--------------------------------------------------------------------------
-    a  = 0.20/0.990;  R0 = 1.010/0.990; Current_VI = 0.0
+    a  = 0.20/0.990;  R0 = 1.010/0.990; Current_VI = 0.0; Toroidal_VI = 0.0
     UseUniformCurrent = .true.;  UseSurfaceCurrent = .false.
     call set_filament_geometry(a, R0)
     do iLoop = 1, nStep
@@ -689,8 +694,6 @@ contains
           Var_VI(AxialU_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
           Var_VI(PoloidalU_,iLoop) = 0.125*Kappa3*KappaPrime*&
                Amplitude_I(Poloidal_)
-          Var_VI(ToroidalU_,iLoop) = 0.0
-
        else
           !
           ! Internal field from the uniform current
@@ -700,7 +703,7 @@ contains
           ! Eqs. 35
           Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
-          Var_VI(ToroidalU_,iLoop) = Amplitude_I(Toroidal_)
+          Toroidal_VI(Uniform_,iLoop) = Amplitude_I(Toroidal_)
           Current_VI(Uniform_,iLoop) = uniform_current(KappaPrime**2)
        end if
     end do
@@ -732,10 +735,10 @@ contains
     call save_plot_file(NameFile='test_fields.out', &
          TypeFileIn='ascii'                     ,&
          NameVarIn=&
-         'kappa_prime AxialS PoloidalS AxialU PoloidalU ToroidalU', &
-         StringFormatIn = '(6es18.10)'          ,&
+         'kappa_prime AxialS PoloidalS AxialU PoloidalU', &
+         StringFormatIn = '(5es18.10)'          ,&
          Coord1In_I = Coord_I                   ,&
-         VarIn_VI = Var_VI(AxialS_:ToroidalU_,1:nStep))
+         VarIn_VI = Var_VI(AxialS_:PoloidalU_,1:nStep))
     UseSurfaceCurrent = .false.;  UseParabolicCurrent = .true.
     call set_filament_geometry(a, R0)
     do iLoop = 1, nStep
@@ -750,7 +753,6 @@ contains
           Var_VI(AxialP_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
           Var_VI(PoloidalP_,iLoop) = 0.125*Kappa3*KappaPrime*&
                Amplitude_I(Poloidal_)
-          Var_VI(ToroidalP_,iLoop) = 0.0
        else
           !
           ! Internal field from the parabolic current
@@ -760,7 +762,7 @@ contains
           ! Eqs. 35
           Var_VI(AxialP_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalP_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
-          Var_VI(ToroidalP_,iLoop) = Amplitude_I(Toroidal_)
+          Toroidal_VI(Parabolic_,iLoop) = Amplitude_I(Toroidal_)
           Current_VI(Parabolic_,iLoop) = parabolic_current(KappaPrime**2)
        end if
     end do
@@ -773,8 +775,18 @@ contains
        Coord_I(iLoop) = KappaPrime
        Kappa2     = 1 - KappaPrime**2
        if(Kappa2<=Kappa2ExtMax)then
-          CYCLE
+          Kappa3 = sqrt(Kappa2)*Kappa2
+          call  external_field(Kappa2In = Kappa2, Amplitude_I=Amplitude_I)
+          Var_VI(AxialLD_,iLoop)    = 0.125*Kappa3*Amplitude_I(Axial_)
+          Var_VI(PoloidalLD_,iLoop) = 0.125*Kappa3*KappaPrime*&
+               Amplitude_I(Poloidal_)
        else
+          call ld_current_field(KappaPrime2In = KappaPrime**2, &
+               Amplitude_I=Amplitude_I)
+          ! Eqs. 35
+          Var_VI(AxialLD_,iLoop)    = Amplitude_I(Axial_)
+          Var_VI(PoloidalLD_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
+          Toroidal_VI(Merged_,iLoop) = Amplitude_I(Toroidal_)
           Current_VI(Merged_,iLoop) = merged_current(KappaPrime**2)
        end if
     end do
@@ -785,13 +797,20 @@ contains
          StringFormatIn = '(4es18.10)'          ,&
          Coord1In_I = Coord_I                   ,&
          VarIn_VI = Current_VI)
+       call save_plot_file(NameFile='test_toroidal.out', &
+         TypeFileIn='ascii'                     ,&
+         NameVarIn=&
+         'kappa_prime Uniform Parabolic Merged', &
+         StringFormatIn = '(4es18.10)'          ,&
+         Coord1In_I = Coord_I                   ,&
+         VarIn_VI = Toroidal_VI)
     call save_plot_file(NameFile='test_parabolic.out', &
          TypeFileIn='ascii'                     ,&
          NameVarIn=&
-         'kappa_prime AxialP PoloidalP ToroidalP', &
-         StringFormatIn = '(4es18.10)'          ,&
+         'kappa_prime AxialP PoloidalP AxialLD PoloidalLD', &
+         StringFormatIn = '(5es18.10)'          ,&
          Coord1In_I = Coord_I                   ,&
-         VarIn_VI = Var_VI(AxialP_:ToroidalP_,1:nStep))
+         VarIn_VI = Var_VI)
     UseUniformCurrent = .true.;  UseParabolicCurrent = .false.
     UseMergedCurrent = .false.
     ! Set rInfty = 1 and KappaPrime  = 0.1
