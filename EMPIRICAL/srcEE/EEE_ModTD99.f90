@@ -81,11 +81,8 @@ contains
     DToroidQ0DuAtU0  = &
          3*KappaPrime2In*Kappa*toroid_q(1,KappaPrime2In=KappaPrime2In)
     ! Norm_par = Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du
-    norm_par= ToroidQ0AtU0*                                             &
-         d_parabolic_current_e_du(KappaPrime2In=KappaPrime2In)          &
-         - DToroidQ0DuAtU0*                                             &
-         parabolic_current_e(CothU0=CothU0,                             &
-         KappaPrime2In=KappaPrime2In)
+    norm_par= ToroidQ0AtU0*d_parabolic_current_e_du(KappaPrime2In)          &
+         - DToroidQ0DuAtU0*parabolic_current_e(CothU0,KappaPrime2In)
   end function norm_par
   !============================================================================
   real function q_0(KappaPrime2In)
@@ -144,18 +141,16 @@ contains
     Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
     Kappa2ExtMax = Kappa02 - 2*Eps*KappaPrime02
     KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
-
+    ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
     ! Eq. 36, constant field factor for uniform current
-    Q1 = 0.125*toroid_p(1,KappaPrime2In=KappaPrime02)/&
-         (toroid_q(1,KappaPrime2In=KappaPrime02))
     CurrentFactor = 1/norm_uni(KappaPrime02)
     ! Constant current I_E = 1/( (3/4)*Norm_Uni
     CurrentE = cFourThirds*CurrentFactor
+    Q1 = q_0(KappaPrime02) - CurrentE/ToroidQ0AtU0
     ! Constants determining toroidal field:
     ! Eq. 49 constant  torroidl field factor
     Q2 = -6*Q1*CurrentE
     ! Q^{-1}_{-1/2}(u_0):
-    ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
     if(Eps > 0.0)then
        call get_amplitude_int(&
             KappaPrime2In=KappaPrime2Uniform, &
@@ -217,8 +212,7 @@ module  ModParabolicCurrent
   ! Constant  factors  to calculate internal field
   !
   real :: CothU0           ! Value of coth(u_0)
-  real :: ToroidQ0AtU0     ! Q^{-1}_{-1/2}(u_0)
-  real :: DToroidQ0DuAtU0  ! dQ^{-1}_{-1/2}(u_0)/du_0
+  real :: DPsiMinusJEOverDu0  ! Q1*dQ^{-1}_{-1/2}(u_0)/du_0
   ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
   real :: CurrentFactor
   real :: Q1               ! Eq. ??, field factor for parabolic current
@@ -231,26 +225,26 @@ contains
   subroutine set_kappaprime0(KappaPrime0In)
     real, intent(in)  :: KappaPrime0In
     real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
+    real :: ToroidQ0AtU0     ! Q^{-1}_{-1/2}(u_0)
     !--------------------------------------------------------------------------
     KappaPrime0 = KappaPrime0In
     KappaPrime02 = KappaPrime0**2
 
     ! Calculate Coth(u_0)
     CothU0 = cothu(KappaPrime2In=KappaPrime02)
-
+    ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
+    CurrentFactor = 1/norm_par(CothU0,KappaPrime02)
+    
     Kappa02 = 1 - KappaPrime02;     Kappa2ExtMax = Kappa02
     Kappa0 = sqrt(Kappa02); Kappa03 = Kappa0*Kappa02
     ! Q^{-1}_{-1/2}(u_0):
     ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
-    ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
-    DToroidQ0DuAtU0  = &
-         3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)
-    ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
-    CurrentFactor = 1/norm_par(CothU0,KappaPrime02)
-
     ! Eq. ??, constant field factor for parabolic current
     Q1 = q_0(KappaPrime2In=KappaPrime02)                                     &
          - parabolic_current_e(CothU0,KappaPrime02)*CurrentFactor/ToroidQ0AtU0
+     ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
+    DPsiMinusJEOverDu0  = &
+         Q1*3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
@@ -259,31 +253,28 @@ contains
     !
     ! Misc
     !
-    real :: Kappa, Kappa2, Kappa3, ToroidQ0, DToroidQ0Du
+    real :: Kappa, Kappa2, Kappa3, PsiMinusJE, DPsiMinusJEOverDu
     !--------------------------------------------------------------------------
     Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
 
-    ToroidQ0 = Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
+    PsiMinusJE = Q1*Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
     ! Eqs. 35
-    Amplitude_I(Axial_)    = Q1*ToroidQ0 + CurrentFactor*                    &
-         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
-    DToroidQ0Du  =                                                           &
-         3*KappaPrime2In*Kappa*toroid_q(1,KappaPrime2In=KappaPrime2In)
-    Amplitude_I(Poloidal_) = (Q1*DToroidQ0Du + CurrentFactor*                &
-         d_parabolic_current_e_du(KappaPrime2In))                            &
-         *Kappa2/KappaPrime2In
-    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, -0.4*CurrentFactor**2*          &
-         parabolic_current(CothU0,KappaPrime2In)**2 +   &
-         Q1*CurrentFactor*(ToroidQ0*                                         &
-         parabolic_current(CothU0,KappaPrime2In) -                           &
-         cFourThirds*(DToroidQ0Du - DToroidQ0DuAtU0))  ))
+    Amplitude_I(Axial_)    = PsiMinusJE + CurrentFactor*                     &
+         parabolic_current_e(CothU0,KappaPrime2In)
+    DPsiMinusJEOverDu  =                                                     &
+         Q1*3*KappaPrime2In*Kappa*toroid_q(1,KappaPrime2In=KappaPrime2In)
+    Amplitude_I(Poloidal_) = (DPsiMinusJEOverDu + CurrentFactor*             &
+         d_parabolic_current_e_du(KappaPrime2In))*Kappa2/KappaPrime2In
+    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, -0.4*(CurrentFactor*            &
+         parabolic_current(CothU0,KappaPrime2In))**2 +                       &
+         CurrentFactor*(PsiMinusJE*parabolic_current(CothU0,KappaPrime2In) - &
+         cFourThirds*(DPsiMinusJEOverDu - DPsiMinusJEOverDu0))  ))
   end subroutine get_amplitude_int
   !============================================================================
   real function current(KappaPrime2In)
     real, intent(in)    :: KappaPrime2In
     !--------------------------------------------------------------------------
-    current = CurrentFactor* &
-         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+    current = CurrentFactor*parabolic_current(CothU0,KappaPrime2In)
   end function current
   !============================================================================
 end module ModParabolicCurrent
@@ -299,7 +290,7 @@ module  ModMergedCurrent
   real :: Eps = 0.0
   ! Parabolic current at
   ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
-  ! KappaPrime2Uniform < KappaPrime2 < 1 - Kappa2ExtMax
+  ! KappaPrime2Uniform < KappaPrime2 < KappaPrime2Ext = 1 - Kappa2ExtMax
   real :: KappaPrime2Uniform
   !
   ! Constant  factors  to calculate internal field
