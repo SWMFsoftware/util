@@ -107,10 +107,6 @@ module  ModUniformCurrent
   ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
   ! KappaPrime2Uniform < KappaPrime2 < 1 - Kappa2ExtMax
   real :: KappaPrime2Uniform
-  ! Interpolated amplitudes
-  ! Amplitude_I = AmplitudeIniform_I + (AmplitudeExt_I - AmplitudeUniform)*&
-  ! (KappaPrime2 - KappaPrime2Uniform)/(2*Eps*KappPrime02)
-  real, dimension(Axial_:Toroidal_) :: AmplitudeUniform_I, DeltaAmplitude_I
   !
   ! Constant  factors  to calculate the internal field
   !
@@ -120,8 +116,7 @@ module  ModUniformCurrent
   !
   ! Constants determining toroidal field:
   !
-  real  :: Q2           ! Eq. 49 constant  torroidl field factor
-  real  :: ToroidQ0AtU0 ! Q^{-1}_{-1/2}(u_0)
+  real  :: PsiMinusJEO  ! Eq. 49 constant  torroidal field factor
 
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitude
@@ -132,6 +127,7 @@ contains
     real, intent(in)  :: KappaPrime0In
     real, optional, intent(in) :: EpsIn
     real :: KappaPrime02, Kappa0,  Kappa03, Kappa02
+    real  :: ToroidQ0AtU0 ! Q^{-1}_{-1/2}(u_0)
     !--------------------------------------------------------------------------
     Eps = 0.0
     if(present(EpsIn)) Eps = EpsIn
@@ -149,23 +145,10 @@ contains
     Q1 = q_0(KappaPrime02) - CurrentE/ToroidQ0AtU0
     ! Constants determining toroidal field:
     ! Eq. 49 constant  torroidl field factor
-    Q2 = -6*Q1*CurrentE
+    PsiMinusJEO = Q1*ToroidQ0AtU0
     ! Q^{-1}_{-1/2}(u_0):
     if(Eps > 0.0)then
-       call get_amplitude_int(&
-            KappaPrime2In=KappaPrime2Uniform, &
-            Amplitude_I  = AmplitudeUniform_I)
-       call external_field(&
-            Kappa2In = Kappa2ExtMax,&
-            Amplitude_I  = DeltaAmplitude_I)
-       ! Account for a difference in geometric factors in the definitions
-       ! of internal and external field amplitudes:
-       DeltaAmplitude_I = DeltaAmplitude_I*0.1250*&
-            Kappa2ExtMax*sqrt(Kappa2ExtMax)
-       ! Subtract internal solution, to find delta:
-       DeltaAmplitude_I = DeltaAmplitude_I - AmplitudeUniform_I
-       ! Divide by delta of KappaPrime2:
-       DeltaAmplitude_I = DeltaAmplitude_I/(4*Eps*KappaPrime02)
+       RETURN
     end if
   end subroutine set_kappaprime0
   !============================================================================
@@ -175,21 +158,20 @@ contains
     !
     ! Misc
     !
-    real :: Kappa, Kappa2, Kappa3, ToroidQ0
+    real :: Kappa, Kappa2, Kappa3, PsiMinusJE
     !--------------------------------------------------------------------------
     if(KappaPrime2In > KappaPrime2Uniform)then
        ! Interpolate between external and internal solutions:
-       Amplitude_I = AmplitudeUniform_I + DeltaAmplitude_I*&
-            (KappaPrime2In - KappaPrime2Uniform)
        RETURN
     end if
     Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
-    ToroidQ0 = Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
+    PsiMinusJE = Q1*Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
     ! Eqs. 35
-    Amplitude_I(Axial_)    = Q1*ToroidQ0 + CurrentE
+    Amplitude_I(Axial_)    = PsiMinusJE + CurrentE
     Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,    &
          KappaPrime2In=KappaPrime2In)
-    Amplitude_I(Toroidal_) = sqrt(Q2*max(ToroidQ0AtU0 - ToroidQ0,0.0))
+    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, &
+         CurrentFactor*(PsiMinusJE - PsiMinusJEO)))
   end subroutine get_amplitude_int
   !============================================================================
   real function current(KappaPrime2In)
