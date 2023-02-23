@@ -2,7 +2,7 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModExternalField
-  use ModHyperGeometric, ONLY: toroid_p, toroid_q
+  use ModHyperGeometric, ONLY: toroid_p
   implicit none
   ! Calculate amplitudes of n=0 totoidal harmonic field OUDSIDE the filament
   ! Named indexes for the field amplitudes
@@ -24,7 +24,7 @@ contains
 end module ModExternalField
 !==============================================================================
 module ModFormFactors
-  use ModHyperGeometric, ONLY: toroid_q
+  use ModHyperGeometric, ONLY: toroid_q, toroid_p
   implicit none
   ! 1/E^{(0)} and -1/E^{(1)}
   real, parameter :: cFourThirds = 1.333333333333333333333, cFourFifths = 0.80
@@ -88,10 +88,17 @@ contains
          KappaPrime2In=KappaPrime2In)
   end function norm_par
   !============================================================================
+  real function q_0(KappaPrime2In)
+    real, intent(in)     :: KappaPrime2In
+    !--------------------------------------------------------------------------
+    q_0 = 0.125*toroid_p(0, KappaPrime2In=KappaPrime2In)/&
+       toroid_q(0,KappaPrime2In=KappaPrime2In)
+  end function q_0
+  !============================================================================
 end module ModFormFactors
 !==============================================================================
 module  ModUniformCurrent
-  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+  use ModExternalField, ONLY:   &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
   use ModFormFactors
   implicit none
@@ -199,7 +206,7 @@ contains
 end module ModUniformCurrent
 !==============================================================================
 module  ModParabolicCurrent
-  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+  use ModExternalField, ONLY: &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax
   use ModFormFactors
   implicit none
@@ -239,13 +246,11 @@ contains
     DToroidQ0DuAtU0  = &
          3*KappaPrime02*Kappa0*toroid_q(1,KappaPrime2In=KappaPrime02)
     ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
-    CurrentFactor = 1/norm_par(CothU0=CothU0,KappaPrime2In=KappaPrime02)
+    CurrentFactor = 1/norm_par(CothU0,KappaPrime02)
 
     ! Eq. ??, constant field factor for parabolic current
-    Q1 = 0.125*toroid_p(0,KappaPrime2In=KappaPrime02)/                  &
-         (toroid_q(0,KappaPrime2In=KappaPrime02))                       &
-         -  parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02)*   &
-         CurrentFactor/ToroidQ0AtU0
+    Q1 = q_0(KappaPrime2In=KappaPrime02)                                     &
+         - parabolic_current_e(CothU0,KappaPrime02)*CurrentFactor/ToroidQ0AtU0
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
@@ -260,17 +265,17 @@ contains
 
     ToroidQ0 = Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
     ! Eqs. 35
-    Amplitude_I(Axial_)    = Q1*ToroidQ0 + CurrentFactor*               &
+    Amplitude_I(Axial_)    = Q1*ToroidQ0 + CurrentFactor*                    &
          parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
-    DToroidQ0Du  = &
+    DToroidQ0Du  =                                                           &
          3*KappaPrime2In*Kappa*toroid_q(1,KappaPrime2In=KappaPrime2In)
-    Amplitude_I(Poloidal_) = (Q1*DToroidQ0Du + CurrentFactor*           &
-         d_parabolic_current_e_du(KappaPrime2In=KappaPrime2In))              &
+    Amplitude_I(Poloidal_) = (Q1*DToroidQ0Du + CurrentFactor*                &
+         d_parabolic_current_e_du(KappaPrime2In))                            &
          *Kappa2/KappaPrime2In
-    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, -0.4*CurrentFactor**2*     &
-         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)**2 +   &
-         Q1*CurrentFactor*(ToroidQ0*                                    &
-         parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In) -      &
+    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, -0.4*CurrentFactor**2*          &
+         parabolic_current(CothU0,KappaPrime2In)**2 +   &
+         Q1*CurrentFactor*(ToroidQ0*                                         &
+         parabolic_current(CothU0,KappaPrime2In) -                           &
          cFourThirds*(DToroidQ0Du - DToroidQ0DuAtU0))  ))
   end subroutine get_amplitude_int
   !============================================================================
@@ -284,7 +289,7 @@ contains
 end module ModParabolicCurrent
 !==============================================================================
 module  ModMergedCurrent
-  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+  use ModExternalField, ONLY: &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
   use ModFormFactors
   implicit none
@@ -337,15 +342,12 @@ contains
 
     ! Q^{-1}_{-1/2}(u_0):
     ToroidQ0AtU0 = Kappa03*toroid_q(0,KappaPrime2In=KappaPrime02)
-    CurrentFactor = 1/(DeltaInv*norm_par(CothU0 = CothU0, &
-         KappaPrime2In=1 - Kappa2ExtMax)  - &
-         DeltaInv*norm_par(CothU0 = CothU0, &
-         KappaPrime2In=KappaPrime2Uniform) +             &
-         norm_uni(KappaPrime2In=KappaPrime2Uniform))
+    CurrentFactor = 1/(DeltaInv*norm_par(CothU0,1 - Kappa2ExtMax)     - &
+         DeltaInv*norm_par(CothU0,KappaPrime2Uniform) +                 &
+         norm_uni(KappaPrime2Uniform))
     ! Eq. ??, constant field factor for uniform current
-    Q3 = 0.125*toroid_p(0,KappaPrime2In=KappaPrime02)/                  &
-         (toroid_q(0,KappaPrime2In=KappaPrime02))                       &
-         -  parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime02)*   &
+    Q3 = q_0(KappaPrime2In=KappaPrime02)                                &
+         -  parabolic_current_e(CothU0,KappaPrime02)*                   &
          CurrentFactor/ToroidQ0AtU0
   end subroutine set_kappaprime0
   !============================================================================
@@ -362,11 +364,10 @@ contains
     ! Eqs. 35
     Amplitude_I(Axial_)    = Q3*Kappa3*toroid_q(0,KappaPrime2In =       &
          KappaPrime2In) + CurrentFactor*                                &
-         parabolic_current_e(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+         parabolic_current_e(CothU0,KappaPrime2In)
     Amplitude_I(Poloidal_) = 3*Q3*Kappa3*toroid_q(1,                    &
          KappaPrime2In=KappaPrime2In) + CurrentFactor*                  &
-         d_parabolic_current_e_du(KappaPrime2In=KappaPrime2In)*Kappa2        &
-         /KappaPrime2In
+         d_parabolic_current_e_du(KappaPrime2In)*Kappa2/KappaPrime2In
     Amplitude_I(Toroidal_) = 0.0
   end subroutine get_amplitude_int
   !============================================================================
@@ -374,8 +375,7 @@ contains
     real, intent(in)    :: KappaPrime2In
     !--------------------------------------------------------------------------
     if(KappaPrime2In > KappaPrime2Uniform)then
-       current = DeltaInv*CurrentFactor* &
-            parabolic_current(CothU0=CothU0,KappaPrime2In=KappaPrime2In)
+       current = DeltaInv*CurrentFactor*parabolic_current(CothU0,KappaPrime2In)
     else
        current = 1*CurrentFactor
     end if
@@ -384,8 +384,9 @@ contains
 end module ModMergedCurrent
 !==============================================================================
 module  ModSurfaceCurrent
-  use ModExternalField, ONLY: toroid_p, toroid_q,   &
+  use ModExternalField, ONLY:   &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax
+  use ModFormFactors
   implicit none
   PRIVATE  ! Except
   ! \kappa^\prime at the  boundary
@@ -406,8 +407,7 @@ contains
     KappaPrime02 = KappaPrime0**2
     Kappa2ExtMax      = 1 - KappaPrime02
     ! Eq. 31, constant field factor for surface current
-    Q0 = 0.125*toroid_p(0, KappaPrime2In=KappaPrime02)/&
-       toroid_q(0,KappaPrime2In=KappaPrime02)
+    Q0 = q_0(KappaPrime2In=KappaPrime02)
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
