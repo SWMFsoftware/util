@@ -94,100 +94,6 @@ contains
   !============================================================================
 end module ModFormFactors
 !==============================================================================
-module  ModUniformCurrent
-  use ModExternalField, ONLY:   &
-       Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
-  use ModFormFactors
-  implicit none
-  PRIVATE  ! Except
-  real :: Eps = 0.0
-  ! Interpolate field at
-  ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
-  ! KappaPrime2Uniform < KappaPrime2 < 1 - Kappa2ExtMax
-  real :: KappaPrime2Uniform
-  !
-  ! Constant  factors  to calculate the internal field
-  !
-  real :: Q1            ! Eq. 36, constant field factor for uniform current
-  real :: CurrentFactor ! 1/Norm_{uni}
-  real :: CurrentE      ! Constant current I_E
-  !
-  ! Constants determining toroidal field:
-  !
-  real  :: PsiMinusJEUOPlus
-
-  public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
-  public:: get_amplitude_int! Internal field amplitude
-  public:: current          ! Current ``density'', i, divided by I_tot
-contains
-  !============================================================================
-  subroutine set_kappaprime0(KappaPrime0In,EpsIn)
-    real, intent(in)  :: KappaPrime0In
-    real, optional, intent(in) :: EpsIn
-    ! \kappa^\prime^2 at the  boundary
-    real :: KappaPrime02
-    ! At the boundary of the external field region
-    real :: KappaPrime2Ext, KappaExtMax
-    ! At the boundary of the uniform current region:
-    real :: Kappa2Uniform, KappaUniform
-    real :: ToroidQ0U0Minus ! Q^{-1}_{-1/2}(u^-_0)
-    real :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
-    !--------------------------------------------------------------------------
-    Eps = 0.0
-    if(present(EpsIn)) Eps = EpsIn
-    KappaPrime02 = KappaPrime0In**2
-    ! External boundary
-    KappaPrime2Ext = (1 + 2*Eps)*KappaPrime02
-    Kappa2ExtMax = 1 - KappaPrime2Ext
-    KappaExtMax  = sqrt(Kappa2ExtMax)
-    ! Boundary of the uniform current region
-    KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
-    Kappa2Uniform = 1 - KappaPrime2Uniform
-    KappaUniform = sqrt(Kappa2Uniform)
-    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*&
-         toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
-    ! Eq. 36, constant field factor for uniform current
-    CurrentFactor = 1/norm_uni(KappaPrime2Uniform)
-    ! Constant current I_E = 1/( (3/4)*Norm_Uni
-    CurrentE = cFourThirds*CurrentFactor
-    Q1 = q_0(KappaPrime2uniform) - CurrentE/ToroidQ0U0Plus
-    ! Constants determining toroidal field:
-    PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
-    if(Eps > 0.0)then
-       RETURN
-    end if
-  end subroutine set_kappaprime0
-  !============================================================================
-  subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
-    real, intent(in)    :: KappaPrime2In
-    real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
-    !
-    ! Misc
-    !
-    real :: Kappa, Kappa2, Kappa3, PsiMinusJE
-    !--------------------------------------------------------------------------
-    if(KappaPrime2In > KappaPrime2Uniform)then
-       ! Interpolate between external and internal solutions:
-       RETURN
-    end if
-    Kappa2 = 1 - KappaPrime2In; Kappa = sqrt(Kappa2); Kappa3 = Kappa2*Kappa
-    PsiMinusJE = Q1*Kappa3*toroid_q(0,KappaPrime2In = KappaPrime2In)
-    ! Eqs. 35
-    Amplitude_I(Axial_)    = PsiMinusJE + CurrentE
-    Amplitude_I(Poloidal_) = 3*Q1*Kappa3*toroid_q(1,    &
-         KappaPrime2In=KappaPrime2In)
-    Amplitude_I(Toroidal_) = sqrt(8*max(0.0, &
-         CurrentFactor*(PsiMinusJE - PsiMinusJEUOPlus)))
-  end subroutine get_amplitude_int
-  !============================================================================
-  real function current(KappaPrime2In)
-    real, intent(in)    :: KappaPrime2In
-    !--------------------------------------------------------------------------
-    current = 1*CurrentFactor
-  end function current
-  !============================================================================
-end module ModUniformCurrent
-!==============================================================================
 module  ModParabolicCurrent
   use ModExternalField, ONLY: &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax
@@ -273,13 +179,13 @@ contains
   !============================================================================
 end module ModParabolicCurrent
 !==============================================================================
-module  ModMergedCurrent
+module  ModUniformCurrent
   use ModExternalField, ONLY: &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
   use ModFormFactors
   implicit none
   PRIVATE  ! Except
-  real :: Eps = 0.0
+  real :: Eps = 0.1
   ! Parabolic current at
   ! KappaPrime0^2*(1 - 2*Eps) < KappaPrime2 < KappaPrime0^2*(1 + 2*Eps)
   ! KappaPrime2Uniform < KappaPrime2 < KappaPrime2Ext = 1 - Kappa2ExtMax
@@ -323,7 +229,7 @@ contains
     real :: ToroidQ0U0Plus  ! Q^{-1}_{-1/2}(u^+_0)
     real :: Amplitude_I(Axial_:Toroidal_)
     !--------------------------------------------------------------------------
-    Eps = 0.0
+    Eps = 0.1
     if(present(EpsIn)) Eps = EpsIn
     KappaPrime02 = KappaPrime0In**2
     ! External boundary
@@ -334,42 +240,54 @@ contains
     KappaPrime2Uniform = KappaPrime02*(1 - 2*Eps)
     Kappa2Uniform = 1 - KappaPrime2Uniform
     KappaUniform = sqrt(Kappa2Uniform)
-
-    ! Calculate Coth(u_0)
-    CothU0 = cothu(KappaPrime2Ext)
-    ! 1/(coth u^-_0 - coth u^+_0)
-    DeltaInv = 1/(CothU0 - cothu(KappaPrime2Uniform))
-    ! Different contributions to the normalization integral
-    NormMinus = DeltaInv*norm_par(CothU0,KappaPrime2Ext)
-    NormPlus  = - DeltaInv*norm_par(CothU0,KappaPrime2Uniform) +        &
-         norm_uni(KappaPrime2Uniform)
-    ! Normalization factor for currents:
-    CurrentFactor = 1/(NormMinus + NormPlus)
-    ! Normalize currents contributing to the normalization integrals
-    NormPlus = CurrentFactor*NormPlus; NormMinus = CurrentFactor*NormMinus
-    ! Uniform current
-    CurrentE = cFourThirds*CurrentFactor
-    ! Q^{-1}_{-1/2}(u_0):
-    ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
-         toroid_q(0,KappaPrime2In=KappaPrime2Ext)
-
-    ! Constant field factor for parabolic current
-    Q01 = q_0(KappaPrime2In=KappaPrime2Ext)*NormMinus                    &
-         -  parabolic_current_e(CothU0,KappaPrime2Ext)*DeltaInv*         &
-         CurrentFactor/ToroidQ0U0Minus
-    ! Constant for toroidal field and parabolic current
-    DPsiMinusJEOverDu0Minus  =  3*KappaPrime2Ext*KappaExtMax*(           &
-         Q01*toroid_q(1,KappaPrime2In=KappaPrime2Ext) +                  &
-         0.125*NormPlus*toroid_p(1,KappaPrime2In = KappaPrime2Ext) )
-    ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*                         &
-         toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
-    Q1 = Q01 + NormPlus*q_0(KappaPrime2Uniform) +                        &
-         (parabolic_current_e(CothU0,KappaPrime2Uniform)*DeltaInv*       &
-         CurrentFactor - CurrentE)/ToroidQ0U0Plus
-    ! Constants determining toroidal field:
-    PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
-    call get_amplitude_int(1.0000003*KappaPrime2Uniform,Amplitude_I)
-    Toroidal2 = Amplitude_I(Toroidal_)**2
+    if(Eps > 0.0)then
+       ! Calculate Coth(u_0)
+       CothU0 = cothu(KappaPrime2Ext)
+       ! 1/(coth u^-_0 - coth u^+_0)
+       DeltaInv = 1/(CothU0 - cothu(KappaPrime2Uniform))
+       ! Different contributions to the normalization integral
+       NormMinus = DeltaInv*norm_par(CothU0,KappaPrime2Ext)
+       NormPlus  = - DeltaInv*norm_par(CothU0,KappaPrime2Uniform) +        &
+            norm_uni(KappaPrime2Uniform)
+       ! Normalization factor for currents:
+       CurrentFactor = 1/(NormMinus + NormPlus)
+       ! Normalize currents contributing to the normalization integrals
+       NormPlus = CurrentFactor*NormPlus; NormMinus = CurrentFactor*NormMinus
+       ! Uniform current
+       CurrentE = cFourThirds*CurrentFactor
+       ! Q^{-1}_{-1/2}(u_0):
+       ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
+            toroid_q(0,KappaPrime2In=KappaPrime2Ext)
+       
+       ! Constant field factor for parabolic current
+       Q01 = q_0(KappaPrime2In=KappaPrime2Ext)*NormMinus                    &
+            -  parabolic_current_e(CothU0,KappaPrime2Ext)*DeltaInv*         &
+            CurrentFactor/ToroidQ0U0Minus
+       ! Constant for toroidal field and parabolic current
+       DPsiMinusJEOverDu0Minus  =  3*KappaPrime2Ext*KappaExtMax*(           &
+            Q01*toroid_q(1,KappaPrime2In=KappaPrime2Ext) +                  &
+            0.125*NormPlus*toroid_p(1,KappaPrime2In = KappaPrime2Ext) )
+       ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*                         &
+            toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
+       Q1 = Q01 + NormPlus*q_0(KappaPrime2Uniform) +                        &
+            (parabolic_current_e(CothU0,KappaPrime2Uniform)*DeltaInv*       &
+            CurrentFactor - CurrentE)/ToroidQ0U0Plus
+       ! Constants determining toroidal field:
+       PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
+       call get_amplitude_int(1.0000003*KappaPrime2Uniform,Amplitude_I)
+       Toroidal2 = Amplitude_I(Toroidal_)**2
+    else
+       ToroidQ0U0Plus = Kappa2Uniform*KappaUniform*&
+            toroid_q(0,KappaPrime2In=KappaPrime2Uniform)
+       ! Eq. 36, constant field factor for uniform current
+       CurrentFactor = 1/norm_uni(KappaPrime2Uniform)
+       ! Constant current I_E = 1/( (3/4)*Norm_Uni
+       CurrentE = cFourThirds*CurrentFactor
+       Q1 = q_0(KappaPrime2uniform) - CurrentE/ToroidQ0U0Plus
+       ! Constants determining toroidal field:
+       PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
+       Toroidal2 = 0.0
+    end if
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
@@ -415,7 +333,7 @@ contains
     end if
   end function current
   !============================================================================
-end module ModMergedCurrent
+end module ModUniformCurrent
 !==============================================================================
 module  ModSurfaceCurrent
   use ModExternalField, ONLY:   &
@@ -471,8 +389,6 @@ module ModCurrentFilament
        surface_current_field=>get_amplitude_int
   use ModParabolicCurrent,    ONLY: &
        parabolic_current_field=>get_amplitude_int, parabolic_current=>current
-  use ModMergedCurrent,    ONLY: merged_current=>current, &
-       ld_current_field=>get_amplitude_int
   use ModExternalField,          ONLY: Kappa2ExtMax, external_field, &
        Axial_, Poloidal_, Toroidal_
   implicit none
@@ -490,8 +406,6 @@ module ModCurrentFilament
   logical :: UseSurfaceCurrent = .false.
   ! 3. Parabolic current formfactor
   logical :: UseParabolicCurrent = .false.
-  ! 4. Merged profile of parabolic (near the boundary) and uniform current
-  logical :: UseMergedCurrent = .false.
   ! Inductunce  coefficient; the ratio of the total inductance of the filament
   ! in the SI units ormalized by \mu_0 R_\infty
   real :: Inductance
@@ -501,7 +415,6 @@ contains
     use ModUniformCurrent, ONLY: set_uniform_current=>set_kappaprime0
     use ModSurfaceCurrent, ONLY: set_surface_current=>set_kappaprime0
     use ModParabolicCurrent, ONLY: set_parabolic_current=>set_kappaprime0
-    use ModMergedCurrent,  ONLY: set_merged_current=>set_kappaprime0
     use ModHypergeometric, ONLY: l0_ext_inductance
 
     real, intent(in) :: rMinor, rMajor
@@ -512,14 +425,6 @@ contains
     Kappa2ExtMax  = -1.0
     if(UseUniformCurrent)then
        call set_uniform_current(KappaPrime0,EpsIn)
-       ! Calculate inductance depending on the choice of the current form-factor
-       ! Inductance includes external and internal field iductances as well as
-       ! the torooidal field inductance:
-       !                      external               internal  toroidal
-       Inductance = l0_ext_inductance(KappaPrime0**2) + 0.250 + 0.50
-    end if
-    if(UseMergedCurrent)then
-       call set_merged_current(KappaPrime0,EpsIn)
        ! Calculate inductance depending on the choice of the current form-factor
        ! Inductance includes external and internal field iductances as well as
        ! the torooidal field inductance:
@@ -681,7 +586,7 @@ contains
     !--------------------------------------------------------------------------
     a  = 0.20/0.990;  R0 = 1.010/0.990; Current_VI = 0.0; Toroidal_VI = 0.0
     UseUniformCurrent = .true.;  UseSurfaceCurrent = .false.
-    call set_filament_geometry(a, R0)
+    call set_filament_geometry(a, R0, 0.0)
     do iLoop = 1, nStep
        !
        ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
@@ -766,8 +671,8 @@ contains
           Current_VI(Parabolic_,iLoop) = parabolic_current(KappaPrime**2)
        end if
     end do
-    UseParabolicCurrent = .false.;  UseMergedCurrent = .true.
-    call set_filament_geometry(a, R0,0.1)
+    UseParabolicCurrent = .false.;  UseUniformCurrent = .true.
+    call set_filament_geometry(a, R0, 0.1)
     do iLoop = 1, nStep
        !
        ! \kappa^\prime ranges from 0 to \kappa^\prime_0 = 0.1
@@ -781,13 +686,13 @@ contains
           Var_VI(PoloidalLD_,iLoop) = 0.125*Kappa3*KappaPrime*&
                Amplitude_I(Poloidal_)
        else
-          call ld_current_field(KappaPrime2In = KappaPrime**2, &
+          call uniform_current_field(KappaPrime2In = KappaPrime**2, &
                Amplitude_I=Amplitude_I)
           ! Eqs. 35
           Var_VI(AxialLD_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalLD_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
           Toroidal_VI(Merged_,iLoop) = Amplitude_I(Toroidal_)
-          Current_VI(Merged_,iLoop) = merged_current(KappaPrime**2)
+          Current_VI(Merged_,iLoop) = uniform_current(KappaPrime**2)
        end if
     end do
     call save_plot_file(NameFile='test_currents.out', &
@@ -812,9 +717,8 @@ contains
          Coord1In_I = Coord_I                   ,&
          VarIn_VI = Var_VI)
     UseUniformCurrent = .true.;  UseParabolicCurrent = .false.
-    UseMergedCurrent = .false.
     ! Set rInfty = 1 and KappaPrime  = 0.1
-    call set_filament_geometry(0.20 / 0.990, 1.01 / 0.990)
+    call set_filament_geometry(0.20 / 0.990, 1.01 / 0.990, 0.1)
     call set_filament_field(+1, [1.0, 0.0, 0.0])
     do j = -N, N
        do i = -N, N
