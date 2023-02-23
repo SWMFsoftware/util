@@ -75,13 +75,16 @@ test_td22_check:
 		test_parabolic.out test_parabolic.ref >> test_td22.diff)
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_currents.out test_currents.ref >> test_td22.diff)
+	-@(${DIFFNUM} -b -r=1e-7 \
+		test_toroidal.out test_toroidal.ref >> test_td22.diff)
 	@ls -l test_td22.diff
 
 test_td22: LIB
 	@echo "test_td22_compile..." >  test_td22.diff
 	@make test_td22_exe	     >> test_td22.diff
 	@echo "test_td22_run..."     >> test_td22.diff
-	-@(rm -f test_fields.out test_parabolic.out test_currents.out)
+	-@(rm -f test_fields.out test_parabolic.out \
+		test_currents.out test_toroidal.out)
 	-@(./test_td22.exe           >> test_td22.diff)
 	@echo "test_td22_check..."   >> test_td22.diff
 	-@(make test_td22_check)
