@@ -24,18 +24,12 @@ contains
 end module ModExternalField
 !==============================================================================
 module ModFormFactors
-  use ModHyperGeometric, ONLY: toroid_q, toroid_p
+  use ModHyperGeometric, ONLY: toroid_q, toroid_p, cothu
   implicit none
   ! 1/E^{(0)} and -1/E^{(1)}
   real, parameter :: cFourThirds = 1.3333333333333333, cFourFifths = 0.80
   ! Compute functions needed to describe parabolic current aand its field.
 contains
-  !============================================================================
-  real function cothu(KappaPrime2In)
-    real, intent(in)     :: KappaPrime2In
-    !--------------------------------------------------------------------------
-    cothu = 1 + 2*KappaPrime2In/(1 - KappaPrime2In)
-  end function cothu
   !============================================================================
   real function parabolic_current(CothU0, KappaPrime2In)
     real, intent(in)     :: CothU0, KappaPrime2In
