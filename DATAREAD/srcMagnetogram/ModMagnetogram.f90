@@ -19,6 +19,15 @@ module ModMagnetogram
 
   integer, public:: iTableB0    = -1     ! index of B0 lookup table
   integer, public:: iTableB0New = -1     ! index of new B0 lookup table
+  integer, public:: iTableB0local    = -1     ! index of B1 lookup table,
+  real:: rMinB0local ! radial limits of table
+  real:: rMaxB0local
+  real:: LonMinB0local ! longitude limits of table in degrees
+  real:: LonMaxB0local
+  real:: LatMinB0local ! latitude limits of table in degrees
+  real:: LatMaxB0local
+
+  ! if point inside B1 table B0 will be set as B0 + B1
   public:: read_magnetogram_param        ! read parameters
   public:: init_magnetogram_lookup_table ! initialize lookup table
   public:: get_magnetogram_field         ! get field at a given point
@@ -104,14 +113,14 @@ contains
     integer :: iLon, iLat
     ! To get iProc  and determine  the root PE:
     integer :: iProc, iError
+    ! Make sure these are set
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
-    ! Make sure these are set
     iTableB0    = i_lookup_table('B0')
     iTableB0New = i_lookup_table('B0New')
     ! Nothing to do if there is no B0 table defined or to be made
     if(iTableB0 < 0 .and. .not.DoReadHarmonics) RETURN
-     ! Get processor index and total number of processors
+    ! Get processor index and total number of processors
     if(present(iComm))then
        call MPI_comm_rank(iComm,iProc,iError)
     else
@@ -204,7 +213,27 @@ contains
           nullify(Ptr)
        end if
     end if
-       ! Get coordinate limits, Carrington rotation
+
+    ! first read local b0
+    iTableB0local    = i_lookup_table('B0local')
+    if(iTableB0local > 0) then
+       call get_lookup_table(iTableB0local, nParam=nParam, Param_I=Param_I, &
+            IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I)
+       rMinB0local = IndexMin_I(1); rMaxB0local = IndexMax_I(1)
+       LonMinB0local = IndexMin_I(2); LonMaxB0local = IndexMax_I(2)
+       LatMinB0local = IndexMin_I(3); LatMaxB0local = IndexMax_I(3)
+       if(iProc == 0)then
+          write(*,*)NameSub," read B0local table"
+          write(*,*)NameSub," rMinB0local,   rMaxB0local  =", &
+               rMinB0local, rMaxB0local
+          write(*,*)NameSub," LonMinB0local, LonMaxB0local=", &
+               LonMinB0local, LonMaxB0local
+          write(*,*)NameSub," LatMinB0local, LatMaxB0local=", &
+               LatMinB0local, LatMaxB0local
+       endif
+    endif
+
+    ! Get coordinate limits, Carrington rotation
     call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
          IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, Time=CRFraction, &
          IsLogIndex_I=IsLogIndex_I)
@@ -384,9 +413,18 @@ contains
     ! Extrapolate for r < rMinB0
     r = rLonLat_D(1)
 
-    call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
-         DoExtrapolate=(r<rMinB0) )
-
+    if(iTableB0local > 0 .and. &
+         rLonLat_D(1) <= rMaxB0local   .and. &  ! rMax
+         rLonLat_D(2) >= LonMinB0local .and. &  ! LonMin
+         rLonLat_D(2) <= LonMaxB0local .and. &  ! LonMax
+         rLonLat_D(3) >= LatMinB0local .and. &  ! LatMin
+         rLonLat_D(3) <= LatMaxB0local ) then   ! LatMax
+       call interpolate_lookup_table(iTableB0local, rLonLat_D, B0_D, &
+            DoExtrapolate=(r<rMinB0local) )
+    else
+       call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
+            DoExtrapolate=(r<rMinB0) )
+    endif
     ! Rotate Bx, By based on shifted coordinates
     if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
 
@@ -399,7 +437,7 @@ contains
        ! Include the shift in Phi coordinate and make sure that it is
        ! in the range provided by the lookup table
        if(dLonB0New /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
-         modulo(rLonLat_D(2) - dLonB0New - LonMinB0, cTwoPi) + LonMinB0
+            modulo(rLonLat_D(2) - dLonB0New - LonMinB0, cTwoPi) + LonMinB0
 
        ! Lookup table uses degrees
        rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
