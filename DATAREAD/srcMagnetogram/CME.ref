@@ -2,7 +2,7 @@
 #CME 
 T                   UseCme 
 T                   DoAddFluxRope 
--1.0		    tDecayCme 
+-1.0                tDecayCme 
 337.50              LongitudeCme 
 23.30               LatitudeCme 
 167.31              OrientationCme 

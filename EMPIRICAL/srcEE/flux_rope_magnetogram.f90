@@ -5,12 +5,12 @@ program magnetogram
 
   use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
        EEE_set_plot_range, EEE_initialize
-  use EEE_ModCommonVariables, ONLY:  & ! Io2Si_V, Si2Io_V, Io2No_V, &
-       ! No2Io_V, Si2No_V, No2Si_V,
+  use EEE_ModCommonVariables, ONLY: & !Io2Si_V, Si2Io_V, Io2No_V, &
+!       No2Io_V, Si2No_V, No2Si_V, &
   !----------------------------------------------------------------------------
-       prefix, x_, y_, z_, DXyzPlot,  &
+       prefix, x_, y_, z_, DXyzPlot, Si2Io_V, &
        LongitudeCme, LatitudeCme, OrientationCME, DoAddFluxRope, &
-       DirCme_D
+       DirCme_D, UnitB_
   use ModConst, ONLY: cPi, cTwoPi, cDegToRad, cRadToDeg
   use ModPlotFile, ONLY:save_plot_file
   use ModReadParam, ONLY: read_file, read_init, &
@@ -50,8 +50,8 @@ program magnetogram
        '  LongitudeCme LatitudeCme OrientationCme DXyz', String3Gs = 'Gs Gs Gs'
   !----------------------------------------------------------------------------
 
-  ! Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
-  ! No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
+!  Io2Si_V = 1; Si2Io_V = 1; Io2No_V = 1
+!  No2Io_V = 1; Si2No_V = 1; No2Si_V = 1
 
   write(*,'(a)')prefix//'Reading CME.in'
   call read_file('CME.in', iCommIn = MPI_COMM_SELF)
@@ -114,6 +114,7 @@ program magnetogram
            if(DoAddFluxRope)then
               call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
                    Time = 0.0, nStep  = 0, nIter=0)
+              B_D = B_D*Si2Io_V(UnitB_)
               Var_VN(B1x_:B1z_,i,j,k) = matmul(B_D, Rotate_DD)
            end if
            if(iTableB0  > 0)then
@@ -204,6 +205,7 @@ contains
           call rlonlat_to_xyz(1.0,Longitude,Latitude, Xyz_D)
           call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
                Time = 0.0, nStep  = 0, nIter=0)
+          B_D = B_D*Si2Io_V(UnitB_)
           ! Convert to Br, BLon, BLat components
           XyzRLonLat_DD = rot_xyz_rlonlat(lon=Longitude, &
                lat=Latitude)
@@ -221,6 +223,7 @@ contains
          CoordIn_I = Longitude_I,       &
          Coord2In_I= Latitude_I,        &
          NameVarIn = 'Longitude Latitude Br Blon Blat Long0',&
+         NameUnitsIn = 'Deg Deg Gs Gs Gs',&
          VarIn_VII = BSurface_DC)
   end subroutine make_frm_magnetogram
   !============================================================================
