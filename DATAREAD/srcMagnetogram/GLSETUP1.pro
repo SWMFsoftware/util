@@ -201,7 +201,7 @@ pro TDSETUP1, FILE=FILE
   exit
 end
 
-pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS, APEX=APEX
+pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS, APEX=APEX, BMAX=BMAX
 
 ;-----------------------------------------------------------------------
 ; NAME:
@@ -234,13 +234,13 @@ pro TDSETUP2, FILE=FILE,  RADIUS=RADIUS, APEX=APEX
   strap_field_show=strap_field
   index=where(strap_field lt 2)
   strap_field_show[index]=2
-  index=where(strap_field gt 8)
-  strap_field_show[index]=8
+  index=where(strap_field gt BMAX)
+  strap_field_show[index]=BMAX
   window,0,xs=1200,ys=1200*nx[1]/nx[0],xpos=400,ypos=400
   device,decomposed=0
   !p.font=1
   loadct,39
-  contour,strap_field_show,x(*,*,0),x(*,*,1),min=2,max=8,charsize=3,$
+  contour,strap_field_show,x(*,*,0),x(*,*,1),min=2,max=BMAX,charsize=3,$
           title='Strapping field [Gs] Rs)',xtitle='y',$
           ytitle='Altitude',/fill,nlevels=60,/iso,xstyle=1,ystyle=1
 ; left footpoint, x=-Radius, calculate x-index:

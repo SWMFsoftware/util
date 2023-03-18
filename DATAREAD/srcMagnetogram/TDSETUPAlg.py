@@ -155,7 +155,8 @@ def TwoPointsOnSph(Lon1, Lat1, Lon2, Lat2):
     return(Lon,Lat,Orientation,HalfDist)
    
 def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
-        LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn,a2r0Ratio,ApexIn):
+        LonFPPosIn,LatFPPosIn,LonFPNegIn,LatFPNegIn,a2r0Ratio,ApexIn,
+        BStrapMax):
    Lon0     = Param_I[0]
    LonEarth = Param_I[1]
    xPositive = Param_I[2]
@@ -493,8 +494,8 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
       FileId.write(';\n')
       FileId.write('.r GLSETUP1 \n')
       FileId.write(
-         "TDSETUP2,file='FRM_x=0.out',radius={0:4.2f}, Apex={1:4.2f}\n".format(
-            TDRadius,Apex))
+         "TDSETUP2,file='FRM_x=0.out',radius={0:4.2f}, Apex={1:4.2f}, BMax={2:4.2f}\n".format(
+            TDRadius,Apex,BStrapMax))
       FileId.close()
       ########SHOW STRAPPING FIELD, CHOOSE APEX #####################
       print('Now, you will see isolines of strapping field.\n')
