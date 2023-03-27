@@ -784,5 +784,5 @@ if __name__ == '__main__':
             out=args.outputfile+'_'+str(i).zfill(2)+'.out'
             remap(args.inputfile, out, args.nlat, args.nlon, grid_type, i-1)
     else:
-        out=args.outputfile+'.out'
+        out=args.outputfile+'_01.out'
         remap(args.inputfile, out, args.nlat, args.nlon, grid_type, 0)
