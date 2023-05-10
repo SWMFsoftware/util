@@ -89,31 +89,29 @@ module ModMagnetogram
 contains
   !============================================================================
   subroutine init_magnetogram_lookup_table(iComm)
+
     use ModNumConst, ONLY: cDegToRad
-    use ModKind,     ONLY: Real4_
     use ModMpi,      ONLY: MPI_comm_rank
     use ModPlotFile, ONLY: save_plot_file
     integer, intent(in), optional :: iComm
 
-    real:: dLon ! longitude shift
+    real:: LonShift ! longitude shift
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
     ! Two  variables to store magnetogram time.
     ! Carrigton rootation number:
-    integer :: nCR = 0
+    integer:: nCR = 0
     ! Fraction of Carrington rotation since its beginning till magnetogram time
-    real    :: CRFraction  = 0.0
-    type(TableType),  pointer :: Ptr
-    real(Real4_), allocatable  :: Tmp_VIIIII(:,:,:,:,:,:)
-    real, allocatable :: Magnetogram_VII(:,:,:)
-    real :: CosLat, OpenFluxNeg, OpenFluxPos
-    real :: DX_D(3), Lon, Lat ! in degrees
-    real :: XyzRLonLat_DD(3,3)
+    real:: CRFraction  = 0.0
+    type(TableType), pointer:: TablePtr
+    real, allocatable:: Magnetogram_VII(:,:,:)
+    real:: CosLat, OpenFluxNeg, OpenFluxPos
+    real:: dLon, dLat, Lon, Lat ! in degrees
+    real:: XyzRLonLat_DD(3,3)
     integer :: iLon, iLat
-    ! To get iProc  and determine  the root PE:
     integer :: iProc, iError
-    ! Make sure these are set
+
     character(len=*), parameter:: NameSub = 'init_magnetogram_lookup_table'
     !--------------------------------------------------------------------------
     iTableB0    = i_lookup_table('B0')
@@ -128,7 +126,7 @@ contains
     end if
     if(DoReadHarmonics)then
        ! Read harmonics coefficient and Carrington rotation info
-       call read_harmonics_file(NameHarmonicsFile, CarringtonRot, dLon)
+       call read_harmonics_file(NameHarmonicsFile, CarringtonRot, LonShift)
        DoReadHarmonics = .false.
        nCR        = int(CarringtonRot)
        CRFraction = CarringtonRot  - nCR
@@ -142,7 +140,7 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],  &
             IndexMin_I  = [rMagnetogram,     0.0, -90.0],    &
             IndexMax_I  = [rSourceSurface, 360.0,  90.0],    &
-            Param_I = [rMagnetogram, rSourceSurface, dLon, real(nCR)], &
+            Param_I = [rMagnetogram, rSourceSurface, LonShift, real(nCR)], &
             Time    = CRFraction,                  &
             StringDescription = 'Created from '//trim(NameHarmonicsFile) )
        iTableB0 = i_lookup_table('B0')
@@ -152,28 +150,25 @@ contains
 
        call deallocate_harmonics_arrays
        if(iProc==0) then
-          Ptr => Table_I(iTableB0)
-          allocate(Magnetogram_VII(6, nLon, nLat+1))
-          allocate(Tmp_VIIIII(3, nR+1, nLon+1,  nLat+1, 1, 1))
-          Tmp_VIIIII = Ptr%Value4_VC
-          ! Take the radial slice at the photospheric level,
-          ! omit the strip at the longitude of 360 degrees:
-          Magnetogram_VII(1:3,:,:)  =  real(Tmp_VIIIII(:,1,1:nLon,:,1,1))
-          Magnetogram_VII(4:6,:,:)  =  real(Tmp_VIIIII(:,nR+1,1:nLon,:,1,1))
-          DX_D = Ptr%DIndex_I
+          TablePtr => Table_I(iTableB0)
+          allocate(Magnetogram_VII(6,nLon,nLat+1))
+          ! omit the strip at the longitude of 360 degrees and take radial cuts
+          ! at r=1 and r=Rss
+          Magnetogram_VII(1:3,:,:) = TablePtr%Value4_VC(:,1,1:nLon,:,1,1)    
+          Magnetogram_VII(4:6,:,:) = TablePtr%Value4_VC(:,nR+1,1:nLon,:,1,1)
+          dLon = TablePtr%DIndex_I(2)
+          dLat = TablePtr%DIndex_I(3)
           do iLat  = 1, nLat + 1
-             Lat = -90 + DX_D(3)*(iLat - 1)
+             Lat = -90 + dLat*(iLat - 1)
              do iLon = 1, nLon
-                Lon = DX_D(2)*(iLon - 1)
+                Lon = dLon*(iLon - 1)
                 ! Convert to Br, BLon, BLat components
-                XyzRLonLat_DD = rot_xyz_rlonlat(lon=cDegToRad*Lon, &
-                     lat= cDegToRad*Lat)
+                XyzRLonLat_DD = &
+                     rot_xyz_rlonlat(cDegToRad*Lon, cDegToRad*Lat)
                 Magnetogram_VII(1:3, iLon, iLat) =            &
-                     matmul(Magnetogram_VII(1:3, iLon, iLat), &
-                     XyzRLonLat_DD)
+                     matmul(Magnetogram_VII(1:3,iLon,iLat), XyzRLonLat_DD)
                 Magnetogram_VII(4:6, iLon, iLat) =            &
-                     matmul(Magnetogram_VII(4:6, iLon, iLat), &
-                     XyzRLonLat_DD)
+                     matmul(Magnetogram_VII(4:6,iLon,iLat), XyzRLonLat_DD)
              end do
           end do
           ! Remesh from latitudinal nodes to pixels:
@@ -181,7 +176,7 @@ contains
                Magnetogram_VII(:,:,1:nLat) + Magnetogram_VII(:,:,2:nLat+1))
           OpenFluxPos = 0.0; OpenFluxNeg = 0.0
           do iLat = 1, nLat
-             CosLat = cos(cDegToRad*(-90.0 + DX_D(3)*(iLat - 0.5)))
+             CosLat = cos(cDegToRad*(-90.0 + dLat*(iLat - 0.5)))
              OpenFluxPos = OpenFluxPos + CosLat*sum(Magnetogram_VII(4,:,iLat),&
                   MASK=Magnetogram_VII(4,:,iLat)>0.0)
              OpenFluxNeg = OpenFluxNeg + CosLat*sum(Magnetogram_VII(4,:,iLat),&
@@ -196,12 +191,13 @@ contains
           call save_plot_file(NameFile = 'field_2d.out',  &
                nDimIn  = 2,                       &
                TimeIn = CRFraction,               &
-               ParamIn_I= [real(int(dLon)),real(nCR),OpenFluxPos,OpenFluxNeg],&
+               ParamIn_I= &
+               [real(int(LonShift)), real(nCR), OpenFluxPos, OpenFluxNeg],&
                VarIn_VII= Magnetogram_VII(1:4,1:nLon,1:nLat), &
                TypeFileIn    = 'ascii',           &
-               CoordMinIn_D  = [  0.0 + dLon - int(dLon), -90.0 + 90.0/nLat], &
-               CoordMaxIn_D  = [360.0 - 360.0/nLon + dLon - int(dLon),  &
-               90.0 - 90.0/nLat ],&
+               CoordMinIn_D  = [LonShift - int(LonShift), -90 + 90.0/nLat], &
+               CoordMaxIn_D  = [360 - 360.0/nLon + LonShift - int(LonShift),&
+               90 - 90.0/nLat ],&
                StringHeaderIn  = 'Created from '//trim(NameHarmonicsFile), &
                NameUnitsIn  = &
                ' [deg] [deg] [Gs] [Gs] [Gs] [Gs] [Gs] [Gs]'//&
@@ -209,8 +205,7 @@ contains
                NameVarIn = 'Longitude Latitude Br BLon BLat'//&
                ' BrSS Long0 CRNumber OpenFluxPos OpenFluxNeg')
           deallocate(Magnetogram_VII)
-          deallocate(Tmp_VIIIII)
-          nullify(Ptr)
+          nullify(TablePtr)
        end if
     end if
 
@@ -260,7 +255,7 @@ contains
     !
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and Carrington rotation info
-       call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew, dLon)
+       call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew, LonShift)
        DoReadHarmonicsNew = .false.
        nCR        = int(CarringtonRotNew)
        CRFraction = CarringtonRotNew  - nCR
@@ -274,7 +269,7 @@ contains
             nIndex_I    = [nR+1, nLon+1, nLat+1],          &
             IndexMin_I  = [rMagnetogram,     0.0, -90.0],  &
             IndexMax_I  = [rSourceSurface, 360.0,  90.0],  &
-            Param_I = [rMagnetogram, rSourceSurface, dLon, real(nCR)], &
+            Param_I = [rMagnetogram, rSourceSurface, LonShift, real(nCR)], &
             Time=CRFraction,                               &
             StringDescription = 'Created from '//trim(NameHarmonicsFileNew))
 
@@ -285,31 +280,27 @@ contains
 
        call deallocate_harmonics_arrays
        if(iProc==0) then
-          Ptr => Table_I(iTableB0New)
-          allocate(Magnetogram_VII(3, nLon, nLat+1))
-          allocate(Tmp_VIIIII(3, nR+1, nLon+1,  nLat+1, 1, 1))
-          Tmp_VIIIII = Ptr%Value4_VC
+          TablePtr => Table_I(iTableB0New)
+          allocate(Magnetogram_VII(3,nLon,nLat+1))
+
           ! Take the radial slice at the photospheric level,
           ! omit the strip at the longitude of 360 degrees:
-          Magnetogram_VII  =  real(Tmp_VIIIII(:,1,1:nLon,:,1,1))
-          DX_D = Ptr%DIndex_I
+          Magnetogram_VII = TablePtr%Value4_VC(:,1,1:nLon,:,1,1)
+          dLon = TablePtr%DIndex_I(2)
+          dLat = TablePtr%DIndex_I(3)
           do iLat  = 1, nLat + 1
-             Lat = -90 + DX_D(3)*(iLat - 1)
+             Lat = -90 + dLat*(iLat - 1)
              do iLon = 1, nLon
-                Lon = DX_D(2)*(iLon - 1)
+                Lon = dLon*(iLon - 1)
                 ! Convert to Br, BLon, BLat components
-                XyzRLonLat_DD = rot_xyz_rlonlat(lon=cDegToRad*Lon, &
-                     lat= cDegToRad*Lat)
-                Magnetogram_VII(1:3, iLon, iLat) =            &
-                     matmul(Magnetogram_VII(1:3, iLon, iLat), &
-                     XyzRLonLat_DD)
-!                Magnetogram_VII(4:6, iLon, iLat) =            &
-!                     matmul(Magnetogram_VII(4:6, iLon, iLat), &
-!                     XyzRLonLat_DD)
+                XyzRLonLat_DD = &
+                     rot_xyz_rlonlat(cDegToRad*Lon, cDegToRad*Lat)
+                Magnetogram_VII(1:3,iLon,iLat) =            &
+                     matmul(Magnetogram_VII(1:3,iLon,iLat), XyzRLonLat_DD)
              end do
           end do
           ! Remesh from latitudinal nodes to pixels:
-          Magnetogram_VII(:,:,1:nLat) = 0.5*(&
+          Magnetogram_VII(:,:,1:nLat) = 0.5*(             &
                Magnetogram_VII(:,:,1:nLat) + Magnetogram_VII(:,:,2:nLat+1))
           call save_plot_file(NameFile = 'field_2d.out',  &
                nDimIn  = 2,                       &
@@ -324,8 +315,7 @@ contains
                NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
                NameVarIn = 'Longitude Latitude Br BLon BLat Long0 CRNumber')
           deallocate(Magnetogram_VII)
-          deallocate(Tmp_VIIIII)
-          nullify(Ptr)
+          nullify(TablePtr)
        end if
     end if
 
