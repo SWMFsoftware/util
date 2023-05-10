@@ -303,9 +303,9 @@ contains
                 Magnetogram_VII(1:3, iLon, iLat) =            &
                      matmul(Magnetogram_VII(1:3, iLon, iLat), &
                      XyzRLonLat_DD)
-                Magnetogram_VII(4:6, iLon, iLat) =            &
-                     matmul(Magnetogram_VII(4:6, iLon, iLat), &
-                     XyzRLonLat_DD)
+!                Magnetogram_VII(4:6, iLon, iLat) =            &
+!                     matmul(Magnetogram_VII(4:6, iLon, iLat), &
+!                     XyzRLonLat_DD)
              end do
           end do
           ! Remesh from latitudinal nodes to pixels:
