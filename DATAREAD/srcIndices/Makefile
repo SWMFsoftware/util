@@ -6,6 +6,7 @@ include ../../../Makefile.conf
 
 MY_LIB = ${LIBDIR}/libINDICES.a
 
+-include Makefile.RULES
 -include Makefile.DEPEND
 
 OBJECTS = \
