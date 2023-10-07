@@ -95,7 +95,7 @@ contains
     use ModPlotFile, ONLY: save_plot_file
     integer, intent(in), optional :: iComm
 
-    real:: LonShift ! longitude shift
+    real:: LonShift ! longitude shift, in degrees, usually semi-integer
     integer:: nParam
     real:: Param_I(4), IndexMin_I(3), IndexMax_I(3)
     logical:: IsLogIndex_I(3)
@@ -125,7 +125,7 @@ contains
        iProc = 0
     end if
     if(DoReadHarmonics)then
-       ! Read harmonics coefficient and Carrington rotation info
+       ! Read harmonics coefficients, shift in longitude and CR humber
        call read_harmonics_file(NameHarmonicsFile, CarringtonRot, LonShift)
        DoReadHarmonics = .false.
        nCR        = int(CarringtonRot)
@@ -154,7 +154,7 @@ contains
           allocate(Magnetogram_VII(6,nLon,nLat+1))
           ! omit the strip at the longitude of 360 degrees and take radial cuts
           ! at r=1 and r=Rss
-          Magnetogram_VII(1:3,:,:) = TablePtr%Value4_VC(:,1,1:nLon,:,1,1)    
+          Magnetogram_VII(1:3,:,:) = TablePtr%Value4_VC(:,1,1:nLon,:,1,1)
           Magnetogram_VII(4:6,:,:) = TablePtr%Value4_VC(:,nR+1,1:nLon,:,1,1)
           dLon = TablePtr%DIndex_I(2)
           dLat = TablePtr%DIndex_I(3)
@@ -255,7 +255,8 @@ contains
     !
     if(DoReadHarmonicsNew)then
        ! Read harmonics coefficients and Carrington rotation info
-       call read_harmonics_file(NameHarmonicsFileNew, CarringtonRotNew, LonShift)
+       call read_harmonics_file(NameHarmonicsFileNew, &
+            CarringtonRotNew, LonShift)
        DoReadHarmonicsNew = .false.
        nCR        = int(CarringtonRotNew)
        CRFraction = CarringtonRotNew  - nCR
@@ -302,14 +303,15 @@ contains
           ! Remesh from latitudinal nodes to pixels:
           Magnetogram_VII(:,:,1:nLat) = 0.5*(             &
                Magnetogram_VII(:,:,1:nLat) + Magnetogram_VII(:,:,2:nLat+1))
-          call save_plot_file(NameFile = 'field_2d.out',  &
+          call save_plot_file(NameFile = 'new_field_2d.out',  &
                nDimIn  = 2,                       &
                TimeIn = CRFraction,               &
-               ParamIn_I= [real(int(dLon)), real(nCR)], &
+               ParamIn_I= [real(int(LonShift)), real(nCR)], &
                VarIn_VII= Magnetogram_VII(:,1:nLon,1:nLat), &
                TypeFileIn    = 'ascii',           &
-               CoordMinIn_D  = [  0.0 + dLon - int(dLon), -90.0 + 90.0/nLat], &
-               CoordMaxIn_D  = [360.0 - 360.0/nLon + dLon - int(dLon),  &
+               CoordMinIn_D  = [0.0 + LonShift - int(LonShift),&
+               -90.0 + 90.0/nLat],&
+               CoordMaxIn_D  = [360.0 - 360.0/nLon + LonShift - int(LonShift),&
                90.0 - 90.0/nLat ],&
                StringHeaderIn  = 'Created from '//trim(NameHarmonicsFileNew), &
                NameUnitsIn  = ' [deg] [deg] [Gs] [Gs] [Gs] [deg] []', &
