@@ -649,7 +649,8 @@ contains
                'Radius [Rs] Longitude [Deg] Latitude [Deg] B [G]', &
                nameVarIn = 'Radius Longitude Latitude Br Blon Blat' &
                //' rMin rMax LongCR CR', &
-               ParamIn_I = [ rMin, rMax, LongCR, CarRot ], &
+               ParamIn_I = [ rMin, rMax, LongCR, real(int(CarRot)) ], &
+               TimeIn=CarRot - int(CarRot),&
                nDimIn=3, VarIn_VIII=bAll_DG, &
                Coord1In_I=RadiusNode_I, &
                Coord2In_I=LonAll_I, &
