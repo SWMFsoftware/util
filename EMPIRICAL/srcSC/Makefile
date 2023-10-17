@@ -14,10 +14,7 @@ MY_LIB = ${LIBDIR}/libEMPIRICALSC.a
 -include Makefile.RULES
 
 OBJECTS = \
-	ModWsa.o \
 	ModTransitionRegion.o
-
-OBJECTS_EXE= stand_alone_wsa.o
 
 DEPEND:
 	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS} ${OBJECTS_EXE}
@@ -38,23 +35,6 @@ ${MY_LIB}: ${OBJECTS}
 	rm -f ${MY_LIB}
 	${AR} ${MY_LIB} ${OBJECTS}
 
-################## WSA   ###################
-
-WSA: 	LIB
-	make ${WSAEXE}
-	@echo ${WSAEXE} has been compiled.
-	ln -sf ${WSAEXE} .
-
-WSAEXE = ${BINDIR}/WSA.exe
-
-OBJECTS_WSA= \
-	stand_alone_wsa.o
-
-stand_alone_wsa.o: ${OBJECTS}
-
-${WSAEXE}: ${OBJECTS_WSA}
-	${LINK.f90} -o ${WSAEXE} ${OBJECTS_WSA} ${OBJECTS} \
-		-L${LIBDIR} -lMAGNETOGRAM -lSHARE ${Lflag}
 
 #######################################################################
 # Setting BLESS=YES or Y will copy the solution into the reference solution
