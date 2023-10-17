@@ -14,7 +14,8 @@ MY_LIB = ${LIBDIR}/libEMPIRICALSC.a
 -include Makefile.RULES
 
 OBJECTS = \
-	ModWsa.o
+	ModWsa.o \
+	ModTransitionRegion.o
 
 OBJECTS_EXE= stand_alone_wsa.o
 
