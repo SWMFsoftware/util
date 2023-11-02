@@ -13,7 +13,10 @@ MY_LIB = ${LIBDIR}/libEMPIRICALSC.a
 -include Makefile.DEPEND
 -include Makefile.RULES
 
-OBJECTS = \
+CHROMO = chromo_empty.o
+#CHROMO = chromoshere.o
+
+OBJECTS = ${CHROMO} \
 	ModTransitionRegion.o
 
 DEPEND:
