@@ -21,13 +21,13 @@ module EEE_ModMain
 
 contains
   !============================================================================
-  subroutine EEE_initialize(BodyNDim,BodyTDim,gamma, iCommIn, TimeNow)
+  subroutine EEE_initialize(BodyNDim, BodyTDim, Gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
 #ifdef _OPENACC
-    use ModUtilities, ONLY: norm2 
+    use ModUtilities, ONLY: norm2
 #endif
 
-    real, intent(in)             :: BodyNDim,BodyTDim,gamma
+    real, intent(in)             :: BodyNDim, BodyTDim, Gamma
     integer, optional, intent(in):: iCommIn
     real, optional, intent(in)   :: TimeNow
 
@@ -44,7 +44,7 @@ contains
        if(iProc==0)write(*,*) prefix,' tStartCme=',tStartCme,'[s]'
     end if
 
-    g = gamma
+    g = Gamma
     inv_g = 1.0/g
     gm1 = g - 1.0
     inv_gm1 = 1.0/(g - 1.0)
@@ -59,7 +59,7 @@ contains
     ! For sake of convenience
     !  units of B are chosen to satisfy v_A = B/sqrt(rho)       (mu = 1)
     !  units of n are chosen to satisfy  n  = rho/(ionmass/amu) (mp = 1)
-    !  units of T are chosen to satisfy  T  = p/n               (kBoltzmann = 1)
+    !  units of T are chosen to satisfy  T  = p/n               (kBoltzmann=1)
     !
     ! Note that No2Si_V(UnitN_) is NOT EQUAL TO 1/No2Si_V(UnitX_)^3 !!!
     No2Si_V(UnitT_)          = No2Si_V(UnitX_)/No2Si_V(UnitU_)         ! s
@@ -67,7 +67,7 @@ contains
     No2Si_V(UnitP_)          = No2Si_V(UnitRho_)*No2Si_V(UnitU_)**2    ! Pa
     No2Si_V(UnitB_)          = No2Si_V(UnitU_) &
          *sqrt(cMu*No2Si_V(UnitRho_))                                  ! T
-    No2Si_V(UnitRhoU_)       = No2Si_V(UnitRho_)*No2Si_V(UnitU_)       ! kg/m^2/s
+    No2Si_V(UnitRhoU_)       = No2Si_V(UnitRho_)*No2Si_V(UnitU_)     ! kg/m^2/s
     No2Si_V(UnitEnergyDens_) = No2Si_V(UnitP_)                         ! J/m^3
     No2Si_V(UnitPoynting_)   = No2Si_V(UnitEnergyDens_)*No2Si_V(UnitU_)! J/m^2/s
     No2Si_V(UnitJ_)          = No2Si_V(UnitB_)/( No2Si_V(UnitX_)*cMu ) ! A/m^2
@@ -213,9 +213,9 @@ contains
   end subroutine EEE_set_parameters
   !============================================================================
   subroutine EEE_get_state_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
-    
+
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
-         UseCms, UseSpheromak, tStartCme, tDecayCmeDim, Io2No_V, UnitT_
+         UseCms, UseSpheromak, tStartCme, tDecayCmeDim
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
@@ -223,15 +223,15 @@ contains
 
     real, intent(in) :: Xyz_D(3), Time
     real, intent(out) :: Rho, U_D(3), B_D(3), p
-    integer, intent(in):: nstep, nIter
-    
+    integer, intent(in):: nStep, nIter
+
     ! Perturbations due to CME
     real :: Rho1, U1_D(3), B1_D(3), p1
 
     ! Coefficient for perturbations (less than 1 for decay)
     real :: Coeff
-    !--------------------------------------------------------------------------
     ! initialize perturbed state variables
+    !--------------------------------------------------------------------------
     Rho = 0.0; U_D = 0.0; B_D = 0.0; p = 0.0
 
     if(.not.UseCme) RETURN
