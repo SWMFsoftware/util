@@ -20,7 +20,7 @@ typedef arma::SpMat<float> Sp_Mat; /// Sparse matrix
  */
 namespace chromosphere {
 
-  const uword nx = 5; // 1.5D for now
+  const uword nx = 200; // 1.5D for now
   const uword nz = 1;
   const uword num_of_eq = 14;
   const uword num_of_elem = nx*nz*num_of_eq;
@@ -191,6 +191,16 @@ Sp_Mat rhs_implicit(const Vec& xn);
  * Calculate the fast speed eigenvalue in the x-direction
  */
 Vec fast_speed_x(const Vec& xn);
+
+/*!
+ * Calculate flux in the x-direction
+ */
+Vec Fx(const Vec& xn);
+
+/*!
+ * Get max speed for courant condition calculation
+ */
+float get_max_v(const Vec& xn);
 
 } // namespace chromosphere
 

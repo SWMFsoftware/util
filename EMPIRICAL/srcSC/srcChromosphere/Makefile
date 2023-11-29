@@ -1,3 +1,6 @@
+include ../../../../Makefile.def
+include ../../../../Makefile.conf
+
 OBJ_FILES = chromosphere.cpp.o 
 SRC_FILES = chromosphere.cpp
 INC_DIRS := . include/
