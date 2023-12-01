@@ -125,6 +125,7 @@ OBJECTS_HARMONICS= \
 
 ModMagHarmonics.o: ModReadMagnetogram.o 
 harmonics.o: ModMagHarmonics.o
+ModMagnetogram.o: ModReadMagnetogram.o
 
 ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
@@ -147,6 +148,25 @@ convert_harmonics.o: ModMagnetogram.o
 
 ${CONVERTHARMONICSEXE}: ${OBJECTS_CONVERTHARMONICS}
 	${LINK.f90} -o ${CONVERTHARMONICSEXE} ${OBJECTS_CONVERTHARMONICS} \
+		-L${LIBDIR} -lSHARE ${Lflag}
+
+############## OPENCLOSEDBOUNDARY #############
+
+OPENCLOSEDBOUNDARY: ${LIBDIR}/libSHARE.a
+	make ${OPENCLOSEDBOUNDARYEXE}
+	@echo ${OPENCLOSEDBOUNDARYEXE} has been compiled.
+	ln -sf ${OPENCLOSEDBOUNDARYEXE} .
+
+OPENCLOSEDBOUNDARYEXE = ${BINDIR}/OPENCLOSEDBOUNDARY.exe
+
+OBJECTS_OPENCLOSEDBOUNDARY= \
+	open_closed_boundary.o \
+	ModOpenClosedBoundary.o
+
+open_closed_boundary.o: ModOpenClosedBoundary.o
+
+${OPENCLOSEDBOUNDARYEXE}: ${OBJECTS_OPENCLOSEDBOUNDARY}
+	${LINK.f90} -o ${OPENCLOSEDBOUNDARYEXE} ${OBJECTS_OPENCLOSEDBOUNDARY} \
 		-L${LIBDIR} -lSHARE ${Lflag}
 
 ################ DIPOLE11 ###################
