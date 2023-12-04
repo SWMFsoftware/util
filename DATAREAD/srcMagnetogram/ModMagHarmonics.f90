@@ -137,7 +137,7 @@ contains
 
     use ModPlotFile, ONLY: save_plot_file
     use ModReadMagnetogram, ONLY: Br0_II, nTheta0, nPhi0, UseChebyshevNode, &
-         MagnetogramTimeCR, LongShift, UseCosTheta, nThetaorig, nPhiorig, &
+         MagnetogramTimeCR, LongShift, UseCosTheta, nThetaOrig, nPhiorig, &
          ChebyshevWeightE_I, ChebyshevWeightW_I, dPhi, dTheta, dSinTheta, &
          StringMagHeader
 
@@ -188,7 +188,7 @@ contains
           Theta=cPi-iTheta*dThetaChebyshev
           CosTheta=cos(Theta)
           SinTheta=max(sin(Theta), 1E-9)
-          call calc_legendre_polynoms
+          call calc_legendre_polynomials
           PNMTheta_III(:,:,iTheta) = p_nm
        end do
     else
@@ -202,7 +202,7 @@ contains
           end if
           CosTheta=cos(Theta)
           SinTheta=max(sin(Theta), 1E-9)
-          call calc_legendre_polynoms
+          call calc_legendre_polynomials
           PNMTheta_III(:,:,iTheta) = p_nm
        end do
     end if
@@ -250,10 +250,12 @@ contains
     ! Each processor gets part of the array
     do iNM = 0,SizeOfnm-1
 
-       ! The proper normalization factor is (2n+1)/R_n, where R_n=n+1+n(1/Rs)**(2n+1).
-       ! However, in this code the coefficients are normalized only with 2n+1 to reproduce
-       ! the coefficients provided by Stanford. The division by R_n is done after
-       ! the coefficients are been read in ModMagnetogram.f90.
+       ! The proper normalization factor is (2n+1)/R_n,
+       ! where R_n=n+1+n(1/Rs)**(2n+1).
+       ! However, in this code the coefficients are normalized
+       ! only with 2n+1 to reproduce
+       ! the coefficients provided by Stanford. The division by R_n
+       ! is done after the coefficients are been read in ModMagnetogram.f90.
        ! R_n=(nArray(iNM)+1.0)+nArray(iNM)*(1.0/Rs_PFSSM)**(2*nArray(iNM)+1)
        NormalizationFactor=(2*nArray(iNM)+1)
 
@@ -276,7 +278,7 @@ contains
              endif
           end if
 
-          ! Calculate the set of Legendre polynoms (with Schmidt normalization)
+          ! Calculate the set of Legendre polynomials (with Schmidt normalization)
           ! for a given CosTheta, SinTheta.
           ! For non-radial magnetogram (LOS), a division in SinTheta is needed.
 
@@ -329,9 +331,9 @@ contains
   end subroutine calc_harmonics
   !============================================================================
 
-  subroutine calc_legendre_polynoms
+  subroutine calc_legendre_polynomials
 
-    ! Calculate the Legendre polynoms for a particular latitude
+    ! Calculate the Legendre polynomials for a particular latitude
 
     ! Calculate polynomials with appropriate normalization
     ! for Theta_PFSSMa::
@@ -375,7 +377,7 @@ contains
        p_nm(n+1,m+1)  = p_nm(n+1,m+1)*stuff1
     enddo; enddo
 
-  end subroutine calc_legendre_polynoms
+  end subroutine calc_legendre_polynomials
   !============================================================================
 
 end module ModMagHarmonics
