@@ -127,7 +127,8 @@ contains
     !--------------------------------------------------------------------------
     call read_plot_file(NameFileIn, StringHeaderOut=StringMagHeader, &
          n1Out = nPhi0, n2Out = nTheta0, &
-         ParamOut_I=Param_I, iErrorOut=iError, nParamOut=nParam, TimeOut=CRFraction)
+         ParamOut_I=Param_I, iErrorOut=iError, nParamOut=nParam, &
+         TimeOut=CRFraction)
 
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read header from file '//trim(NameFileIn))
