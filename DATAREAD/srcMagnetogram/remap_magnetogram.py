@@ -520,35 +520,28 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             return(-1)
 
     if telescope.find('SDO/HMI') > -1:
-        # CR at center of map
-        try :
-            CRnumber = str(g[0].header['L0_DMC']) #works on GONG and MDI
-        except KeyError as er:
-            CRnumber = '0'
         # CR number
         try :
             CR = str(g[0].header['CAR_ROT']) #works on GONG and MDI
         except KeyError as er:
-            CR = CRnumber
+            CR = 0
+        # CR at center of map
+        try :
+            CRnumber = str(2*float(CR)-float(g[0].header['CRVAL1'])/360.0)
+        except KeyError as er:
+            CRnumber = '0'
+
         # long at left edge
         try:
             long0 = g[0].header['LONG0']
         except KeyError as er:
-            long0 = - 1
-        try:
-            mapdate_trec = g[0].header['T_REC'] #works for new NSO-HMI maps
-            mapdatetime=mapdate_trec.split(' ')
+            long0 = 360*float(CR)-float(g[0].header['LON_LAST'])
+        # Date
+        try :
+            mapdate = g[0].header['T_OBS']  #works for MDI, HMI
         except KeyError as er:
-            mapdate_trec = '0'
-        if(mapdate_trec != '0'):
-            timestamp=datetime.strptime(mapdatetime[0],'%Y.%m.%d_%H:%M')
-            mapdate = timestamp.strftime("%Y-%m-%dT%H:%M:%S")
-            CRnumber = CR
-        else:
-            try :
-                mapdate = g[0].header['T_OBS']  #works for MDI, HMI
-            except KeyError as er:
-                mapdate = '0000-00-00T00:00:00'
+            mapdate = '0000-00-00T00:00:00'
+
         if ( (ctyp.find('CRLT-CEA') > -1) ):
             if ((cunit.find('Sine Latitude') > -1) or cunit.find('sin(latitude)') > -1):
                 magnetogram_type = 'HMI Synoptic'
