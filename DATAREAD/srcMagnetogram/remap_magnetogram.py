@@ -285,7 +285,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     Param_I = np.zeros(nParam)
     Param_I[0] = long0
     Param_I[1] = int(float(CRnumber))
-    Long_I = np.linspace(0.5*360./nlong, 359.5*360./nlong, nlong)
+    Long_I = np.linspace(180.0/nlong, 360-180.0/nlong, nlong)
     # The first line is arbitary
     if (DoHMI == 0):
         if magtype == 'ADAPT Synchronic':
@@ -438,7 +438,6 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI
     except KeyError as er:
         telescope = 'unknown'
-        
     try:
         inst = g[0].header['INSTRUME'] #works for MDI, HMI
     except KeyError as er:
@@ -511,12 +510,28 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             magnetogram_type = 'MDI Synoptic'
             grid_type = 'sin(lat)'
             map_data = 'MDI'
-        try :
-            mapdate = g[0].header['T_OBS']  #works for MDI, HMI
-        except KeyError as er:
-            mapdate = '0000-00-00T00:00:00'            
+            # CR number
+            try :
+                CR = str(g[0].header['CAR_ROT']) #works on GONG and MDI
+            except KeyError as er:
+                CR = 0
+            # CR at center of map
+            try :
+                CRnumber = str(2*float(CR)-float(g[0].header['CRVAL1'])/360.0)
+            except KeyError as er:
+                CRnumber = '0'
+            # long at left edge
+            try:
+                long0 = g[0].header['LONG0']
+            except KeyError as er:
+                long0 = 360*float(CR)-float(g[0].header['LON_LAST'])-180.0/nlo
+            # Date
+            try :
+                mapdate = g[0].header['T_OBS']  #works for MDI, HMI
+            except KeyError as er:
+                mapdate = '0000-00-00T00:00:00'
         else:
-            print ("unknown SOHO magnetogram type")
+            print ("unknown SoHO/MDI magnetogram type")
             return(-1)
 
     if telescope.find('SDO/HMI') > -1:
@@ -535,7 +550,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         try:
             long0 = g[0].header['LONG0']
         except KeyError as er:
-            long0 = 360*float(CR)-float(g[0].header['LON_LAST'])
+            long0 = 360*float(CR)-float(g[0].header['LON_LAST'])-180.0/nlo
         # Date
         try :
             mapdate = g[0].header['T_OBS']  #works for MDI, HMI
@@ -769,7 +784,6 @@ if __name__ == '__main__':
     istart = 1
     iend   = 1
     map_local  = FITS_RECOGNIZE(args.inputfile,IsSilent=False)
-
     if map_local[0] == 'ADAPT Synchronic':
         istart = 1
         iend   = 12
