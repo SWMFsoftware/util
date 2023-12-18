@@ -13,6 +13,17 @@ MY_LIB = ${LIBDIR}/libEMPIRICALSC.a
 -include Makefile.DEPEND
 -include Makefile.RULES
 
+#  Redefine .cpp to .o rule with included linear alhgebra
+INC_DIRS := . include/
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+
+
+chromosphere.o: chromosphere.cpp
+	${COMPILE.mpicxx} ${FLAGCC} $(INC_FLAGS) chromosphere.cpp -o chromosphere.o
+
+chromosphere: chromosphere.o
+	echo finished
+
 CHROMO = chromo_empty.o
 #CHROMO = chromoshere.o
 
