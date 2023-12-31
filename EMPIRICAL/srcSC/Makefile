@@ -21,11 +21,8 @@ INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 chromosphere.o: chromosphere.cpp
 	${COMPILE.mpicxx} ${FLAGCC} $(INC_FLAGS) chromosphere.cpp -o chromosphere.o
 
-chromosphere: chromosphere.o
-	echo finished
 
-CHROMO = chromo_empty.o
-#CHROMO = chromoshere.o
+CHROMO = chromo_interface.o chromosphere.o
 
 OBJECTS = ${CHROMO} \
 	ModTransitionRegion.o
