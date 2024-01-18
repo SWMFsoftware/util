@@ -14,7 +14,7 @@
 # Read & remap HMI vector magnetogram (.fits)
 
 import pyfits as fits
-#from astropy.io import fits
+from astropy.io import fits
 #import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
@@ -110,9 +110,13 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
         return(-1)
     # read the data
     g = fits.open(inputfile)
-    header0 = g[0].header
-    d = g[0].data
-    
+    if map_data == 'PolFil':
+        header0 = g[1].header
+        d = g[1].data
+    else:
+        header0 = g[0].header
+        d = g[0].data
+        
     ind = np.where(np.isnan(d))
     d[ind] = 0.
 
@@ -416,6 +420,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
       GONG Synoptic, sin(lat)
       GONG Hourly updated, sin(lat)
       MDI Synoptic, sin(lat)
+      HMI Synoptic and PolFilled
     This function returns all required details from the header to remap.
        """
 
@@ -424,7 +429,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     map_data = 'unknown'
     g = fits.open(inputfile)
     header0 = g[0].header
-
+    
     # Print out the headers if needed
     if not IsSilent:
         g.info()
@@ -432,7 +437,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         # print("Primary Extension Header:\n")
         # print(repr(header0))
         # print("====================================================\n")
-
+    
     # Which telescope & instrument
     try:
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI
@@ -463,9 +468,25 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     except KeyError as er:
         sft = 'unknown'
 
-    nlo = g[0].header['NAXIS1'] # number of longitude points
-    nla = g[0].header['NAXIS2'] #           latitude
-        
+    try :
+        nlo = g[0].header['NAXIS1'] #works on GONG, ADAPT, Syn HMI, MDI
+    except KeyError as er:
+        nlo = 0
+    try :
+        nla = g[0].header['NAXIS2']
+    except KeyError as er:
+        nla =0
+
+    if nlo == 0 and nla == 0 :
+        try :
+            nlo = g[0].header['ZNAXIS1'] 
+        except KeyError as er:
+            nlo = 0
+        try :
+            nla = g[0].header['ZNAXIS2']
+        except KeyError as er:
+            nla =0
+
     if telescope.find('NSO-GONG') > -1 :
         # long at left edge
         try:
@@ -604,13 +625,17 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     # that FITS_RECOGNIZE() wants to read.
     # Therefore you can manually set those necessay parameters in this if
     # statement
-    if inputfile == 'synopMr_CR2157.fits':
+    if inputfile == 'hmi.synoptic_mr_polfil_720s.2261.Mr_polfil.fits':
         magnetogram_type = 'HMI Synoptic'
+        map_data ='PolFil'
         grid_type = 'sin(lat)' 
-        CRnumber = '2157'
-        CR = '2157'
+        nlo = 3600
+        nla = 1440
+        cunit = 'Sine Latitude'
+        CRnumber = '2261'
+        CR = '2261'
         long0 = '0.0'
-        mapdate = '2014-12-14T00:00:00Z'
+        mapdate = '2022-09-05T16:00:00Z'
                     
 ## Common for all
 # Bunit
@@ -740,7 +765,8 @@ if __name__ == '__main__':
        GONG Synoptic
        GONG Hourly updated
        MDI Synoptic
-
+       HMI PolFil, Needs to be specified in the script
+    
     The code opens the .fits file and automatically recognizes the type of
     map it is, which determines whether it is on a sin(latitude) or regular
     spherical grid.  The output can be any desired resolution, on either a
@@ -753,7 +779,7 @@ if __name__ == '__main__':
     ./remap_magnetogram.py test.fits test.out
     ./remap_magnetogram.py test.fits test.out 180 360
     ./remap_magnetogram.py test.fits test.out -grid=uniform
-
+   
     Within Python, the remapping is done with the remap function contained
     in this file.
     
