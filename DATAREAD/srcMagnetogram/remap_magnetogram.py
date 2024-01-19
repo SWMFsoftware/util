@@ -14,7 +14,7 @@
 # Read & remap HMI vector magnetogram (.fits)
 
 import pyfits as fits
-from astropy.io import fits
+#from astropy.io import fits
 #import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
