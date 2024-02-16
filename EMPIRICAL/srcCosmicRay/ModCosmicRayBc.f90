@@ -1,6 +1,7 @@
 !  Copyright (C) 2002 Regents of the University of Michigan,
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
+
 module ModTransitionRegion
   implicit none
   interface local_interstellar_spectrum
@@ -29,6 +30,7 @@ contains
        DistTimesP2Si,                                              & ! Output
        A, Z)                                                         ! Optional
 
+    use ModConst, ONLY: cGEV
     ! INPUTS
     real, intent(in) :: MomentumSi    ! Particle momentum in Si units
     real, intent(in) :: XyzSi_D(3)    ! Where to set BC
