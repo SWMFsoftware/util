@@ -267,13 +267,13 @@ def Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C, UseCMEGrid, Time,
       "Center for Active region: Lon={0:4.1f}, Lat={1:4.1f} [deg]:".format(
          LonAR,LatAR),"  indexes=",iLonAR,iLatAR)
    # Rectangular box  for active region
-   LonARMin=min([LonNMin,LonPMin])
+   LonARMin=min([LonNMin,LonPMin,iLonAR-20])
    LonARMin=max([LonARMin-2,0])
-   LonARMax=max([LonNMax,LonPMax])
+   LonARMax=max([LonNMax,LonPMax,iLonAR+20])
    LonARMax=min([LonARMax+2,nLon-1])
-   LatARMin =min([LatNMin, LatPMin])
+   LatARMin =min([LatNMin, LatPMin,iLatAR-20])
    LatARMin =max([LatARMin-2,0])
-   LatARMax =max([LatNMax, LatPMax])
+   LatARMax =max([LatNMax, LatPMax,iLatAR+20])
    LatARMax =min([LatARMax+2,nLat-1])
    print('\n Box for AR: minimum and maximum longitude  indexes',\
          LonARMin,LonARMax)
