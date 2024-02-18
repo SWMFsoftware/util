@@ -2,7 +2,7 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 
-module ModTransitionRegion
+module ModCosmicRay
   implicit none
   interface local_interstellar_spectrum
      module procedure local_interstellar_spectrum_s
@@ -75,5 +75,5 @@ contains
     DistTimesP2Si_I = DistTimesP2Gn_I/(Ai * cGEV)
   end subroutine local_interstellar_spectrum_a
   !============================================================================
-end module ModTransitionRegion
+end module ModCosmicRay
 !==============================================================================
