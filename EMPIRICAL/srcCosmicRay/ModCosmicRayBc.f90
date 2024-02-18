@@ -39,8 +39,8 @@ contains
     ! and modified by Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
     ! Here we refer to Eq. (2) in Usoskin et al. 2005
 
-    use ModConst, ONLY: cGEV, cLightSpeed, cProtonMass, &
-         cElectronCharge, cRMEProton
+    use ModConst, ONLY: cGEV, cLightSpeed, cRMEProton,  &
+         cElectronCharge
     ! INPUTS
     integer, intent(in) :: nP  ! The number of meshes in the logarithmic grid
     real, intent(in) :: MomentumSi_I(1:nP)   ! Particle momenta in Si units
@@ -62,7 +62,7 @@ contains
 
     ! p[Si] -> E_K[Si]
     EnergySi_I = sqrt((MomentumSi_I * cLightSpeed)**2 + &
-         (Ai * cProtonMass * cLightSpeed**2)**2)
+         (Ai * cRMEProton)**2) - Ai * cRMEProton
     ! E_K[Si] -> R(E_K)[Si]
     RigiditySi_I = Ai / abs(Zi*cElectronCharge) *       &
          sqrt(EnergySi_I*(EnergySi_I+2*cRMEProton))
