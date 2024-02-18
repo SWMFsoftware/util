@@ -4,7 +4,7 @@
 
 include ../../../Makefile.def
 
-SEARCHDIR = -I${SHAREDIR} -I${MAGNETOGRAMDIR}
+SEARCHDIR = -I${SHAREDIR}
 
 include ../../../Makefile.conf
 
