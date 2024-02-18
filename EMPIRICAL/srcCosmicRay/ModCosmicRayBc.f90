@@ -39,7 +39,7 @@ contains
     ! and modified by Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
     ! Here we refer to Eq. (2) in Usoskin et al. 2005
 
-    use ModConst, ONLY: cGEV, cLightSpeed, cRMEProton,  &
+    use ModConst, ONLY: cGeV, cLightSpeed, cRmeProton,  &
          cElectronCharge
     ! INPUTS
     integer, intent(in) :: nP  ! The number of meshes in the logarithmic grid
@@ -62,17 +62,17 @@ contains
 
     ! p[Si] -> E_K[Si]
     EnergySi_I = sqrt((MomentumSi_I * cLightSpeed)**2 + &
-         (Ai * cRMEProton)**2) - Ai * cRMEProton
+         (Ai * cRmeProton)**2) - Ai * cRmeProton
     ! E_K[Si] -> R(E_K)[Si]
     RigiditySi_I = Ai / abs(Zi*cElectronCharge) *       &
-         sqrt(EnergySi_I*(EnergySi_I+2*cRMEProton))
+         sqrt(EnergySi_I*(EnergySi_I+2*cRmeProton))
     ! R(E_K)[Si] -> R(E_K)[GV]
-    RigidityGV_I = RigiditySi_I / cGEV
+    RigidityGV_I = RigiditySi_I / cGeV
     ! R(E_K)[GV] -> j_LIS[.../(GeV/nuc)]
     DistTimesP2Gn_I = 1.9E+4 * RigidityGV_I**(-2.78) /  &
          (1.0 + 0.4866 * RigidityGV_I**(-2.51))
     ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
-    DistTimesP2Si_I = DistTimesP2Gn_I/(Ai * cGEV)
+    DistTimesP2Si_I = DistTimesP2Gn_I/(Ai * cGeV)
   end subroutine local_interstellar_spectrum_a
   !============================================================================
 end module ModCosmicRay
