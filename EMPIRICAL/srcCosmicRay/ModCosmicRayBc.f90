@@ -22,7 +22,7 @@ contains
     ! OPTIONAL
     real, OPTIONAL, intent(in) :: A   ! To convert to energy per nuc
     real, OPTIONAL, intent(in) :: Z   ! To convert to rigidity
-    character(LEN=8),OPTIONAL,intent(in):: TypeLisBcIn ! Decide which LIS
+    character(LEN=18),OPTIONAL,intent(in):: TypeLisBcIn ! Decide which LIS
     ! LOCAL VARS
     real :: FakeMomentumArr_I(1), FakeDistTimesP2_I(1)
     !--------------------------------------------------------------------------
@@ -52,9 +52,9 @@ contains
     ! OPTIONAL
     real, OPTIONAL, intent(in) :: A          ! To convert to energy per nuc
     real, OPTIONAL, intent(in) :: Z          ! To convert to rigidity
-    character(LEN=8),OPTIONAL,intent(in):: TypeLisBcIn ! Decide which LIS
+    character(LEN=18),OPTIONAL,intent(in):: TypeLisBcIn ! Decide which LIS
     ! LOCAL VARS
-    character(LEN=8) :: TypeLisBc                ! Decide LIS to use finally
+    character(LEN=18) :: TypeLisBc               ! Decide LIS to use finally
     real :: EnergySi_I(1:nP), RigiditySi_I(1:nP) ! E_K and R(E_K) in SI units
     real :: RigidityGV_I(1:nP)                   ! R(E_K) in the unit of GV
     real :: DistTimesP2Gn_I(1:nP) ! Distribution function*p**2, [.../(GeV/nuc)]
