@@ -38,7 +38,8 @@ contains
        TypeLisBcIn, A, Z)                                            ! Optional
     ! Formulae for LISM flux by Burger et al. 2000 (doi: 10.1029/2000JA000153)
     ! and modified by Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
-    ! Here we refer to Eq. (2) in Usoskin et al. 2005
+    ! Here we refer to Eq.(2) in Usoskin et al. 2005 as default
+    ! We also include Eq.(13) in Corti et al. 2019 for potential use
 
     use ModConst, ONLY: cGeV, cLightSpeed, cRmeProton,  &
          cElectronCharge
@@ -56,9 +57,14 @@ contains
     ! LOCAL VARS
     character(LEN=18) :: TypeLisBc               ! Decide LIS to use finally
     real :: EnergySi_I(1:nP), RigiditySi_I(1:nP) ! E_K and R(E_K) in SI units
-    real :: RigidityGV_I(1:nP)                   ! R(E_K) in the unit of GV
+    real :: RigidityGv_I(1:nP)                   ! R(E_K) in the unit of GV
     real :: DistTimesP2Gn_I(1:nP) ! Distribution function*p**2, [.../(GeV/nuc)]
     real :: Ai, Zi                ! Default values for A and Z if not present
+    ! For Eq.(13) in Corti et al., 2019 (doi: 10.3847/1538-4357/aafac4)
+    real, parameter :: nFit = 5658.0, Gamma0Fit = 1.669
+    real, parameter :: RigidityFit(3) = [0.572, 6.2, 540.0]
+    real, parameter :: sFit(3) = [1.78, 3.89, 1.53]
+    real, parameter :: DeltaFit(3) = [-4.117, -0.423, -0.26]
     !--------------------------------------------------------------------------
     Ai = 1.0; Zi = 1.0
     if(present(A)) Ai = A
@@ -71,7 +77,7 @@ contains
     RigiditySi_I = Ai/abs(Zi*cElectronCharge)*         &
          sqrt(EnergySi_I*(EnergySi_I+2*cRmeProton))
     ! R(E_K)[Si] -> R(E_K)[GV]
-    RigidityGV_I = RigiditySi_I/cGeV
+    RigidityGv_I = RigiditySi_I/cGeV
 
     if(present(TypeLisBcIn)) then
        TypeLisBc = TypeLisBcIn
@@ -81,9 +87,22 @@ contains
 
     select case(TypeLisBc)
     case('default', 'usoskin2005')
+       ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
        ! R(E_K)[GV] -> j_LIS[.../(GeV/nuc)]
-       DistTimesP2Gn_I = 1.9E+4*RigidityGV_I**(-2.78)/    &
-            (1.0+0.4866*RigidityGV_I**(-2.51))
+       DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/    &
+            (1.0+0.4866*RigidityGv_I**(-2.51))
+       ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
+       DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
+    case('corti2019')
+       ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
+       ! R(E_K)[GV] -> j_LIS[.../(GeV/nuc)]
+       DistTimesP2Gn_I = nFit*(RigidityGv_I**Gamma0Fit) *                  &
+            ((1.0+(RigidityGv_I/RigidityFit(1))**sFit(1))/                 &
+            (1.0+RigidityFit(1)**(-sFit(1))))**(DeltaFit(1)/sFit(1)) *     &
+            ((1.0+(RigidityGv_I/RigidityFit(2))**sFit(2))/                 &
+            (1.0+RigidityFit(2)**(-sFit(2))))**(DeltaFit(2)/sFit(2)) *     &
+            ((1.0+(RigidityGv_I/RigidityFit(3))**sFit(3))/                 &
+            (1.0+RigidityFit(3)**(-sFit(3))))**(DeltaFit(3)/sFit(3))
        ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
        DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
     case default
