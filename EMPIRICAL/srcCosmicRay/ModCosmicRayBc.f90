@@ -95,14 +95,16 @@ contains
        DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
     case('corti2019')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
-       ! R(E_K)[GV] -> j_LIS[.../(GeV/nuc)]
+       ! R(E_K)[GV] -> j_LIS[.../(GV)] -> j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = nFit*(RigidityGv_I**Gamma0Fit) *                  &
             ((1.0+(RigidityGv_I/RigidityFit(1))**sFit(1))/                 &
             (1.0+RigidityFit(1)**(-sFit(1))))**(DeltaFit(1)/sFit(1)) *     &
             ((1.0+(RigidityGv_I/RigidityFit(2))**sFit(2))/                 &
             (1.0+RigidityFit(2)**(-sFit(2))))**(DeltaFit(2)/sFit(2)) *     &
             ((1.0+(RigidityGv_I/RigidityFit(3))**sFit(3))/                 &
-            (1.0+RigidityFit(3)**(-sFit(3))))**(DeltaFit(3)/sFit(3))
+            (1.0+RigidityFit(3)**(-sFit(3))))**(DeltaFit(3)/sFit(3)) *     &
+            Ai/abs(Zi*cElectronCharge)*(EnergySi_I+cRmeProton)/            &
+            sqrt(EnergySi_I*(EnergySi_I+2*cRmeProton))
        ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
        DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
     case default
