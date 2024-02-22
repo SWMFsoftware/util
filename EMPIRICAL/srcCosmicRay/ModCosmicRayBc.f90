@@ -56,7 +56,7 @@ contains
     character(LEN=18),OPTIONAL,intent(in):: TypeLisBcIn ! Decide which LIS
     ! LOCAL VARS
     character(LEN=18) :: TypeLisBc               ! Decide LIS to use finally
-    real :: EnergySi_I(1:nP), RigiditySi_I(1:nP) ! E_K and R(E_K) in SI units
+    real :: EnergySi_I(1:nP)                     ! E_K and R(E_K) in SI units
     real :: RigidityGv_I(1:nP)                   ! R(E_K) in the unit of GV
     real :: DistTimesP2Gn_I(1:nP) ! Distribution function*p**2, [.../(GeV/nuc)]
     real :: Ai, Zi                ! Default values for A and Z if not present
@@ -70,21 +70,12 @@ contains
     if(present(A)) Ai = A
     if(present(Z)) Zi = Z
 
-    ! p[Si] -> E_K[Si]
-    ! Is this energy or energy per nucleon?
+    ! p|_[Si] -> E_K|_[Si] [J], all nucleons
     EnergySi_I = sqrt((MomentumSi_I*cLightSpeed)**2 +  &
          (Ai*cRmeProton)**2) - Ai*cRmeProton
-    ! E_K[Si] -> R(E_K)[Si]
-    ! Here, what is used in the RHS, energy, or that per nucleon?
-    RigiditySi_I = Ai/abs(Zi*cElectronCharge)*         &
+    ! E_K|_[Si] [J] -> R(E_K)|_[Si] [GV]
+    RigidityGv_I = 1.0/abs(Zi*cGeV)*                   &
          sqrt(EnergySi_I*(EnergySi_I+2*cRmeProton))
-    ! Rigidity in Si is in V. To convert to GV, it should be divided by 1e9
-    ! R(E_K)[Si] -> R(E_K)[GV]
-    RigidityGv_I = RigiditySi_I/cGeV ! 1 GeV is wrong, should be 1e9
-    ! You can, in principle keep here cGeV, but in this case you should remove
-    ! 1/cElectronCharge in the expression for RigiditySi. This is identical,
-    ! since 1e9*cElectronCharge=cGeV.
-    ! All in all, this may work only with no modulation potential
 
     if(present(TypeLisBcIn)) then
        TypeLisBc = TypeLisBcIn
@@ -96,7 +87,7 @@ contains
     case('default', 'usoskin2005')
        ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
        ! R(E_K)[GV] -> j_LIS[.../(GeV/nuc)]
-       DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/    &
+       DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
             (1.0+0.4866*RigidityGv_I**(-2.51))
        ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
        DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
@@ -117,6 +108,9 @@ contains
     case default
        call CON_stop('Unknown type of LIS of: '//TypeLisBc)
     end select
+
+    ! All in all, this may work only without modulation potential, i.e., LIS
+
   end subroutine local_interstellar_spectrum_a
   !============================================================================
 end module ModCosmicRay
