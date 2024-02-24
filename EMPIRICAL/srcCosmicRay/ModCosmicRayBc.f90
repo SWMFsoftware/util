@@ -11,7 +11,7 @@ module ModCosmicRay
 
   character(LEN=18), public :: TypeLisBc = 'default' ! Decide which LIS to use
   logical, public :: UseModulationPhi = .false.
-  real, public :: ModulationPhi = 0.0                ! In the unit of MV
+  real,    public :: ModulationPhi = 0.0             ! In the unit of MV
 contains
   !============================================================================
   subroutine local_interstellar_spectrum_s(MomentumSi, XyzSi_D,    & ! Input
@@ -82,22 +82,30 @@ contains
     EnergyGn_I = (sqrt((MomentumSi_I*cLightSpeed)**2 + &
          (Ai*cRmeProton)**2) - Ai*cRmeProton)/(cGeV*Ai)
     ! E_K/A [GeV/nuc] -> R(E_K/A) [GV]
-    RigidityGv_I = energyGn_to_rigidityGv_a(nP, EnergyGn_I)
+    RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I)
+    ! DistLisToUpperBc_I: Set UpperEndBc_I as LIS or GCR Spectrum at ~1 AU
+    if(UseModulationPhi) then
+       DistLisToUpperBc_I = 1.0
+    else
+       ! Theoretical basis: the force field approximation in
+       ! Gleeson and Axford [1968] and McCracken et al. [2004a].
+       DistLisToUpperBc_I = RigidityGv_I**2
+       ! If UseModulationPhi: we need j_LIS(R(E_K/A + Phi))
+       RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I + EnergyLossGn)
+       DistLisToUpperBc_I = DistLisToUpperBc_I/RigidityGv_I**2
+    end if
 
     select case(trim(TypeLisBc))
     case('default', 'usoskin2005')
        ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
-       ! If UseModulationPhi: we need j_LIS(R(E_K/A + Phi))
-       if (UseModulationPhi) RigidityGv_I =      &
-            energyGn_to_rigidityGv_a(nP, EnergyGn_I+EnergyLossGn)
        ! R(E_K/A + Phi)[GV] -> j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
             (1.0+0.4866*RigidityGv_I**(-2.51))
        ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
-       DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
     case('corti2019')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
        ! R(E_K)[GV] -> j_LIS[.../(GV)] -> j_LIS[.../(GeV/nuc)]
+       ! Why this is not done via loop?!!!!!
        DistTimesP2Gn_I = nFit*(RigidityGv_I**Gamma0Fit) *                  &
             ((1.0+(RigidityGv_I/RigidityFit(1))**sFit(1))/                 &
             (1.0+RigidityFit(1)**(-sFit(1))))**(DeltaFit(1)/sFit(1)) *     &
@@ -108,22 +116,10 @@ contains
             Ai/abs(Zi)*(EnergyGn_I+cRmeProtonGeV)/                         &
             sqrt(EnergyGn_I*(EnergyGn_I+2*cRmeProtonGeV))
        ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
-       DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
     case default
        call CON_stop('Unknown type of LIS of: '//TypeLisBc)
     end select
-
-    ! DistLisToUpperBc_I: Set UpperEndBc_I as LIS or GCR Spectrum at ~1 AU
-    if(UseModulationPhi) then
-       DistLisToUpperBc_I = 1.0
-    else
-       ! Theoretical basis: the force field approximation in
-       ! Gleeson and Axford [1968] and McCracken et al. [2004a].
-       DistLisToUpperBc_I = EnergyGn_I*(EnergyGn_I+2*cRmeProtonGeV)/      &
-            ((EnergyGn_I+EnergyLossGn)*                                   &
-            (EnergyGn_I+EnergyLossGn+2*cRmeProtonGeV))
-    end if
-
+    DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
     ! Check any of DistLisToUpperBc_I is negative
     if (any(DistLisToUpperBc_I<0.0)) call CON_stop('Negative DistUpperBc')
     ! Finally stick to LIS or use the spectrum in inner heliosphere
