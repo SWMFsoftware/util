@@ -10,8 +10,8 @@ module ModCosmicRay
   end interface local_interstellar_spectrum
 
   character(LEN=18), public :: TypeLisBc = 'default' ! Decide which LIS to use
-  logical, public :: UseModulationPotential = .false.
-  real, public :: ModulationPotential = 0.0
+  logical, public :: UseModulationPhi = .true.
+  real, public :: ModulationPhi = 0.0
 contains
   !============================================================================
   subroutine local_interstellar_spectrum_s(MomentumSi, XyzSi_D,    & ! Input
@@ -73,10 +73,10 @@ contains
     if(present(A)) Ai = A
     if(present(Z)) Zi = Z
 
-    ! Given ModulationPotential (phi[MV]), the averaged energy loss of
+    ! Given ModulationPhi (phi[MV]), the averaged energy loss of
     ! cosmic rays inside the heliosphere is given by Phi = (Z*e/A)*phi
-    ! It equals to Zi/Ai * ModulationPotential * cMeV/cGeV to get [GeV/nuc]
-    EnergyLossGn = Zi/Ai * ModulationPotential * 1.0E-3
+    ! It equals to Zi/Ai * ModulationPhi * cMeV/cGeV to get [GeV/nuc]
+    EnergyLossGn = Zi/Ai * ModulationPhi * 1.0E-3
 
     ! p|_[Si] -> E_K/A [GeV/nuc]
     EnergyGn_I = (sqrt((MomentumSi_I*cLightSpeed)**2 + &
@@ -84,11 +84,11 @@ contains
     ! E_K/A [GeV/nuc] -> R(E_K/A) [GV]
     RigidityGv_I = energyGn_to_rigidityGv_a(nP, EnergyGn_I)
 
-    select case(TypeLisBc)
+    select case(trim(TypeLisBc))
     case('default', 'usoskin2005')
        ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
-       ! If UseModulationPotential: we need j_LIS(R(E_K/A + Phi))
-       if (UseModulationPotential) RigidityGv_I =      &
+       ! If UseModulationPhi: we need j_LIS(R(E_K/A + Phi))
+       if (UseModulationPhi) RigidityGv_I =      &
             energyGn_to_rigidityGv_a(nP, EnergyGn_I+EnergyLossGn)
        ! R(E_K/A + Phi)[GV] -> j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
@@ -114,7 +114,7 @@ contains
     end select
 
     ! DistLisToUpperBc_I: Set UpperEndBc_I as LIS or GCR Spectrum at ~1 AU
-    if(UseModulationPotential) then
+    if(UseModulationPhi) then
        DistLisToUpperBc_I = 1.0
     else
        ! Theoretical basis: the force field approximation in
