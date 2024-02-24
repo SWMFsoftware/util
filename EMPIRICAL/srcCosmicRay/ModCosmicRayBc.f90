@@ -44,8 +44,7 @@ contains
     ! Here we refer to Eq.(2) in Usoskin et al. 2005 as default
     ! We also include Eq.(13) in Corti et al. 2019 for potential use
 
-    use ModConst, ONLY: cGeV, cLightSpeed, cRmeProton,  &
-         cElectronCharge
+    use ModConst, ONLY: cGeV, cLightSpeed, cRmeProton
     use ModUtilities, ONLY: CON_stop
     ! INPUTS
     integer, intent(in) :: nP  ! The number of meshes in the logarithmic grid
@@ -59,9 +58,9 @@ contains
     ! LOCAL VARS
     real :: EnergyGn_I(1:nP)                 ! E_K/A in Gev per nucleon
     real :: RigidityGv_I(1:nP)               ! R(E_K/A) in the unit of GV
-    real :: DistTimesP2Gn_I(1:nP) ! Distribution function*p**2, [.../(GeV/nuc)]
     real :: EnergyLossGn                     ! Phi=Z*e/A*phi, avg. energy loss
     real :: DistLisToUpperBc_I(1:nP)         ! Factor: LIS -> ~1 AU Spectrum
+    real :: DistTimesP2Gn_I(1:nP) ! Distribution function*p**2, [.../(GeV/nuc)]
     real :: Ai, Zi                ! Default values for A and Z if not present
     real, parameter :: cRmeProtonGeV = cRmeProton/cGeV
     ! For Eq.(13) in Corti et al., 2019 (doi: 10.3847/1538-4357/aafac4)
@@ -83,15 +82,14 @@ contains
     EnergyGn_I = (sqrt((MomentumSi_I*cLightSpeed)**2 + &
          (Ai*cRmeProton)**2) - Ai*cRmeProton)/(cGeV*Ai)
     ! E_K/A [GeV/nuc] -> R(E_K/A) [GV]
-    RigidityGv_I = Ai/abs(Zi)*sqrt(EnergyGn_I*(EnergyGn_I+2*cRmeProtonGeV))
+    RigidityGv_I = energyGn_to_rigidityGv_a(nP, EnergyGn_I)
 
     select case(TypeLisBc)
     case('default', 'usoskin2005')
        ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
        ! If UseModulationPotential: we need j_LIS(R(E_K/A + Phi))
        if (UseModulationPotential) RigidityGv_I =      &
-            Ai/abs(Zi)*sqrt((EnergyGn_I+EnergyLossGn)* &
-            ((EnergyGn_I+EnergyLossGn)+2*cRmeProtonGeV))
+            energyGn_to_rigidityGv_a(nP, EnergyGn_I+EnergyLossGn)
        ! R(E_K/A + Phi)[GV] -> j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
             (1.0+0.4866*RigidityGv_I**(-2.51))
@@ -128,6 +126,18 @@ contains
     ! Finally stick to LIS or use the spectrum in inner heliosphere
     DistTimesP2Si_I = DistTimesP2Si_I*DistLisToUpperBc_I
 
+  contains
+    !==========================================================================
+    function energyGn_to_rigidityGv_a(nP, EnergyGn_I)
+      ! Turn given EnergyGn_I into RigidityGv_I
+      integer, intent(in) :: nP
+      real, intent(in) :: EnergyGn_I(1:nP)
+      real :: energyGn_to_rigidityGv_a(1:nP)
+      !------------------------------------------------------------------------
+      energyGn_to_rigidityGv_a = Ai/abs(Zi)*           &
+           sqrt(EnergyGn_I*(EnergyGn_I+2*cRmeProtonGeV))
+    end function energyGn_to_rigidityGv_a
+    !==========================================================================
   end subroutine local_interstellar_spectrum_a
   !============================================================================
 end module ModCosmicRay
