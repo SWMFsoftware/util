@@ -128,7 +128,7 @@ contains
     CothU0 = cothu(KappaPrime2Ext)
     ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
     CurrentFactor = 1/norm_par(CothU0,KappaPrime2Ext)
-    
+
     ! Q^{-1}_{-1/2}(u_0):
     ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
          toroid_q(0,KappaPrime2In=KappaPrime2Ext)
@@ -192,7 +192,7 @@ module  ModUniformCurrent
   ! Two contributions to the normalization integrals, for u^-_0 and u^+_0
   real :: NormMinus, NormPlus
   ! Normalization coefficient for current
-  real :: CurrentFactor 
+  real :: CurrentFactor
   real :: CurrentE      ! Uniform current
   !
   ! Field factors
@@ -201,7 +201,7 @@ module  ModUniformCurrent
   !
   ! Constants determining toroidal field:
   !
-  real :: DPsiMinusJEOverDu0Minus   ! For parabolic current    
+  real :: DPsiMinusJEOverDu0Minus   ! For parabolic current
   real :: PsiMinusJEUOPlus          ! For uniform current
   real :: Toroidal2                 ! b^2(u^+_0)
 
@@ -252,7 +252,7 @@ contains
        ! Q^{-1}_{-1/2}(u_0):
        ToroidQ0U0minus = Kappa2ExtMax*KappaExtMax*&
             toroid_q(0,KappaPrime2In=KappaPrime2Ext)
-       
+
        ! Constant field factor for parabolic current
        Q01 = q_0(KappaPrime2In=KappaPrime2Ext)*NormMinus                    &
             -  parabolic_current_e(CothU0,KappaPrime2Ext)*DeltaInv*         &
@@ -297,7 +297,7 @@ contains
        PsiMinusJE = Kappa3*(Q01*toroid_q(0,KappaPrime2In = KappaPrime2In) +  &
             0.125*NormPlus*toroid_p(0,KappaPrime2In = KappaPrime2In) )
        Amplitude_I(Axial_)    = PsiMinusJE + CurrentFactor*DeltaInv*         &
-            parabolic_current_e(CothU0,KappaPrime2In) 
+            parabolic_current_e(CothU0,KappaPrime2In)
        DPsiMinusJEOverDu  =  3*KappaPrime2In*Kappa*(                         &
             Q01*toroid_q(1,KappaPrime2In=KappaPrime2In) +                    &
             0.125*NormPlus*toroid_p(1,KappaPrime2In = KappaPrime2In) )
