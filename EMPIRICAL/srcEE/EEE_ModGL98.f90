@@ -6,10 +6,10 @@ module EEE_ModGL98
   ! Gibson-Low CME flux rope model
 
 #ifdef _OPENACC
-  use ModUtilities, ONLY: norm2 
+  use ModUtilities, ONLY: norm2
 #endif
   use EEE_ModCommonVariables
-  
+
   implicit none
 
   SAVE
@@ -97,7 +97,7 @@ contains
     ! The constant coefficient, Beta0 = -2.8723629148938019E-02
     ! This is Beta0 parameter for the GL particular configuration
     B0 = B0Dim*Io2No_V(UnitB_)
-    
+
     ! Relation between the cme_a1 parameter by Gibson-Low and B0
     ! B0 = - cme_a1*Io2No_V(UnitB_)/(Beta0*Alpha0**2)*4*cPi
 
@@ -188,7 +188,7 @@ contains
        call read_var('Stretch',     Stretch)       ![rSun]
        call read_var('ApexHeight',  ApexHeight)    ![rSun]
        if(UseSpheromak)call read_var('uCmeSi', uCmeSi)  ![km/s]
-       
+
        rDistance1 = 1 + ApexHeight + Stretch - Radius
 
        ! position of the CME apex
