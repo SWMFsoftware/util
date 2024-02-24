@@ -64,7 +64,6 @@ contains
   !============================================================================
   subroutine get_shearflow(x_D,Time,U_D,nIter)
 
-    !DESCRIPTION:
     ! Boundary shear flow that conserves the radial magnetic flux
 
     use EEE_ModCommonVariables
