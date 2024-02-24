@@ -5,7 +5,7 @@ program magnetogram
 
   use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
        EEE_set_plot_range, EEE_initialize
-  use EEE_ModCommonVariables, ONLY: & !Io2Si_V, Si2Io_V, Io2No_V, &
+  use EEE_ModCommonVariables, ONLY: & ! Io2Si_V, Si2Io_V, Io2No_V, &
 !       No2Io_V, Si2No_V, No2Si_V, &
   !----------------------------------------------------------------------------
        prefix, x_, y_, z_, DXyzPlot, Si2Io_V, &
