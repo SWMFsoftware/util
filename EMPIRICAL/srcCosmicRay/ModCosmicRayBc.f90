@@ -10,8 +10,8 @@ module ModCosmicRay
   end interface local_interstellar_spectrum
 
   character(LEN=18), public :: TypeLisBc = 'default' ! Decide which LIS to use
-  logical, public :: UseModulationPhi = .true.
-  real, public :: ModulationPhi = 0.0
+  logical, public :: UseModulationPhi = .false.
+  real, public :: ModulationPhi = 0.0                ! In the unit of MV
 contains
   !============================================================================
   subroutine local_interstellar_spectrum_s(MomentumSi, XyzSi_D,    & ! Input
@@ -123,6 +123,9 @@ contains
             ((EnergyGn_I+EnergyLossGn)*                                   &
             (EnergyGn_I+EnergyLossGn+2*cRmeProtonGeV))
     end if
+
+    ! Check any of DistLisToUpperBc_I is negative
+    if (any(DistLisToUpperBc_I<0.0)) call CON_stop('Negative DistUpperBc')
     ! Finally stick to LIS or use the spectrum in inner heliosphere
     DistTimesP2Si_I = DistTimesP2Si_I*DistLisToUpperBc_I
 
