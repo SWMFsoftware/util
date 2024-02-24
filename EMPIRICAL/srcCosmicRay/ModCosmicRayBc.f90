@@ -127,9 +127,8 @@ contains
 
   contains
     !==========================================================================
-    function energyGn_to_rigidityGv_a(nP, EnergyGn_I)
+    function energyGn_to_rigidityGv_a(EnergyGn_I)
       ! Turn given EnergyGn_I into RigidityGv_I
-      integer, intent(in) :: nP
       real, intent(in) :: EnergyGn_I(1:nP)
       real :: energyGn_to_rigidityGv_a(1:nP)
       !------------------------------------------------------------------------
