@@ -1,7 +1,6 @@
 !  Copyright (C) 2002 Regents of the University of Michigan,
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-
 module ModCosmicRay
   implicit none
   interface local_interstellar_spectrum
@@ -64,6 +63,7 @@ contains
     real :: Ai, Zi                ! Default values for A and Z if not present
     real, parameter :: cRmeProtonGeV = cRmeProton/cGeV
     ! For Eq.(13) in Corti et al., 2019 (doi: 10.3847/1538-4357/aafac4)
+    integer         :: iFit                  ! loop variables
     real, parameter :: nFit = 5658.0, Gamma0Fit = 1.669
     real, parameter :: RigidityFit(3) = [0.572, 6.2, 540.0]
     real, parameter :: sFit(3) = [1.78, 3.89, 1.53]
@@ -85,14 +85,14 @@ contains
     RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I)
     ! DistLisToUpperBc_I: Set UpperEndBc_I as LIS or GCR Spectrum at ~1 AU
     if(UseModulationPhi) then
-       DistLisToUpperBc_I = 1.0
-    else
        ! Theoretical basis: the force field approximation in
        ! Gleeson and Axford [1968] and McCracken et al. [2004a].
        DistLisToUpperBc_I = RigidityGv_I**2
        ! If UseModulationPhi: we need j_LIS(R(E_K/A + Phi))
        RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I + EnergyLossGn)
        DistLisToUpperBc_I = DistLisToUpperBc_I/RigidityGv_I**2
+    else
+       DistLisToUpperBc_I = 1.0
     end if
 
     select case(trim(TypeLisBc))
@@ -101,29 +101,30 @@ contains
        ! R(E_K/A + Phi)[GV] -> j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
             (1.0+0.4866*RigidityGv_I**(-2.51))
-       ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
     case('corti2019')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
-       ! R(E_K)[GV] -> j_LIS[.../(GV)] -> j_LIS[.../(GeV/nuc)]
-       ! Why this is not done via loop?!!!!!
-       DistTimesP2Gn_I = nFit*(RigidityGv_I**Gamma0Fit) *                  &
-            ((1.0+(RigidityGv_I/RigidityFit(1))**sFit(1))/                 &
-            (1.0+RigidityFit(1)**(-sFit(1))))**(DeltaFit(1)/sFit(1)) *     &
-            ((1.0+(RigidityGv_I/RigidityFit(2))**sFit(2))/                 &
-            (1.0+RigidityFit(2)**(-sFit(2))))**(DeltaFit(2)/sFit(2)) *     &
-            ((1.0+(RigidityGv_I/RigidityFit(3))**sFit(3))/                 &
-            (1.0+RigidityFit(3)**(-sFit(3))))**(DeltaFit(3)/sFit(3)) *     &
-            Ai/abs(Zi)*(EnergyGn_I+cRmeProtonGeV)/                         &
+       ! R(E_K)[GV] -> j_LIS[.../(GV)]
+       DistTimesP2Gn_I = nFit*(RigidityGv_I**Gamma0Fit)
+       do iFit = 1, size(sFit)
+          DistTimesP2Gn_I = DistTimesP2Gn_I *                         &
+               ((1.0 + (RigidityGv_I/RigidityFit(iFit))**sFit(iFit))/ &
+               (1.0 + RigidityFit(iFit)**(-sFit(iFit))))              &
+               **(DeltaFit(iFit)/sFit(iFit))
+       end do
+       ! j_LIS[.../(GV)] -> j_LIS[.../(GeV/nuc)]
+       DistTimesP2Gn_I = DistTimesP2Gn_I *             &
+            Ai/abs(Zi)*(EnergyGn_I+cRmeProtonGeV)/     &
             sqrt(EnergyGn_I*(EnergyGn_I+2*cRmeProtonGeV))
-       ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
     case default
        call CON_stop('Unknown type of LIS of: '//TypeLisBc)
     end select
+
+    ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
     DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
-    ! Check any of DistLisToUpperBc_I is negative
-    if (any(DistLisToUpperBc_I<0.0)) call CON_stop('Negative DistUpperBc')
     ! Finally stick to LIS or use the spectrum in inner heliosphere
     DistTimesP2Si_I = DistTimesP2Si_I*DistLisToUpperBc_I
+    ! Check any of DistLisToUpperBc_I is negative
+    if (any(DistTimesP2Si_I<0.0)) call CON_stop('Negative DistUpperBc')
 
   contains
     !==========================================================================
