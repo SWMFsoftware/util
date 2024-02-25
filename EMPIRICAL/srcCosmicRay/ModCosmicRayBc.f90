@@ -9,8 +9,8 @@ module ModCosmicRay
   end interface local_interstellar_spectrum
 
   character(LEN=18), public :: TypeLisBc = 'default' ! Decide which LIS to use
-  logical, public :: UseModulationPhi = .false.
-  real,    public :: ModulationPhi = 0.0             ! In the unit of MV
+  logical, public :: UseModulationPot = .false.
+  real,    public :: ModulationPot = 0.0             ! phi, in the unit of MV
 contains
   !============================================================================
   subroutine local_interstellar_spectrum_s(MomentumSi, XyzSi_D,    & ! Input
@@ -79,38 +79,39 @@ contains
     ! E_K/A [GeV/nuc] -> R(E_K/A) [GV]
     RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I)
     ! DistLisToUpperBc_I: Set UpperEndBc_I as LIS or GCR Spectrum at ~1 AU
-    if(UseModulationPhi) then
+    if(UseModulationPot) then
        ! Theoretical basis: the force field approximation in
        ! Gleeson and Axford [1968] and McCracken et al. [2004a].
-       ! At the time, ModulationPhi can only be set to constant value,
+       ! At the time, ModulationPot can only be set to constant value,
        ! in MV, and read from the parameter file
-       ! TBD - the value of ModulationPhi below may be calculated for
+       ! TBD - the value of ModulationPot below may be calculated for
        ! different choices of model. The expected implementation is
        !
-       ! ModulationPhi = get_modulation_phi(XyzSi_D)
+       ! ModulationPot = get_modulation_pot(XyzSi_D)
        !
-       ! Once the modulation potential ModulationPhi (phi[MV]) is known,
+       ! Once the modulation potential ModulationPot (phi[MV]) is known,
        ! the averaged energy loss of cosmic rays inside the heliosphere
-       ! as given by Phi = (Z*e/A)*phi=Zi/Ai*ModulationPhi*cMeV/cGeV
+       ! as given by Phi = (Z*e/A)*phi=Zi/Ai*ModulationPot*cMeV/cGeV
        ! to get the energy loss in [GeV/nuc]
-       EnergyLossGn = Zi/Ai * ModulationPhi * 1.0E-3
+       EnergyLossGn = Zi/Ai * ModulationPot * 1.0E-3
        DistLisToUpperBc_I = RigidityGv_I**2
-       ! If UseModulationPhi: we need j_LIS(R(E_K/A + Phi))
+       ! If UseModulationPot: we need j_LIS(R(E_K/A + Phi))
        RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I + EnergyLossGn)
        DistLisToUpperBc_I = DistLisToUpperBc_I/RigidityGv_I**2
     else
        DistLisToUpperBc_I = 1.0
     end if
 
+    ! Calculate LIS based on the input of TypeLisBc
     select case(trim(TypeLisBc))
     case('default', 'usoskin2005')
        ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
-       ! R(E_K/A + Phi)[GV] -> j_LIS[.../(GeV/nuc)]
+       ! Formula Input: R(E_K/A + Phi)[GV]; Output: j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
             (1.0+0.4866*RigidityGv_I**(-2.51))
     case('corti2019')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
-       ! R(E_K)[GV] -> j_LIS[.../(GV)]
+       ! Formula Input: R(E_K)[GV]; Output: j_LIS[.../(GV)]
        DistTimesP2Gn_I = cFit*(RigidityGv_I**Gamma0Fit)
        do iFit = 1, size(sFit)
           DistTimesP2Gn_I = DistTimesP2Gn_I *                         &
@@ -126,10 +127,8 @@ contains
        call CON_stop('Unknown type of LIS of: '//TypeLisBc)
     end select
 
-    ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si]
-    DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)
-    ! Finally stick to LIS or use the spectrum in inner heliosphere
-    DistTimesP2Si_I = DistTimesP2Si_I*DistLisToUpperBc_I
+    ! j_LIS[.../(GeV/nuc)] -> p^2*f|_{infty}[Si] -> LIS or IH spectrum
+    DistTimesP2Si_I = DistTimesP2Gn_I/(Ai*cGeV)*DistLisToUpperBc_I
     ! Check any of DistLisToUpperBc_I is negative
     if (any(DistTimesP2Si_I<0.0)) call CON_stop('Negative DistUpperBc')
 
