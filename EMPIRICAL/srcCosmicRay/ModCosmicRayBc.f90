@@ -64,7 +64,7 @@ contains
     real, parameter :: cRmeProtonGeV = cRmeProton/cGeV
     ! For Eq.(13) in Corti et al., 2019 (doi: 10.3847/1538-4357/aafac4)
     integer         :: iFit                  ! loop variables
-    real, parameter :: nFit = 5658.0, Gamma0Fit = 1.669
+    real, parameter :: cFit = 5658.0, Gamma0Fit = 1.669
     real, parameter :: RigidityFit(3) = [0.572, 6.2, 540.0]
     real, parameter :: sFit(3) = [1.78, 3.89, 1.53]
     real, parameter :: DeltaFit(3) = [-4.117, -0.423, -0.26]
@@ -72,11 +72,6 @@ contains
     Ai = 1.0; Zi = 1.0
     if(present(A)) Ai = A
     if(present(Z)) Zi = Z
-
-    ! Given ModulationPhi (phi[MV]), the averaged energy loss of
-    ! cosmic rays inside the heliosphere is given by Phi = (Z*e/A)*phi
-    ! It equals to Zi/Ai * ModulationPhi * cMeV/cGeV to get [GeV/nuc]
-    EnergyLossGn = Zi/Ai * ModulationPhi * 1.0E-3
 
     ! p|_[Si] -> E_K/A [GeV/nuc]
     EnergyGn_I = (sqrt((MomentumSi_I*cLightSpeed)**2 + &
@@ -87,6 +82,18 @@ contains
     if(UseModulationPhi) then
        ! Theoretical basis: the force field approximation in
        ! Gleeson and Axford [1968] and McCracken et al. [2004a].
+       ! At the time, ModulationPhi can only be set to constant value,
+       ! in MV, and read from the parameter file
+       ! TBD - the value of ModulationPhi below may be calculated for
+       ! different choices of model. The expected implementation is
+       !
+       ! ModulationPhi = get_modulation_phi(XyzSi_D)
+       !
+       ! Once the modulation potential ModulationPhi (phi[MV]) is known,
+       ! the averaged energy loss of cosmic rays inside the heliosphere
+       ! as given by Phi = (Z*e/A)*phi=Zi/Ai*ModulationPhi*cMeV/cGeV
+       ! to get the energy loss in [GeV/nuc]
+       EnergyLossGn = Zi/Ai * ModulationPhi * 1.0E-3
        DistLisToUpperBc_I = RigidityGv_I**2
        ! If UseModulationPhi: we need j_LIS(R(E_K/A + Phi))
        RigidityGv_I = energyGn_to_rigidityGv_a(EnergyGn_I + EnergyLossGn)
@@ -104,7 +111,7 @@ contains
     case('corti2019')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
        ! R(E_K)[GV] -> j_LIS[.../(GV)]
-       DistTimesP2Gn_I = nFit*(RigidityGv_I**Gamma0Fit)
+       DistTimesP2Gn_I = cFit*(RigidityGv_I**Gamma0Fit)
        do iFit = 1, size(sFit)
           DistTimesP2Gn_I = DistTimesP2Gn_I *                         &
                ((1.0 + (RigidityGv_I/RigidityFit(iFit))**sFit(iFit))/ &
