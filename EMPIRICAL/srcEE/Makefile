@@ -23,7 +23,7 @@ OBJECTS = \
 	EEE_ModShearFlow.o \
 	EEE_ModCms.o
 
-OBJECTS_EXE= flux_rope_magnetogram.o
+OBJECTS_EXE= flux_rope_magnetogram.o eliminate_cme_br.o
 
 DEPEND:
 	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS} ${OBJECTS_EXE}
@@ -52,6 +52,14 @@ FRM:	LIB
 ${BINDIR}/FRMAGNETOGRAM.exe: flux_rope_magnetogram.o
 	${LINK.f90} -o ${BINDIR}/FRMAGNETOGRAM.exe \
 		flux_rope_magnetogram.o \
+		-L${LIBDIR} -lEMPIRICALEE -lMAGNETOGRAM -lSHARE ${Lflag}
+
+CMEBR:	LIB
+	make ${BINDIR}/ELIMINATECMEBR.exe
+
+${BINDIR}/ELIMINATECMEBR.exe: eliminate_cme_br.o
+	${LINK.f90} -o ${BINDIR}/ELIMINATECMEBR.exe \
+		eliminate_cme_br.o \
 		-L${LIBDIR} -lEMPIRICALEE -lMAGNETOGRAM -lSHARE ${Lflag}
 
 #######################################################################

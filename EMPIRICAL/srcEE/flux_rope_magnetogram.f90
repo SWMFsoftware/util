@@ -68,6 +68,8 @@ program magnetogram
      case('#LOOKUPTABLE')
         call read_lookup_table_param
         call init_magnetogram_lookup_table()
+     case('#MAGNETOGRAM')
+        ! Do nothing
      case default
         call CON_stop('Unknown command:'//NameCommand)
      end select
