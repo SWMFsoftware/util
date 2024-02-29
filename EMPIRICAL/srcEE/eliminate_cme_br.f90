@@ -7,19 +7,17 @@ program magnetogram
        EEE_set_plot_range, EEE_initialize
   use EEE_ModCommonVariables, ONLY: & 
        prefix, x_, y_, z_, DXyzPlot, Si2Io_V, &
-       LongitudeCme, LatitudeCme, OrientationCME, DoAddFluxRope, &
-       DirCme_D, UnitB_
+       LongitudeCme, LatitudeCme, DoAddFluxRope, UnitB_
   use ModConst, ONLY: cPi, cTwoPi, cDegToRad, cRadToDeg
   use ModPlotFile, ONLY:save_plot_file, read_plot_file
   use ModReadParam, ONLY: read_file, read_init, read_var, read_line, &
        read_command
   use ModUtilities, ONLY: CON_stop
-  use ModCoordTransform, ONLY: rot_xyz_rlonlat, rlonlat_to_xyz, &
-       rot_xyz_mercator, rot_matrix_z
+  use ModCoordTransform, ONLY: rlonlat_to_xyz
   use ModMpi, ONLY: MPI_COMM_SELF, MPI_init, MPI_finalize
-  use ModLookupTable, ONLY: read_lookup_table_param, get_lookup_table
+  ! use ModLookupTable, ONLY: read_lookup_table_param, get_lookup_table
   use ModIoUnit,     ONLY:  io_unit_new
-
+  use ModUtilities,   ONLY: split_string, join_string
   implicit none
   ! Number of indexes for magnetogram map
   integer :: nLong = 360, nLat = 180
@@ -28,15 +26,18 @@ program magnetogram
        BrCme_II(:,:)
   real :: Param_I(10)
   ! Loop indexes    ::
-  integer           :: i, j, iUnit, iError, Long0, nVar, nParam
+  integer           :: i, j, iUnit, iError, Long0, nVar, nParam, iVar
   real              :: Longitude, Latitude, Xyz_D(3), Rho, p, U_D(3), B_D(3),&
        Time
-  character(LEN=100):: StringLine, NameCommand, NameVar
+  character(LEN=100):: StringLine, NameCommand
   ! The file name for the original magnetogram and the transformed ones
   character(LEN=100):: NameMagnetogram     = 'map_01.out'
   character(LEN=100):: NameEliminatedCmeBr = 'map_01.out'
   character(LEN=400):: StringHeader
-       
+  ! Array for variable names
+  integer, parameter:: MaxVar = 200
+  character(len=20) :: NameVar_I(MaxVar)
+  character(len=500):: NameVar
   !----------------------------------------------------------------------------
   write(*,'(a)')prefix//'Reading CME.in'
   call read_file('CME.in', iCommIn = MPI_COMM_SELF)
@@ -85,12 +86,12 @@ program magnetogram
   ! Allocate coord arrays
   allocate(Longitude_I(nLong), Latitude_I(nLat))
   ! Allocate data arrays
-  allocate(Var_VII(nVar,nLong,nLat), BrCme_II(nLong,nLat))
+  allocate(Var_VII(nVar+1,nLong,nLat), BrCme_II(nLong,nLat))
   call read_plot_file(NameFile = NameMagnetogram, &
        iUnitIn   = iUnit,                  &
        Coord1Out_I   = Longitude_I,        & 
        Coord2Out_I   = Latitude_I,         &
-       VarOut_VII    = Var_VII)
+       VarOut_VII    = Var_VII(1:nVar,:,:))
   write(*,*)prefix//'Start to calculate CME Br'
   do j = 1,nLat
      Latitude = Latitude_I(j)*cDegToRad
@@ -105,8 +106,14 @@ program magnetogram
   enddo
   write(*,*)prefix//'Eliminate CME Br'
   ! Eliminate Br
-  Var_VII(1,:,:) = - BrCme_II ! Var_VII(1,:,:) 
+  Var_VII(1,:,:) = Var_VII(1,:,:) - BrCme_II
+  Var_VII(nVar+1,:,:) =  - BrCme_II
   write(*,*)'Saving 2d magnetogram with eliminated CME Br'
+  call split_string(NameVar, MaxVar, NameVar_I, iVar)
+  ! Add new data column
+  NameVar_I(nVar+4:iVar+1) = NameVar_I(nVar+3:iVar)
+  NameVar_I(nVar+3) = 'CmeBr'
+  call join_string(iVar+1, NameVar_I(1:iVar+1), NameVar)
   call save_plot_file(&
        NameFile = NameEliminatedCmeBr,&
        TypeFileIn = 'ascii',          &
