@@ -112,21 +112,21 @@ contains
 
     real:: Param_I(2)
     real:: BrAverage
-    real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:)
+    real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:), Var_VII(:,:,:)
     real :: MagnetogramTime, CRFraction
     integer :: iTime_I(7)
 
     integer:: iError, nParam, iTheta, iPhi, nThetaRatio, nPhiRatio
-    integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi
+    integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi, nVar
 
     logical :: IsInputLatReverse = .false.
-    logical :: IsRemoveMonopole = .true.
+    logical :: IsRemoveMonopole = .true., DoEliminateCmeBr = .false.
     character(len=200) :: NameVarOut
 
     character(len=*), parameter:: NameSub = 'read_orig_magnetogram'
     !--------------------------------------------------------------------------
     call read_plot_file(NameFileIn, StringHeaderOut=StringMagHeader, &
-         n1Out = nPhi0, n2Out = nTheta0, &
+         n1Out = nPhi0, n2Out = nTheta0, nVarOut = nVar, &
          ParamOut_I=Param_I, iErrorOut=iError, nParamOut=nParam, &
          TimeOut=CRFraction)
 
@@ -143,15 +143,15 @@ contains
          nTheta0, nPhi0, LongShift, MagnetogramTimeCR
     ! Saves the original Magnetogram grid
     allocate(Phi0_I(nPhi0), Lat0_I(nTheta0))
-    allocate(Br0_II(nPhi0,nTheta0))
+    allocate(Br0_II(nPhi0,nTheta0), Var_VII(nVar,nPhi0,nTheta0))
 
     call read_plot_file(NameFileIn, &
-         Coord1Out_I=Phi0_I, Coord2Out_I=Lat0_I, VarOut_II = Br0_II, &
+         Coord1Out_I=Phi0_I, Coord2Out_I=Lat0_I, VarOut_VII = Var_VII, &
          iErrorOut=iError, NameVarOut=NameVarOut)
 
     if(iError /= 0) call CON_stop(NameSub// &
          ': could not read data from file '//trim(NameFileIn), iError)
-
+    Br0_II = Var_VII(1,:,:); DoEliminateCmeBr = index(NameVarOut,'CmeBr') > 0
     if(MagnetogramTimeCR > 0.0)then
        MagnetogramTime = MagnetogramTimeCR*CarringtonSynodicPeriod &
             + tStartCarringtonRotation
@@ -183,6 +183,8 @@ contains
 
     ! For #CHANGEPOLARFIELD
     if(DoChangePolarField)then
+       ! Add and then subtract CmeBr field, if needed
+       if(DoEliminateCmeBr)Br0_II = Br0_II - Var_VII(nVar,:,:)
        do iTheta = 1, nTheta0
           Br0_II(:,iTheta) = Br0_II(:,iTheta) * (1 + &
                (PolarFactor-1)*abs(sin(cDegToRad*Lat0_I(iTheta)))&
@@ -190,6 +192,7 @@ contains
        end do
        write(StringMagHeader,'(a,f4.1,a,f4.1)')trim(StringMagHeader)//&
             '; PolarFactor = ', PolarFactor,'; PolarExponent = ', PolarExponent
+       if(DoEliminateCmeBr)Br0_II = Br0_II + Var_VII(nVar,:,:)
     end if
 
     ! options not supported with UseWedge
@@ -206,11 +209,14 @@ contains
 
     ! For #CHANGEWEAKFIELD
     if(DoChangeWeakField)then
+       ! Add and then subtract CmeBr field, if needed
+       if(DoEliminateCmeBr)Br0_II = Br0_II - Var_VII(nVar,:,:)
        if(BrMin > 0.0 .or. BrFactor > 1.0) &
             Br0_II = sign(min(abs(Br0_II) + BrMin, &
             BrFactor*abs(Br0_II)), Br0_II)
        write(StringMagHeader,'(a,f4.1,a,f4.1)')trim(StringMagHeader)//&
             '; BrFactor =', BrFactor, '; BrMin = ', BrMin
+       if(DoEliminateCmeBr)Br0_II = Br0_II + Var_VII(nVar,:,:)
     endif
 
     ! Fix too large values of Br
