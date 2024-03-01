@@ -6,7 +6,6 @@ program harmonics
   ! Transform raw magnetogram file into spherical harmonics file
 
   use ModMagHarmonics
-  use ModReadMagnetogram
 
   implicit none
   integer:: iError
