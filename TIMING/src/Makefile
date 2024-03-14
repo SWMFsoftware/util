@@ -60,11 +60,11 @@ ${LIBNOMPI}:
 OBJ_TEST = timing_test.o
 
 timing_test.exe: $(OBJ_TEST) ${MY_LIB} ${LIBNOMPI}
-	$(LINK.f90) $(Lflag2) -o timing_test.exe $(OBJ_TEST) \
+	$(LINK.f90) $(Lflag) -o timing_test.exe $(OBJ_TEST) \
 	-L${LIBDIR} -lTIMING -lNOMPI
 
 timing_test_mpi.exe: $(OBJ_TEST) ${MY_LIB}
-	$(LINK.f90) $(Lflag1) -o timing_test_mpi.exe $(OBJ_TEST) \
+	$(LINK.f90) $(LflagMpi) -o timing_test_mpi.exe $(OBJ_TEST) \
 	-L${LIBDIR} -lTIMING $(MPILIB)
 
 OBJ_EMPTY= ../srcEmpty/timing_empty.o timing_test.o
@@ -73,11 +73,11 @@ OBJ_EMPTY= ../srcEmpty/timing_empty.o timing_test.o
 	cd ../srcEmpty; make timing_empty.o
 
 timing_empty.exe: $(OBJ_EMPTY) ${LIBNOMPI}
-	$(LINK.f90) ${Lflag1} -o timing_empty.exe $(OBJ_EMPTY) \
+	$(LINK.f90) ${LflagMpi} -o timing_empty.exe $(OBJ_EMPTY) \
 	 -L${LIBDIR} -lNOMPI
 
 timing_empty_mpi.exe: $(OBJ_EMPTY)
-	$(LINK.f90) ${Lflag2} -o timing_empty_mpi.exe $(OBJ_EMPTY) $(MPILIB)
+	$(LINK.f90) ${Lflag} -o timing_empty_mpi.exe $(OBJ_EMPTY) $(MPILIB)
 
 clean: cleanfiles
 

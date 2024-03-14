@@ -1,4 +1,5 @@
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan,
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 include ../../../Makefile.def
@@ -29,8 +30,7 @@ IGRF:
 	make ${BINDIR}/IGRF.exe
 
 ${BINDIR}/IGRF.exe: Igrf.o
-		${LINK.f90} -o ${BINDIR}/IGRF.exe \
-		Igrf.o ${Lflag1}
+	${LINK.f90} -o ${BINDIR}/IGRF.exe Igrf.o ${LflagMpi}
 
 clean: cleanfiles
 
