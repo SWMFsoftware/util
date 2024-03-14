@@ -83,13 +83,13 @@ IONIZ.exe: test_ionization.o
 IONIZ_general:
 	${LINK.f90} -o IONIZ.exe test_ionization.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 IONIZ_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o IONIZ.exe test_ionization.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 test_absorption.o : ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
@@ -104,13 +104,13 @@ ABS.exe: test_absorption.o
 ABS_general:
 	${LINK.f90} -o ABS.exe test_absorption.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 ABS_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o ABS.exe test_absorption.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 opacity.o : ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
@@ -128,13 +128,13 @@ OPAC.exe: opacity.o
 OPAC_general:
 	${LINK.f90} -o OPAC.exe opacity.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 OPAC_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o OPAC.exe opacity.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 test_opac_tables.o : ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
@@ -152,13 +152,13 @@ TEST_OPAC.exe: test_opac_tables.o
 TEST_OPAC_general:
 	${LINK.f90} -o TEST_OPAC.exe test_opac_tables.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 TEST_OPAC_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o TEST_OPAC.exe test_opac_tables.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 save_eos_table.o : ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
@@ -174,13 +174,13 @@ EOS.exe: save_eos_table.o
 EOS_general:
 	${LINK.f90} -o EOS.exe save_eos_table.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 EOS_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o EOS.exe save_eos_table.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_
 
 testNLTE.o: ${LIBSHARE} ${MY_LIB}
@@ -199,13 +199,13 @@ TEST_NLTE.exe: eos_material.o testNLTE.o
 TEST_NLTE_general:
 	${LINK.f90} -o TEST_NLTE.exe  testNKTE.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}	
+		${LflagMpi}	
 
 TEST_NLTE_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE}; 
 	${LINK.f90} -o TEST_NLTE.exe testNLTE.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_
 
 
@@ -221,13 +221,13 @@ GODUNOV.exe: test_godunov.o
 GODUNOV_general:
 	${LINK.f90} -o GODUNOV.exe test_godunov.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 GODUNOV_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o GODUNOV.exe test_godunov.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 test_eos: 
@@ -263,13 +263,13 @@ test_Fermi.exe: test_Fermi.o
 test_Fermi_general:
 	${LINK.f90} -o test_Fermi.exe test_Fermi.o \
 		-L${LIBDIR} -lCRASH  -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 test_Fermi_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o test_Fermi.exe test_Fermi.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 convert.o : ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
 
@@ -277,7 +277,7 @@ CONVERT: convert.o
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o CONVERT.exe convert.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 convert_ARTEP_opac.o: ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
@@ -286,7 +286,7 @@ CONVERT_ARTEP: convert_ARTEP_opac.o
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o CONVERT_ARTEP.exe convert_ARTEP_opac.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 
 convert_propaceos.o: ${LIBSHARE} ${LIBTIMING} ${MY_LIB}
@@ -295,7 +295,7 @@ PROPACEOS: convert_propaceos.o
 	rm -rf Tmp_; mkdir Tmp_ ;
 	cd Tmp_; ar -x ${MY_LIB}; ar -x ${LIBTIMING}; ar -x ${LIBSHARE};
 	${LINK.f90} -o PROPACEOS.exe convert_propaceos.o Tmp_/*.o \
-		${Lflag1}    ; 
+		${LflagMpi}    ; 
 	rm -rf Tmp_ 
 	./PROPACEOS.exe
 
