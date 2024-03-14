@@ -593,6 +593,13 @@ subroutine MPI_COMM_GROUP(comm,group,ierror)
   ierror=0
 end subroutine MPI_COMM_GROUP
 
+subroutine MPI_Comm_split(comm,color,key,newcomm,ierror)
+  integer, intent(in) :: comm,color,key
+  integer, intent(out):: newcomm,ierror
+  newcomm=comm
+  ierror=0
+end subroutine MPI_Comm_split
+
 subroutine MPI_ERRHANDLER_SET(comm,errhandler,ierror)
   integer, intent(in) :: comm, errhandler
   integer, intent(out):: ierror
