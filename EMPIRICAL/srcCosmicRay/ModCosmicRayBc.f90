@@ -2,6 +2,7 @@
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModCosmicRay
+
   implicit none
   interface local_interstellar_spectrum
      module procedure local_interstellar_spectrum_s
@@ -63,7 +64,6 @@ contains
     real :: Ai, Zi                ! Default values for A and Z if not present
     real, parameter :: cRmeProtonGeV = cRmeProton/cGeV
     ! For Eq.(13) in Corti et al., 2019 (doi: 10.3847/1538-4357/aafac4)
-    integer         :: iFit                  ! loop variables
     real, parameter :: cFit = 5658.0, Gamma0Fit = 1.669
     real, parameter :: RigidityFit(3) = [0.572, 6.2, 540.0]
     real, parameter :: sFit(3) = [1.78, 3.89, 1.53]
@@ -112,13 +112,9 @@ contains
     case('corti2019')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
        ! Formula Input: R(E_K)[GV]; Output: j_LIS[.../(GV)]
-       DistTimesP2Gn_I = cFit*(RigidityGv_I**Gamma0Fit)
-       do iFit = 1, size(sFit)
-          DistTimesP2Gn_I = DistTimesP2Gn_I *                         &
-               ((1.0 + (RigidityGv_I/RigidityFit(iFit))**sFit(iFit))/ &
-               (1.0 + RigidityFit(iFit)**(-sFit(iFit))))              &
-               **(DeltaFit(iFit)/sFit(iFit))
-       end do
+       DistTimesP2Gn_I = cFit*(RigidityGv_I**Gamma0Fit)*       &
+            product(((1.0 + (RigidityGv_I/RigidityFit)**sFit)/ &
+            (1.0 + RigidityFit**(-sFit)))**(DeltaFit/sFit))
        ! j_LIS[.../(GV)] -> j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = DistTimesP2Gn_I *             &
             Ai/abs(Zi)*(EnergyGn_I+cRmeProtonGeV)/     &
