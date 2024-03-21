@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 program open_closed_boundary
 
@@ -26,7 +26,7 @@ program open_closed_boundary
      case('#OPENCLOSEDBOUNDARY')
         call read_open_closed_boundary(NameCommand)
      case("#END")
-        exit
+        EXIT
      case default
         call CON_stop(NameSub//' invalid NameCommand='//NameCommand)
      end select
