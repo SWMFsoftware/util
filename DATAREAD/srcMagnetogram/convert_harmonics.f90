@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 program convert_harmonics
 
@@ -17,7 +17,7 @@ program convert_harmonics
   call read_file('HARMONICSGRID.in',iCommIn = MPI_COMM_WORLD)
   call read_init
   call read_echo_set(.false.)
-  
+
   do
      if(.not.read_line() ) EXIT
      if(.not.read_command(NameCommand)) CYCLE
@@ -25,7 +25,7 @@ program convert_harmonics
      case("#FACTORB0", "#HARMONICSGRID", "#HARMONICSFILE")
         call read_magnetogram_param(NameCommand)
      case("#END")
-        exit
+        EXIT
      case default
         call CON_stop(NameSub//' invalid NameCommand='//NameCommand)
      end select
