@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModPotentialField
 
@@ -99,8 +99,8 @@ module ModPotentialField
        RecvBC020_II(:,:), RecvBC360_II(:,:)
 
 contains
+  !============================================================================
 
-  !===========================================================================
   subroutine read_fdips_param
 
     use ModReadParam
@@ -111,7 +111,7 @@ contains
     integer:: i, iProcTest
 
     character(len=*), parameter:: NameSub = 'read_fdips_param'
-    !-----------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     call read_file('FDIPS.in')
     call read_init
     if(iProc==0) call read_echo_set(.true.)
@@ -223,7 +223,7 @@ contains
     if(iProc > 0) UseTiming = .false.
 
   end subroutine read_fdips_param
-  !===========================================================================
+  !============================================================================
   subroutine read_modified_magnetogram
 
     use ModReadMagnetogram, ONLY: read_orig_magnetogram, Br0_II,  &
@@ -233,8 +233,7 @@ contains
     logical :: IsInputLonLatInDegree = .true.
 
     character(len=*), parameter:: NameSub = 'read_modified_magnetogram'
-    !------------------------------------------------------------------------
-
+    !--------------------------------------------------------------------------
     call read_orig_magnetogram(IsPhiThetaOrder, UseWedge, DoRemoveMonopole, &
          nThetaCoarse, nPhiCoarse)
 
@@ -254,7 +253,7 @@ contains
     Br_II=Br0_II
 
     ! The CR longitude of Left edge (Longitdue Shift)
-    ! and the Carrington Rotation of the Central Meridian 
+    ! and the Carrington Rotation of the Central Meridian
     ! is read.
     LongCR = LongShift
     CarRot = MagnetogramTimeCR
@@ -276,7 +275,7 @@ contains
 
     !--------------------------------------------------------------------------
 
-    ! decompose the total number of processors to 
+    ! decompose the total number of processors to
     ! theta (i) and phi (j) directions
     ! 0<ni<100, 0<nj<100, ni*nj<=1000, ni*nj<=nproc
     if (nProcTheta*nProcPhi == 0) then
@@ -312,7 +311,7 @@ contains
           nProcPhi = 1
           nProcTheta = 1
        endif
-       if (iProc == 0) then 
+       if (iProc == 0) then
           write(*,*)
           write(*,'(A,2I4,I6)') 'New nProcTheta, nProcPhi, nProc=', &
                nProcTheta, nProcPhi, nProcTheta*nProcPhi
@@ -341,13 +340,13 @@ contains
     iProcPhi   = iProc - iProcTheta*nProcPhi
 
     ! Calculate the nTheta, nPhi. To distribute as even as possible,
-    ! there will be two different nTheta and nPhi. 
+    ! there will be two different nTheta and nPhi.
     nThetaLgr  = ceiling(real(nThetaAll)/nProcTheta)
     nThetaSml  = floor(  real(nThetaAll)/nProcTheta)
     nPhiLgr    = ceiling(real(nPhiAll)/nProcPhi)
     nPhiSml    = floor(  real(nPhiAll)/nProcPhi)
 
-    ! Calculate the number of processors which has large/small 
+    ! Calculate the number of processors which has large/small
     ! local number of Theta/Phi.
     nProcThetaLgr = mod(nThetaAll, nProcTheta)
     nProcThetaSml = nProcTheta - nProcThetaLgr
@@ -492,7 +491,7 @@ contains
     dPhi = (PhiMax-PhiMin)/nPhiAll
     ! Set Phi_I
     do iPhi = 0, nPhi+1
-       ! Phi grid is Cell Centered 
+       ! Phi grid is Cell Centered
        Phi_I(iPhi) = PhiMin+(iPhi + iPhi0 - 0.5)*dPhi
     end do
 
@@ -504,7 +503,6 @@ contains
     Rhs_C             =   0.0
 
   end subroutine init_potential_field
-
   !============================================================================
 
   subroutine save_potential_field
@@ -524,9 +522,9 @@ contains
     integer:: iError
     integer:: iStatus_I(mpi_status_size)
     integer:: nPhiOut, MinLat, MaxLat
-    !-------------------------------------------------------------------------
 
     ! Only the last processors in the phi direction write out the ghost cell
+    !--------------------------------------------------------------------------
     if(iProcPhi == nProcPhi - 1 .and. .not.UseWedge)then
        nPhiOut = nPhi + 1
     else
@@ -545,7 +543,7 @@ contains
        if(iProcTheta == 0)              MaxLat = nLat + 1
        if(iProcTheta == nProcTheta - 1) MinLat = 0
 
-       ! Average field for each radial index at the two poles 
+       ! Average field for each radial index at the two poles
        allocate(Bpole_DII(3,nR+1,2), Btotal_DII(3,nR+1,2))
     end if
     allocate(Lat_I(MinLat:MaxLat), &
@@ -562,7 +560,7 @@ contains
        b_DX(1,iR,iPhi,nTheta+1-iTheta) = B0_DF(1,iR,iTheta,iPhi)
     end do; end do; end do
 
-    ! Use radius as weights to average Bphi and Btheta 
+    ! Use radius as weights to average Bphi and Btheta
     ! Also swap phi and theta components (2,3) -> (3,2)
     do iPhi = 1, nPhi; do iTheta = 1, nTheta; do iR = 1, nR
 
@@ -591,7 +589,7 @@ contains
     ! Apply periodicity in Phi to fill the nPhi+1 ghost cell
     if (.not. UseWedge) then
        if (nProcPhi > 1) then
-          if (iProcPhi ==0 ) then 
+          if (iProcPhi ==0 ) then
              b_DII = b_DX(:,:,1,1:nLat)
              call mpi_send(b_DII, 3*(nR+1)*nLat, MPI_REAL, &
                   iProcTheta*nProcPhi + nProcPhi-1, 21, iComm,  iError)
@@ -638,7 +636,6 @@ contains
        call MPI_reduce_real_array(bAll_DG, size(bAll_DG), MPI_SUM, 0, &
             iComm, iError)
 
-
        if(iProc==0)then
           ! Switch sign for the theta -> Latitude component
           bAll_DG(3,:,:,:) = -bAll_DG(3,:,:,:)
@@ -673,7 +670,7 @@ contains
           end do
        end do; end do
 
-       ! Average values in the Phi direction for the two poles. 
+       ! Average values in the Phi direction for the two poles.
        ! The average value only makes sense for Cartesian components
        if (.not. UseWedge) then
           ! Initialize on all processors for the MPI_allreduce
@@ -691,7 +688,7 @@ contains
           if(nProcPhi > 1)then
              call MPI_allreduce(Bpole_DII, Btotal_DII, size(Bpole_DII), &
                   MPI_REAL, MPI_SUM, iComm, iError)
-             Bpole_DII = Btotal_DII 
+             Bpole_DII = Btotal_DII
           end if
 
           ! Get the average
@@ -804,7 +801,6 @@ contains
     deallocate(b_DX)
 
   end subroutine save_potential_field
-
   !============================================================================
 
   subroutine set_boundary(x_C, x_G)
@@ -825,6 +821,7 @@ contains
     integer:: jProc
     integer:: iError
 
+    !--------------------------------------------------------------------------
     if (.not. allocated(TmpXPhi0_II)) allocate( &
          TmpXPhi0_II(0:nR+1,nPhiAll),              &
          TmpXPhipi_II(0:nR+1,nPhiAll),             &
@@ -862,10 +859,9 @@ contains
     x_G(nR+1,:,:) = -x_G(nR,:,:)
     ! wedge has four side boundaries, updated later in the side boundary part
 
-
     ! ----- pole ------
     if (.not. UseWedge) then
-       ! Set TmpXPhi0_II and TmpXPhipi_II which used to store the global 
+       ! Set TmpXPhi0_II and TmpXPhipi_II which used to store the global
        ! boundary close to the pole to the root
        if (iProcTheta ==0) then
           SendBC010_II = x_G(:,1,1:nPhi)
@@ -936,7 +932,7 @@ contains
        if (iProcTheta == nProcTheta-1)  x_G(:,nTheta+1,:) = x_G(:,nTheta,:)
     endif
 
-    !Update the local theta boundary
+    ! Update the local theta boundary
     if (iProcTheta /= nProcTheta-1) then
        SendBC34_II = x_G(:,nTheta,1:nPhi)
        call MPI_ISEND(SendBC34_II, (nR+2)*nPhi, MPI_REAL, &
@@ -997,13 +993,11 @@ contains
           x_G(:,:,nPhi+1) = RecvBC020_II
        end if
 
-
        ! ----- wedge phi outer boundary -----
     else
        if (iProcPhi == 0)               x_G(:,:,0)        = x_G(:,:,1)
        if (iProcPhi == nProcPhi-1)      x_G(:,:,nPhi+1)   = x_G(:,:,nPhi)
     endif
-
 
     ! Start to send and update the local boundary
     if (iProcPhi /= nProcPhi-1) then
@@ -1034,5 +1028,7 @@ contains
     end if
 
   end subroutine set_boundary
+  !============================================================================
 
 end module ModPotentialField
+!==============================================================================

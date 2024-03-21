@@ -1,4 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModHypre
 
@@ -35,18 +36,18 @@ module ModHypre
   integer:: jPart = 0 ! index of the neighbor part
   integer:: nVar  = 1 ! there is only one variable per grid cell
   integer:: iVar  = 0 ! index of the variable
-  integer:: iVarType_I(1) = (/ HYPRE_SSTRUCT_VARIABLE_CELL /)
+  integer:: iVarType_I(1) = [ HYPRE_SSTRUCT_VARIABLE_CELL ]
   integer:: iLower_D(nDim), iUpper_D(nDim) ! index limits for each box
 
   integer:: iLowerBc_D(nDim), iUpperBc_D(nDim) ! index limit for ghost cells
   integer:: jLowerBc_D(nDim), jUpperBc_D(nDim) ! index limit for phys. cells
 
   ! Mapping between boundaries: same index order and same direction
-  integer, parameter:: iIndexMap_D(nDim) = (/0,1,2/) 
-  integer, parameter:: iIndexDir_D(nDim) = (/1,1,1/)
+  integer, parameter:: iIndexMap_D(nDim) = [0,1,2]
+  integer, parameter:: iIndexDir_D(nDim) = [1,1,1]
 
   integer:: iStencil
-  integer:: iStencil_I(nStencil) = (/ (iStencil, iStencil=0,nStencil-1) /)
+  integer:: iStencil_I(nStencil) = [ (iStencil, iStencil=0,nStencil-1) ]
   integer:: DiStencil_DI(nDim,nStencil)   ! Stencil description
 
   integer:: iObjectType
@@ -61,32 +62,32 @@ module ModHypre
   integer:: iInterpolateAmg    = 0    ! 0..14
   real::    StrongThresholdAmg = 0.25 ! 0.25 for 2D, 0.5-0.6 for 3D
   real::    TruncFactorAmg     = 0.0  ! ?
-  
+
 contains
-  !==========================================================================
+  !============================================================================
   subroutine hypre_read_param
 
     use ModReadParam, ONLY: read_var
 
+    !--------------------------------------------------------------------------
     call read_var('iVerboseAmg',        iVerboseAmg)
     call read_var('MaxRowElementsAmg',  MaxRowElementsAmg)
     call read_var('iCoarsenAmg',        iCoarsenAmg)
     call read_var('iRelaxAmg',          iRelaxAmg)
-    call read_var('iInterpolateAmg',    iInterpolateAmg)  
+    call read_var('iInterpolateAmg',    iInterpolateAmg)
     call read_var('StrongThresholdAmg', StrongThresholdAmg)
-    call read_var('TruncFactorAmg',     TruncFactorAmg)   
+    call read_var('TruncFactorAmg',     TruncFactorAmg)
     call read_var('UseSinglePart',      UseSinglePart)
 
   end subroutine hypre_read_param
+  !============================================================================
 
-  !==========================================================================
   subroutine hypre_initialize
 
     integer:: iValue, iR, iTheta, iPhi, iError
 
     character(len=*), parameter:: NameSub = 'hypre_initialize'
-    !-------------------------------------------------------------------------
-
+    !--------------------------------------------------------------------------
     if(DoTestMe)write(*,*) NameSub,' starting'
 
     if(NamePreconditioner == 'MG')then
@@ -101,16 +102,16 @@ contains
        nPart = 1
 
        ! box = local domain with global index space
-       iLower_D = (/  1, iTheta0+1,      iPhi0+1 /)
-       iUpper_D = (/ nR, iTheta0+nTheta, iPhi0+nPhi /)
+       iLower_D = [  1, iTheta0+1,      iPhi0+1 ]
+       iUpper_D = [ nR, iTheta0+nTheta, iPhi0+nPhi ]
     else
        ! one part on each processor
        iPart = iProc
        nPart = nProc
 
        ! part = local domain with local index space
-       iLower_D = (/  1, 1, 1 /)
-       iUpper_D = (/ nR, nTheta, nPhi /)
+       iLower_D = [  1, 1, 1 ]
+       iUpper_D = [ nR, nTheta, nPhi ]
     end if
 
     ! Create an empty 3D grid object
@@ -127,26 +128,26 @@ contains
     if(UseSinglePart)then
 
        ! This solution does not work, because not implemented for CSR storage.
-       !nPeriod_D = (/0,0,nPhiAll/)
-       !call HYPRE_SStructGridSetPeriodic(i8Grid, &
+       ! nPeriod_D = (/0,0,nPhiAll/)
+       ! call HYPRE_SStructGridSetPeriodic(i8Grid, &
        !     iPart, nPeriod_D, iError )
 
        ! Setup periodic boundaries in Phi direction
-       iLowerBc_D = (/  1,         1,    0 /)
-       iUpperBc_D = (/ nR, nThetaAll,    0 /)
-       jLowerBc_D = (/  1,         1, nPhiAll /)
-       jUpperBc_D = (/ nR, nThetaAll, nPhiAll /)
-       
+       iLowerBc_D = [  1,         1,    0 ]
+       iUpperBc_D = [ nR, nThetaAll,    0 ]
+       jLowerBc_D = [  1,         1, nPhiAll ]
+       jUpperBc_D = [ nR, nThetaAll, nPhiAll ]
+
        call HYPRE_SStructGridSetNeighborPart( i8Grid, &
             iPart, iLowerBc_D, iUpperBc_D, &
             iPart, jLowerBc_D, jUpperBc_D, &
             iIndexMap_D, iIndexDir_D, iError)
-       
-       iLowerBc_D = (/  1,         1, nPhiAll+1 /)
-       iUpperBc_D = (/ nR, nThetaAll, nPhiAll+1 /)
-       jLowerBc_D = (/  1,         1,         1 /)
-       jUpperBc_D = (/ nR, nThetaAll,         1 /)
-       
+
+       iLowerBc_D = [  1,         1, nPhiAll+1 ]
+       iUpperBc_D = [ nR, nThetaAll, nPhiAll+1 ]
+       jLowerBc_D = [  1,         1,         1 ]
+       jUpperBc_D = [ nR, nThetaAll,         1 ]
+
        call HYPRE_SStructGridSetNeighborPart( i8Grid, &
             iPart, iLowerBc_D, iUpperBc_D, &
             iPart, jLowerBc_D, jUpperBc_D, &
@@ -163,10 +164,10 @@ contains
        end if
        if(DoTestMe) write(*,*)'Left   iPart, jPart=',iPart, jPart
 
-       iLowerBc_D = (/  1,      1,    0 /)
-       iUpperBc_D = (/ nR, nTheta,    0 /)
-       jLowerBc_D = (/  1,      1, nPhi /)
-       jUpperBc_D = (/ nR, nTheta, nPhi /)
+       iLowerBc_D = [  1,      1,    0 ]
+       iUpperBc_D = [ nR, nTheta,    0 ]
+       jLowerBc_D = [  1,      1, nPhi ]
+       jUpperBc_D = [ nR, nTheta, nPhi ]
 
        call HYPRE_SStructGridSetNeighborPart( i8Grid, &
             iPart, iLowerBc_D, iUpperBc_D, &
@@ -181,10 +182,10 @@ contains
        end if
        if(DoTestMe) write(*,*)'Right  iPart, jPart=', iPart, jPart
 
-       iLowerBc_D = (/  1,      1, nPhi+1 /)
-       iUpperBc_D = (/ nR, nTheta, nPhi+1 /)
-       jLowerBc_D = (/  1,      1,      1 /)
-       jUpperBc_D = (/ nR, nTheta,      1 /)
+       iLowerBc_D = [  1,      1, nPhi+1 ]
+       iUpperBc_D = [ nR, nTheta, nPhi+1 ]
+       jLowerBc_D = [  1,      1,      1 ]
+       jUpperBc_D = [ nR, nTheta,      1 ]
 
        call HYPRE_SStructGridSetNeighborPart( i8Grid, &
             iPart, iLowerBc_D, iUpperBc_D, &
@@ -196,10 +197,10 @@ contains
           jPart = iProc - nProcPhi
           if(DoTestMe) write(*,*)'Bottom iPart, jPart=', iPart, jPart
 
-          iLowerBc_D = (/  1,      0,    1 /)
-          iUpperBc_D = (/ nR,      0, nPhi /)
-          jLowerBc_D = (/  1, nTheta,    1 /)
-          jUpperBc_D = (/ nR, nTheta, nPhi /)
+          iLowerBc_D = [  1,      0,    1 ]
+          iUpperBc_D = [ nR,      0, nPhi ]
+          jLowerBc_D = [  1, nTheta,    1 ]
+          jUpperBc_D = [ nR, nTheta, nPhi ]
 
           call HYPRE_SStructGridSetNeighborPart( i8Grid, &
                iPart, iLowerBc_D, iUpperBc_D, &
@@ -212,10 +213,10 @@ contains
           jPart = iProc + nProcPhi
           if(DoTestMe) write(*,*)'Top    iPart, jPart=', iPart, jPart
 
-          iLowerBc_D = (/  1, nTheta+1,    1 /)
-          iUpperBc_D = (/ nR, nTheta+1, nPhi /)
-          jLowerBc_D = (/  1,        1,    1 /)
-          jUpperBc_D = (/ nR,        1, nPhi /)
+          iLowerBc_D = [  1, nTheta+1,    1 ]
+          iUpperBc_D = [ nR, nTheta+1, nPhi ]
+          jLowerBc_D = [  1,        1,    1 ]
+          jUpperBc_D = [ nR,        1, nPhi ]
 
           call HYPRE_SStructGridSetNeighborPart( i8Grid, &
                iPart, iLowerBc_D, iUpperBc_D, &
@@ -231,13 +232,13 @@ contains
     if(DoTestMe)write(*,*) NameSub,' HYPRE_SStructGridAssemble done'
 
     ! Define index offsets for the 7-point stencil
-    DiStencil_DI(:,1) = (/  0, 0, 0 /)
-    DiStencil_DI(:,2) = (/ -1, 0, 0 /)
-    DiStencil_DI(:,3) = (/ +1, 0, 0 /)
-    DiStencil_DI(:,4) = (/  0,-1, 0 /)
-    DiStencil_DI(:,5) = (/  0,+1, 0 /)
-    DiStencil_DI(:,6) = (/  0, 0,-1 /)
-    DiStencil_DI(:,7) = (/  0, 0,+1 /)
+    DiStencil_DI(:,1) = [  0, 0, 0 ]
+    DiStencil_DI(:,2) = [ -1, 0, 0 ]
+    DiStencil_DI(:,3) = [ +1, 0, 0 ]
+    DiStencil_DI(:,4) = [  0,-1, 0 ]
+    DiStencil_DI(:,5) = [  0,+1, 0 ]
+    DiStencil_DI(:,6) = [  0, 0,-1 ]
+    DiStencil_DI(:,7) = [  0, 0,+1 ]
 
     call HYPRE_SStructStencilCreate(nDim, nStencil, i8Stencil, iError)
 
@@ -249,7 +250,7 @@ contains
     ! Create the graph object
     call HYPRE_SStructGraphCreate(iComm, i8Grid, i8Graph, iError)
 
-    ! Tell the graph which stencil to use for each variable on each part 
+    ! Tell the graph which stencil to use for each variable on each part
     do jPart = 0, nPart - 1
        call HYPRE_SStructGraphSetStencil(i8Graph, jPart, iVar, i8Stencil, iError)
     end do
@@ -356,17 +357,15 @@ contains
     if(DoTestMe)write(*,*) NameSub,' finished'
 
   end subroutine hypre_initialize
-
-  !==========================================================================
+  !============================================================================
 
   subroutine hypre_solver
 
     integer:: iValue, iR, iTheta, iPhi, iError
 
-    character(len=*), parameter:: NameSub = 'hypre_solver'
-    !-------------------------------------------------------------------------
-
     ! Set RHS values
+    character(len=*), parameter:: NameSub = 'hypre_solver'
+    !--------------------------------------------------------------------------
     nValue = nR*nTheta*nPhi
     allocate(Value_I(nValue))
 
@@ -528,8 +527,7 @@ contains
     if(DoTestMe)write(*,*) NameSub,' finished'
 
   end subroutine hypre_solver
-
-  !===========================================================================
+  !============================================================================
 
   subroutine hypre_preconditioner(n, y_I)
 
@@ -542,7 +540,7 @@ contains
     logical, parameter:: DoDebug = .false.
 
     character(len=*), parameter:: NameSub = 'hypre_preconditioner'
-    !-------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
 
     if(DoDebug)write(*,*) NameSub,' starting n, maxval, minval, y_I(1)=', &
          n, maxval(y_I), minval(y_I), y_I(1)
@@ -589,14 +587,17 @@ contains
     if(DoDebug)write(*,*) NameSub,' finished'
 
   end subroutine hypre_preconditioner
+  !============================================================================
 
 end module ModHypre
-!============================================================
+!==============================================================================
 subroutine read_hypre_param
 
   ! This is here to avoid circular dependencies
 
   use ModHypre, ONLY: hypre_read_param
+  !----------------------------------------------------------------------------
   call hypre_read_param
 
 end subroutine read_hypre_param
+!==============================================================================
