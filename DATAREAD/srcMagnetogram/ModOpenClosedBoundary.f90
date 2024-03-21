@@ -14,7 +14,7 @@ module ModOpenClosedBoundary
   real    :: rBoundary
   integer :: nLonBoundary = 360, nLatBoundary = 180
   real    :: SizeStep = 0.01
-  
+
   real:: rMinB0Local ! radial limits of table
   real:: rMaxB0Local
   real:: LonMinB0Local ! longitude limits of table in degrees
@@ -66,7 +66,7 @@ contains
     end if
 
     iTableB0 = i_lookup_table('B0')
-    
+
     call get_lookup_table(iTableB0, nParam=nParam, Param_I=Param_I, &
          IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I)
 
@@ -105,7 +105,6 @@ contains
 
     character(len=*), parameter:: NameSub = 'get_open_closed_boundary'
     !--------------------------------------------------------------------------
-
     if (allocated(LonTrace_I))   deallocate(LonTrace_I)
     if (allocated(LatTrace_I))   deallocate(LatTrace_I)
     if (allocated(Status_II))    deallocate(Status_II)
@@ -164,7 +163,7 @@ contains
              ! Br = 0, set the status to -1
              write(*,*) ' warning: Br = 0!!!!!'
              Status_II(iLonTrace,iLatTrace) = -1
-             exit
+             EXIT
           end if
 
           iStep = 0
@@ -183,17 +182,17 @@ contains
              if (iStep > nStepMax) then
                 ! exceed the maximum interation
                 Status_II(iLonTrace,iLatTrace) = -1
-                exit
+                EXIT
              end if
 
              if (rNow > rMaxB0Local) then
                 ! open field region
                 Status_II(iLonTrace,iLatTrace) = 2
-                exit
+                EXIT
              else if (rNow < rMinB0Local) then
                 ! close field region
                 Status_II(iLonTrace,iLatTrace) = 1
-                exit
+                EXIT
              end if
 
              ! update the magnetic field if still within the domain
