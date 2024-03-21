@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModPotentialFieldSimple
 
@@ -21,7 +21,7 @@ module ModPotentialFieldSimple
 
   ! magnetogram parameters
   character(len=100):: NameFileIn = 'fitsfile.dat'  ! filename
-  logical           :: UseCosTheta = .true. 
+  logical           :: UseCosTheta = .true.
   real              :: BrMax = 3500.0               ! Saturation level of MDI
 
   ! output paramters
@@ -32,7 +32,7 @@ module ModPotentialFieldSimple
   logical           :: DoSavePotential   = .true.
   character(len=100):: NameFilePotential = 'potentialtest.out'
   character(len=5)  :: TypeFilePotential = 'real8'
-  
+
   logical           :: DoSaveTecplot   = .false.
   character(len=100):: NameFileTecplot = 'potentialfield.dat'
 
@@ -58,8 +58,8 @@ module ModPotentialFieldSimple
        d_I, e_I, e1_I, e2_I, f_I, f1_I, f2_I
 
 contains
+  !============================================================================
 
-  !===========================================================================
   subroutine read_fdips_param
 
     use ModReadParam
@@ -68,7 +68,7 @@ contains
     character(len=lStringLine) :: NameCommand
     character(len=10):: TypeOutput
     character(len=*), parameter:: NameSub = 'read_fdips_param'
-    !-----------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     call read_file('POTENTIAL.in', iCommIn = MPI_COMM_SELF)
     call read_init
     do
@@ -116,7 +116,7 @@ contains
     end do
 
   end subroutine read_fdips_param
-  !===========================================================================
+  !============================================================================
   subroutine read_magnetogram
 
     use ModIoUnit, ONLY: UnitTmp_
@@ -133,13 +133,13 @@ contains
     real, allocatable:: Br0_II(:,:)
 
     character(len=*), parameter:: NameSub = 'read_magnetogram'
-    !------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     open(UnitTmp_, file=NameFileIn, status='old', iostat=iError)
     if(iError /= 0)then
        write(*,*) 'Error in ',NameSub,': could not open input file ',NameFileIn
        stop
     end if
-    do 
+    do
        read(UnitTmp_,'(a)', iostat = iError ) String
        if(index(String,'#CR')>0)then
           read(UnitTmp_,*) nCarringtonRotation
@@ -150,7 +150,7 @@ contains
        endif
        if(index(String,'#START')>0) EXIT
     end do
-    
+
     write(*,*)'nCarringtonRotation, nTheta0, nPhi0: ',&
          nCarringtonRotation, nTheta0, nPhi0
 
@@ -194,7 +194,7 @@ contains
           do iTheta = 1, nTheta
              iTheta0 = nThetaRatio*(iTheta-1) + 1
              iTheta1 = iTheta0 + nThetaRatio - 1
-          
+
              Br_II(iTheta,iPhi) = Br_II(iTheta,iPhi) &
                   + sum( Br0_II(iTheta0:iTheta1, jPhi))
           end do
@@ -212,7 +212,6 @@ contains
     close(UnitTmp_)
 
   end subroutine read_magnetogram
-
   !============================================================================
 
   subroutine init_potential_field
@@ -247,7 +246,7 @@ contains
     if(UseCosTheta)then
        dZ = 2.0/nTheta
 
-       !Set Theta_I
+       ! Set Theta_I
        do iTheta = 1, nTheta
           z = 1 - (iTheta - 0.5)*dZ
           Theta_I(iTheta) = acos(z)
@@ -255,7 +254,7 @@ contains
        Theta_I(0)        = -Theta_I(1)
        Theta_I(nTheta+1) = cTwoPi - Theta_I(nTheta)
 
-       !Set ThetaNode_I
+       ! Set ThetaNode_I
        do iTheta = 1, nTheta + 1
           z = max(-1.0, min(1.0, 1 - (iTheta-1)*dZ))
           ThetaNode_I(iTheta) = acos(z)
@@ -263,12 +262,12 @@ contains
     else
        dTheta = cPi/nTheta
 
-       !Set Theta_I
+       ! Set Theta_I
        do iTheta = 0, nTheta+1
           Theta_I(iTheta) = (iTheta - 0.5)*dTheta
        end do
 
-       !Set ThetaNode_I
+       ! Set ThetaNode_I
        do iTheta = 1, nTheta+1
           ThetaNode_I(iTheta) = (iTheta - 1)*dTheta
        end do
@@ -281,8 +280,8 @@ contains
        dCosThetaNode_I = dZ
 
        ! The definitions below work better for l=m=1 harmonics test
-       !dCosTheta_I(1:nTheta) = SinTheta_I(1:nTheta)*dTheta_I
-       !dCosThetaNode_I(2:nTheta) = SinThetaNode_I(2:nTheta)* &
+       ! dCosTheta_I(1:nTheta) = SinTheta_I(1:nTheta)*dTheta_I
+       ! dCosThetaNode_I(2:nTheta) = SinThetaNode_I(2:nTheta)* &
        !     (Theta_I(2:nTheta)-Theta_I(1:nTheta-1))
 
     else
@@ -310,7 +309,6 @@ contains
     Rhs_C             =   0.0
 
   end subroutine init_potential_field
-
   !============================================================================
 
   subroutine save_potential_field
@@ -325,7 +323,7 @@ contains
     real    :: rI, rJ, rInv
     real, allocatable :: B_DX(:,:,:,:)
     integer :: iError
-    !-------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
 
     allocate(B_DX(3,nR+1,nPhi+1,nTheta))
 
@@ -336,7 +334,7 @@ contains
        B_DX(1,iR,iPhi,nTheta+1-iTheta) = B0_DF(1,iR,iTheta,iPhi)
     end do; end do; end do
 
-    ! Use radius as weights to average Bphi and Btheta 
+    ! Use radius as weights to average Bphi and Btheta
     ! Also swap phi and theta components (2,3) -> (3,2)
     do iPhi = 1, nPhi; do iTheta = 1, nTheta; do iR = 1, nR
 
@@ -368,7 +366,7 @@ contains
          StringHeaderIn = 'Radius [Rs] Longitude [Rad] Latitude [Rad] B [G]', &
          nameVarIn = 'Radius Longitude Latitude Br Bphi Btheta' &
          //' Ro_PFSSM Rs_PFSSM PhiShift nRExt', &
-         ParamIn_I = (/ rMin, rMax, 0.0, 0.0 /), &
+         ParamIn_I = [ rMin, rMax, 0.0, 0.0 ], &
          nDimIn=3, VarIn_VIII=B_DX, &
          Coord1In_I=RadiusNode_I, &
          Coord2In_I=Phi_I(1:nPhi+1), &
@@ -412,7 +410,6 @@ contains
     deallocate(B_DX)
 
   end subroutine save_potential_field
-
   !============================================================================
 
   subroutine set_boundary(x_C, x_G)
@@ -447,9 +444,9 @@ contains
     x_G(:,:,nPhi+1) = x_G(:,:,1)
 
   end subroutine set_boundary
+  !============================================================================
 
 end module ModPotentialFieldSimple
-
 !==============================================================================
 
 module ModB0Matvec
@@ -457,7 +454,6 @@ module ModB0Matvec
   implicit none
 
 contains
-
   !============================================================================
 
   subroutine matvec(x_C, y_C, n)
@@ -482,7 +478,6 @@ contains
     end if
 
   end subroutine matvec
-
   !============================================================================
 
   subroutine get_gradient(x_C, Grad_DG)
@@ -559,25 +554,24 @@ contains
     end do
 
     ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
+    ! iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
     !
-    !r = Radius_I(iR)
-    !GradExact_D  = (/ &
+    ! r = Radius_I(iR)
+    ! GradExact_D  = (/ &
     !     (1+2*rMax**3/RadiusNode_I(iR)**3)/(1+2*rMax**3) &
     !     *sin(Theta_I(iTheta))*cos(Phi_I(iPhi)), &
     !     (r-rMax**3/r**2)/(1+2*rMax**3)/r &
     !     *cos(ThetaNode_I(iTheta))*cos(Phi_I(iPhi)), &
     !     -(r-rMax**3/r**2)/(1+2*rMax**3)/r*sin(PhiNode_I(iPhi)) /)
     !
-    !write(*,*) 'magnetogram at test cell=', Br_II(iTheta,iPhi)
-    !do iDim = 1, 3
+    ! write(*,*) 'magnetogram at test cell=', Br_II(iTheta,iPhi)
+    ! do iDim = 1, 3
     !   write(*,*) 'Grad, Exact, Error=', &
     !        Grad_DG(iDim,iR,iTheta,iPhi), GradExact_D(iDim), &
     !        Grad_DG(iDim,iR,iTheta,iPhi) - GradExact_D(iDim)
-    !end do
+    ! end do
 
   end subroutine get_gradient
-
   !============================================================================
 
   subroutine get_divergence(b_DG, DivB_C)
@@ -614,44 +608,44 @@ contains
     end do
 
     ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
-    !r = Radius_I(iR)
+    ! iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
+    ! r = Radius_I(iR)
     !
-    !Div_D(1) = ( RadiusNode_I(iR+1)**2*b_DG(1,iR+1,iTheta,iPhi)   &
+    ! Div_D(1) = ( RadiusNode_I(iR+1)**2*b_DG(1,iR+1,iTheta,iPhi)   &
     !     - RadiusNode_I(iR)**2  *b_DG(1,iR  ,iTheta,iPhi) ) &
     !     / (Radius_I(iR)**2 *dRadius_I(iR))
     !
-    !Div_D(2) = ( SinThetaNode_I(iTheta+1)*b_DG(2,iR,iTheta+1,iPhi)   &
+    ! Div_D(2) = ( SinThetaNode_I(iTheta+1)*b_DG(2,iR,iTheta+1,iPhi)   &
     !     - SinThetaNode_I(iTheta)  *b_DG(2,iR,iTheta  ,iPhi) ) &
     !     / (Radius_I(iR)*dCosTheta_I(iTheta))
     !
-    !Div_D(3) = ( b_DG(3,iR,iTheta,iPhi+1) - b_DG(3,iR,iTheta,iPhi) ) &
+    ! Div_D(3) = ( b_DG(3,iR,iTheta,iPhi+1) - b_DG(3,iR,iTheta,iPhi) ) &
     !     / (Radius_I(iR)*SinTheta_I(iTheta)*dPhi_I(iPhi))
     !
-    !DivExact_D = &
+    ! DivExact_D = &
     !     (/ 2*SinTheta_I(iTheta), &
     !     (1-SinTheta_I(iTheta)**2)/SinTheta_I(iTheta), &
     !     - 1/SinTheta_I(iTheta) /)
     !
-    !DivExact_D = DivExact_D &
+    ! DivExact_D = DivExact_D &
     !     *(r-rMax**3/r**2)/(1+2*rMax**3)/r**2*cos(Phi_I(iPhi))
     !
-    !do iDim = 1, 3
+    ! do iDim = 1, 3
     !   write(*,*) 'Div_D, Exact, Error=', Div_D(iDim), DivExact_D(iDim), &
     !        Div_D(iDim) - DivExact_D(iDim)
-    !end do
-    !   
-    !write(*,*)'testlaplace=', DivB_C(iR,iTheta,iPhi)
-    !write(*,*)'location   =', maxloc(abs(DivB_C))
-    !write(*,*)'max laplace=', maxval(abs(DivB_C))
-    !write(*,*)'avg laplace=', sum(abs(DivB_C))/(nR*nTheta*nPhi)
+    ! end do
     !
-    !stop
+    ! write(*,*)'testlaplace=', DivB_C(iR,iTheta,iPhi)
+    ! write(*,*)'location   =', maxloc(abs(DivB_C))
+    ! write(*,*)'max laplace=', maxval(abs(DivB_C))
+    ! write(*,*)'avg laplace=', sum(abs(DivB_C))/(nR*nTheta*nPhi)
+    !
+    ! stop
 
   end subroutine get_divergence
+  !============================================================================
 
 end module ModB0Matvec
-
 !==============================================================================
 
 program potential_field
@@ -669,7 +663,7 @@ program potential_field
   integer :: nIter=10000
   real    :: r
   integer :: n, i, iError, iR, iPhi, iTheta, i_D(3)
-  !--------------------------------------------------------------------------
+  !----------------------------------------------------------------------------
 
   call read_fdips_param
 
@@ -679,7 +673,7 @@ program potential_field
 
   if(.not.DoReadMagnetogram)then
      allocate(Br_II(nTheta,nPhi))
-     do iPhi = 1, nPhi; do iTheta = 1, nTheta; 
+     do iPhi = 1, nPhi; do iTheta = 1, nTheta;
         ! magnetogram proportional to the l=m=n harmonics
         n = 1 ! or 2
         Br_II(iTheta,iPhi) = sin(Theta_I(iTheta))**n *cos(n*Phi_I(iPhi))
@@ -719,22 +713,22 @@ program potential_field
         e1_I(i) = SinThetaNode_I(iTheta)**2 / &
              (Radius_I(iR)**2 * dCosThetaNode_I(iTheta)  *dCosTheta_I(iTheta))
 
-        !e1_I(i) = 0.0
+        ! e1_I(i) = 0.0
 
         f1_I(i) = SinThetaNode_I(iTheta+1)**2 /&
              (Radius_I(iR)**2 * dCosThetaNode_I(iTheta+1)*dCosTheta_I(iTheta))
 
-        !f1_I(i) = 0.0
+        ! f1_I(i) = 0.0
 
         e2_I(i) = 1/(Radius_I(iR)**2 * SinTheta_I(iTheta)**2 &
              * dPhiNode_I(iPhi) * dPhi_I(iPhi))
 
-        !e2_I(i) = 0.0
+        ! e2_I(i) = 0.0
 
         f2_I(i) = 1/(Radius_I(iR)**2 * SinTheta_I(iTheta)**2 &
              * dPhiNode_I(iPhi+1) * dPhi_I(iPhi))
 
-        !f2_I(i) = 0.0
+        ! f2_I(i) = 0.0
 
         d_I(i)  = -(e_I(i) + f_I(i) + e1_I(i) + f1_I(i) + e2_I(i) + f2_I(i))
 
