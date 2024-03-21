@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModB0Matvec
 
@@ -22,7 +22,6 @@ module ModB0Matvec
   implicit none
 
 contains
-
   !============================================================================
 
   subroutine matvec(x_C, y_C, n)
@@ -52,7 +51,6 @@ contains
     end if
 
   end subroutine matvec
-
   !============================================================================
 
   subroutine get_gradient(x_C, Grad_DG)
@@ -74,7 +72,7 @@ contains
     end if
 
     call set_boundary(x_C, x_G)
-    
+
     ! This initialization is only for the corners
     Grad_DG = 0.0
 
@@ -123,25 +121,24 @@ contains
     end do
 
     ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
+    ! iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
     !
-    !r = Radius_I(iR)
-    !GradExact_D  = (/ &
+    ! r = Radius_I(iR)
+    ! GradExact_D  = (/ &
     !     (1+2*rMax**3/RadiusNode_I(iR)**3)/(1+2*rMax**3) &
     !     *sin(Theta_I(iTheta))*cos(Phi_I(iPhi)), &
     !     (r-rMax**3/r**2)/(1+2*rMax**3)/r &
     !     *cos(ThetaNode_I(iTheta))*cos(Phi_I(iPhi)), &
     !     -(r-rMax**3/r**2)/(1+2*rMax**3)/r*sin(PhiNode_I(iPhi)) /)
     !
-    !write(*,*) 'magnetogram at test cell=', Br_II(iTheta,iPhi)
-    !do iDim = 1, 3
+    ! write(*,*) 'magnetogram at test cell=', Br_II(iTheta,iPhi)
+    ! do iDim = 1, 3
     !   write(*,*) 'Grad, Exact, Error=', &
     !        Grad_DG(iDim,iR,iTheta,iPhi), GradExact_D(iDim), &
     !        Grad_DG(iDim,iR,iTheta,iPhi) - GradExact_D(iDim)
-    !end do
+    ! end do
 
   end subroutine get_gradient
-
   !============================================================================
 
   subroutine get_divergence(b_DG, DivB_C)
@@ -176,44 +173,44 @@ contains
     end do
 
     ! Calculate discretization error for the l=m=1 harmonics
-    !iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
-    !r = Radius_I(iR)
+    ! iR = iRTest; iPhi = iPhiTest; iTheta = iThetaTest
+    ! r = Radius_I(iR)
     !
-    !Div_D(1) = ( RadiusNode_I(iR+1)**2*b_DG(1,iR+1,iTheta,iPhi)   &
+    ! Div_D(1) = ( RadiusNode_I(iR+1)**2*b_DG(1,iR+1,iTheta,iPhi)   &
     !     - RadiusNode_I(iR)**2  *b_DG(1,iR  ,iTheta,iPhi) ) &
     !     / (Radius_I(iR)**2 *dRadius_I(iR))
     !
-    !Div_D(2) = ( SinThetaNode_I(iTheta+1)*b_DG(2,iR,iTheta+1,iPhi)   &
+    ! Div_D(2) = ( SinThetaNode_I(iTheta+1)*b_DG(2,iR,iTheta+1,iPhi)   &
     !     - SinThetaNode_I(iTheta)  *b_DG(2,iR,iTheta  ,iPhi) ) &
     !     / (Radius_I(iR)*dCosTheta_I(iTheta))
     !
-    !Div_D(3) = ( b_DG(3,iR,iTheta,iPhi+1) - b_DG(3,iR,iTheta,iPhi) ) &
+    ! Div_D(3) = ( b_DG(3,iR,iTheta,iPhi+1) - b_DG(3,iR,iTheta,iPhi) ) &
     !     / (Radius_I(iR)*SinTheta_I(iTheta)*dPhi_I(iPhi))
     !
-    !DivExact_D = &
+    ! DivExact_D = &
     !     (/ 2*SinTheta_I(iTheta), &
     !     (1-SinTheta_I(iTheta)**2)/SinTheta_I(iTheta), &
     !     - 1/SinTheta_I(iTheta) /)
     !
-    !DivExact_D = DivExact_D &
+    ! DivExact_D = DivExact_D &
     !     *(r-rMax**3/r**2)/(1+2*rMax**3)/r**2*cos(Phi_I(iPhi))
     !
-    !do iDim = 1, 3
+    ! do iDim = 1, 3
     !   write(*,*) 'Div_D, Exact, Error=', Div_D(iDim), DivExact_D(iDim), &
     !        Div_D(iDim) - DivExact_D(iDim)
-    !end do
-    !   
-    !write(*,*)'testlaplace=', DivB_C(iR,iTheta,iPhi)
-    !write(*,*)'location   =', maxloc(abs(DivB_C))
-    !write(*,*)'max laplace=', maxval(abs(DivB_C))
-    !write(*,*)'avg laplace=', sum(abs(DivB_C))/(nR*nThetaAll*nPhiAll)
+    ! end do
     !
-    !stop
+    ! write(*,*)'testlaplace=', DivB_C(iR,iTheta,iPhi)
+    ! write(*,*)'location   =', maxloc(abs(DivB_C))
+    ! write(*,*)'max laplace=', maxval(abs(DivB_C))
+    ! write(*,*)'avg laplace=', sum(abs(DivB_C))/(nR*nThetaAll*nPhiAll)
+    !
+    ! stop
 
   end subroutine get_divergence
+  !============================================================================
 
 end module ModB0Matvec
-
 !==============================================================================
 
 program potential_field
@@ -236,12 +233,12 @@ program potential_field
   integer :: nIter=10000
   real    :: r, DivBMax, DivBMaxAll
   integer :: n, i, iError, iR, iPhi, iTheta
-  !--------------------------------------------------------------------------
+  !----------------------------------------------------------------------------
 
   call MPI_init(iError)
   call MPI_comm_rank(iComm,iProc,iError)
   call MPI_comm_size(iComm,nProc,iError)
-  
+
   call read_fdips_param
 
   if(DoReadMagnetogram .and. iProc == 0) call read_modified_magnetogram
@@ -267,7 +264,7 @@ program potential_field
 
   if(.not.DoReadMagnetogram)then
      allocate(Br_II(nThetaAll,nPhiAll))
-     do iPhi = 1, nPhiAll; do iTheta = 1, nThetaAll; 
+     do iPhi = 1, nPhiAll; do iTheta = 1, nThetaAll;
         ! magnetogram proportional to the l=m=n harmonics
         n = 1 ! or 2
         Br_II(iTheta,iPhi) = sin(Theta_I(iTheta))**n *cos(n*Phi_I(iPhi))
@@ -320,19 +317,19 @@ program potential_field
                 (Radius_I(iR)**2 * dThetaNode_I(iTheta+1)*dCosTheta_I(iTheta))
         end if
 
-        !e1_I(i) = 0.0
+        ! e1_I(i) = 0.0
 
-        !f1_I(i) = 0.0
+        ! f1_I(i) = 0.0
 
         e2_I(i) = 1/(Radius_I(iR)**2 * SinTheta_I(iTheta)**2 &
              * dPhiNode_I(iPhi) * dPhi_I(iPhi))
 
-        !e2_I(i) = 0.0
+        ! e2_I(i) = 0.0
 
         f2_I(i) = 1/(Radius_I(iR)**2 * SinTheta_I(iTheta)**2 &
              * dPhiNode_I(iPhi+1) * dPhi_I(iPhi))
 
-        !f2_I(i) = 0.0
+        ! f2_I(i) = 0.0
 
         d_I(i)  = -(e_I(i) + f_I(i) + e1_I(i) + f1_I(i) + e2_I(i) + f2_I(i))
 
