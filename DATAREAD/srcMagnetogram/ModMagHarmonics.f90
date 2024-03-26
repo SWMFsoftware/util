@@ -62,7 +62,10 @@ module ModMagHarmonics
   real, allocatable:: Sqrt_I(:)
 
   real, allocatable, dimension(:) :: ChebyshevWeightE_I, ChebyshevWeightW_I
-
+  ! For integrating on subgrid in Theta, should be even integer:
+  integer :: nSubGrid = 1
+  ! If subgrid is used the polar fix can be applied reducing the error in the
+  ! polar domain
 contains
   !============================================================================
 
@@ -91,6 +94,8 @@ contains
        case("#MAGNETOGRAMFILE", "#CHEBYSHEV", '#CHANGEWEAKFIELD',&
             '#CHANGEPOLARFIELD')
           call read_magnetogram_param(NameCommand)
+       case("#SUBGRID")
+          call read_var('nSubGrid', nSubGrid)
        case default
           call CON_stop(NameSub//': unknown command='//trim(NameCommand))
        end select
@@ -145,7 +150,9 @@ contains
     real    :: dThetaChebyshev, dLon = 0.0
     real    :: CRFraction, CRNumber
     real, allocatable:: Br_II(:,:), Coord_DII(:,:,:), Var_VI(:,:)
-
+    ! Subgrid computations:
+    real    :: PolarField
+    integer :: iSubGrid, nSubGrid2
     !--------------------------------------------------------------------------
     write(*,*)'Calculating harmonic coefficients'
 
@@ -176,9 +183,36 @@ contains
     ! Add the longitude width of a half cell (=180/nPhi) for cell centers
     ! dLon rotates the longitude into actual HGR/Carrington longitude
     dLon = LongShift + 180.0/nPhi
-
-    allocate(Br_II(0:nPhi-1,0:nTheta-1))
-    Br_II=Br0_II
+    if(nSubGrid==2*(nSubGrid/2))then
+       nTheta = nTheta*nSubGrid
+       dSinTheta = dSinTheta/nSubGrid
+       nSubGrid2 = nSubGrid/2
+       allocate(Br_II(0:nPhi-1,0:nTheta-1))
+       ! Fix Southern pole value:
+       ! PolarField = sum(Br0_II(:,1),1)/nPhi
+       do iSubGrid = 0, nSubGrid2 - 1
+          Br_II(:,iSubGrid) = Br0_II(:,1)
+          ! (  (0.50 + iSubgrid)*Br0_II(:,1) +&
+          ! (nSubgrid2 -iSubgrid - 0.5)*PolarField ) / nSubgrid2
+       end do
+       do iTheta = 1, nThetaOrig-1
+          do iSubGrid = 0, nSubGrid - 1
+             Br_II(:,iTheta*nSubGrid - nSubGrid2 + iSubGrid) = (&
+                  (0.50 + iSubgrid)*Br0_II(:,iTheta+1) + &
+                  (nSubgrid - iSubgrid - 0.5)*Br0_II(:,iTheta))/nSubGrid
+          end do
+       end do
+       ! Fix Northern pole value:
+       ! PolarField = sum(Br0_II(:,nThetaOrig),1)/nPhi
+       do iSubGrid = 0, nSubGrid2 - 1
+          Br_II(:,nTheta-nSubGrid2+iSubGrid) = Br0_II(:,nThetaOrig)
+          !((0.50 + iSubgrid)*PolarField &
+          !+ (nSubgrid2 -iSubgrid - 0.5)*Br0_II(:,nThetaOrig))/nSubgrid2
+       end do
+    else
+       allocate(Br_II(0:nPhi-1,0:nTheta-1))
+       Br_II=Br0_II
+    end if
 
     if(UseChebyshevNode) then
        allocate(PNMTheta_III(nHarmonics+1,nHarmonics+1,0:nTheta-1))
@@ -326,7 +360,6 @@ contains
          )
 
     deallocate(Coord_DII, Var_VI)
-
 
   end subroutine calc_harmonics
   !============================================================================
