@@ -3,7 +3,7 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModTransitionRegion
   implicit none
-
+  PRIVATE
   ! Normalization as used in the radcool table
   real, private, parameter :: RadNorm = 1.0E+22
 
@@ -18,28 +18,34 @@ module ModTransitionRegion
                           *Cgs2SiEnergyDens/RadNorm
 
   ! A constant factor to calculate the electron heat conduction
-  real :: HeatCondParSi
+  real, public :: HeatCondParSi
 
   ! Coulomb logarithm
-  real, parameter  :: CoulombLog = 20.0
+  real, public, parameter  :: CoulombLog = 20.0
 
   ! Correspondent named indexes: meaning of the columns in the table
-  integer,parameter:: LengthPAvrSi_ = 1, UHeat_ = 2
-  integer,parameter:: HeatFluxLength_ = 3, DHeatFluxXOverU_ = 4
-  integer,parameter:: LambdaSi_=5, DLogLambdaOverDLogT_ = 6
+  integer, parameter, public :: LengthPAvrSi_ = 1, UHeat_ = 2, &
+       HeatFluxLength_ = 3, DHeatFluxXOverU_ = 4, LambdaSi_=5, &
+       DLogLambdaOverDLogT_ = 6
 
   ! Global arrays used in calculating the tables
-  real, dimension(500):: TeSi_I, LambdaSi_I, &
-       LengthPe_I, UHeat_I, dFluxXLengthOverDU_I, DLogLambdaOverDLogT_I
+  real, dimension(500)        :: TeSi_I, LambdaSi_I, DLogLambdaOverDLogT_I
+  real, dimension(1:500,-1:1) :: LengthPe_II, UHeat_II, dFluxXLengthOverDU_II
 
   ! Control parameter: minimum temerature
   real, public :: TeSiMin = 5.0e4
-  real         :: SqrtZ   = 1.0
-  public :: init_tr
+  real, public :: SqrtZ   = 1.0
+  public :: init_tr, check_tr_table, integrate_emission, plot_tr
 
   ! Table numbers needed to use lookup table
-  integer, private :: iTableRadCool = -1
-  integer          :: iTableTR = -1
+  integer         :: iTableRadCool = -1
+  integer, public :: iTableTR = -1
+  
+  ! Chromosphere top boundary
+  real, public, parameter :: rChromo = 1.0
+
+  ! Max speed
+  real, parameter :: uMax = 1000.0 
 
   ! Needed for initialization:
   logical, private :: DoInit = .true.
@@ -111,7 +117,7 @@ contains
   !============================================================================
   subroutine check_tr_table(TypeFileIn,iComm)
     use ModLookupTable, ONLY: i_lookup_table, &
-         init_lookup_table, make_lookup_table_1d
+         init_lookup_table, make_lookup_table
 
     character(LEN=*),optional,intent(in)::TypeFileIn
     integer, optional, intent(in):: iComm
@@ -130,28 +136,28 @@ contains
          NameTable = 'TR',                                       &
          NameCommand = 'save',                                   &
          NameVar =                                               &
-         'logTe LPe UHeat FluxXLength '//                        &
+         'logTe u LPe UHeat FluxXLength '//                      &
          'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT ',        &
-         nIndex_I = [500],                                       &
-         IndexMin_I = [1.0e4],                                   &
-         IndexMax_I = [1.0e8],                                   &
+         nIndex_I = [500,3],                                     &
+         IndexMin_I = [1.0e4,-uMax],                             &
+         IndexMax_I = [1.0e8, uMax],                             &
          NameFile = 'TR.dat',                                    &
          TypeFile = TypeFile,                                    &
          StringDescription =                                     &
          'Model for transition region: '//                       &
-         '[K] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1]')
+         '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1]')
 
     ! The table is now initialized.
     iTableTR = i_lookup_table('TR')
     ! Fill in the table
-    call make_lookup_table_1d(iTableTR, calc_tr_table, iComm)
+    call make_lookup_table(iTableTR, calc_tr_table, iComm)
   end subroutine check_tr_table
   !============================================================================
-  subroutine calc_tr_table(iTableIn, Arg1, Value_V)
+  subroutine calc_tr_table(iTableIn, Arg1, Arg2, Value_V)
     use ModLookupTable, ONLY: interpolate_lookup_table
     use ModConst,      ONLY: cBoltzmann
     integer, intent(in):: iTableIn
-    real, intent(in)   :: Arg1
+    real, intent(in)   :: Arg1, Arg2
     real, intent(out)  :: Value_V(:)
     integer:: iTe
     real   :: DeltaLogTe, LambdaCgs_V(1)
@@ -175,7 +181,7 @@ contains
     if(IsFirstCall)then
        IsFirstCall=.false.
 
-       TeSi_I(1) = 1.0e4; LengthPe_I(1) = 0.0; UHeat_I(1) = 0.0
+       TeSi_I(1) = 1.0e4; LengthPe_II(1,0) = 0.0; UHeat_II(1,0) = 0.0
        do iTe = 2,500
           TeSi_I(iTe) = TeSi_I(iTe-1)*exp(DeltaLogTe)
        end do
@@ -186,36 +192,37 @@ contains
           LambdaSi_I(iTe) = LambdaCgs_V(1)*Radcool2Si
           if(iTe==1)CYCLE
           ! Integrate \sqrt{2\int{\kappa_0\Lambda Te**1.5 d(log T)}}/k_B
-          UHeat_I(iTe) = UHeat_I(iTe-1) + &
+          UHeat_II(iTe,0) = UHeat_II(iTe-1,0) + &
                (LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
                LambdaSi_I(iTe)*TeSi_I(iTe)**1.50)*DeltaLogTe
        end do
-       UHeat_I = sqrt(HeatCondParSi*UHeat_I)/cBoltzmann
+       UHeat_II(:,0) = sqrt(HeatCondParSi*UHeat_II(:,0))/cBoltzmann
 
        ! Temporary fix to avoid a singularity in the first point
-       UHeat_I(1) = UHeat_I(2)
+       UHeat_II(1,0) = UHeat_II(2,0)
        do iTe = 2,500
           ! Integrate \int{\kappa_0\Lambda Te**3.5 d(log T)/UHeat}
-          LengthPe_I(iTe) = LengthPe_I(iTe-1) + 0.5*DeltaLogTe* &
-               ( TeSi_I(iTe-1)**3.5/UHeat_I(iTe-1) + &
-               TeSi_I(iTe)**3.5/UHeat_I(iTe) )
+          LengthPe_II(iTe,0) = LengthPe_II(iTe-1,0) + 0.5*DeltaLogTe* &
+               ( TeSi_I(iTe-1)**3.5/UHeat_II(iTe-1,0) + &
+               TeSi_I(iTe)**3.5/UHeat_II(iTe,0) )
           ! Not multiplied by \kappa_0
        end do
-       dFluxXLengthOverDU_I(1) = &
-            (LengthPe_I(2)*UHeat_I(2) - LengthPe_I(1)*UHeat_I(1))/&
+       dFluxXLengthOverDU_II(1,0) = &
+            (LengthPe_II(2,0)*UHeat_II(2,0) - LengthPe_II(1,0)*UHeat_II(1,0))/&
             (DeltaLogTe*TeSi_I(1)**3.5)
        do iTe = 2,499
-          dFluxXLengthOverDU_I(iTe) = &
-               ( LengthPe_I(iTe+1)*UHeat_I(iTe+1)   &
-               - LengthPe_I(iTe-1)*UHeat_I(iTe-1) ) &
+          dFluxXLengthOverDU_II(iTe,0) = &
+               ( LengthPe_II(iTe+1,0)*UHeat_II(iTe+1,0)   &
+               - LengthPe_II(iTe-1,0)*UHeat_II(iTe-1,0) ) &
                /(2*DeltaLogTe*TeSi_I(iTe)**3.5)
        end do
-       dFluxXLengthOverDU_I(500) = &
-            (LengthPe_I(500)*UHeat_I(500) - LengthPe_I(499)*UHeat_I(499))/&
+       dFluxXLengthOverDU_II(500,0) = &
+            (LengthPe_II(500,0)*UHeat_II(500,0) - &
+            LengthPe_II(499,0)*UHeat_II(499,0))/&
             (DeltaLogTe*TeSi_I(500)**3.5)
 
-       LengthPe_I = LengthPe_I*HeatCondParSi
-       UHeat_I(1) = 0.0
+       LengthPe_II(:,0) = LengthPe_II(:,0)*HeatCondParSi
+       UHeat_II(1,0) = 0.0
        ! Calculate dLogLambda/DLogTe
        DLogLambdaOverDLogT_I(1) = &
             log(LambdaSi_I(2)/LambdaSi_I(1))/DeltaLogTe
@@ -228,8 +235,8 @@ contains
     end if
     iTe = 1 + nint(log(Arg1/1.0e4)/DeltaLogTe)
     Value_V(LengthPAvrSi_:DLogLambdaOverDLogT_) = &
-         [ LengthPe_I(iTe), UHeat_I(iTe), &
-         LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe), &
+         [ LengthPe_II(iTe,0), UHeat_II(iTe,0), &
+         LengthPe_II(iTe,0)*UHeat_II(iTe,0), dFluxXLengthOverDU_II(iTe,0), &
          LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe)]
   end subroutine calc_tr_table
   !============================================================================
@@ -263,14 +270,14 @@ contains
     PAvrSi = PeSi/SqrtZ
     DeltaTe = (TeSi - TeSiMin)/nTRGrid
     TeSi_I(1) = TeSiMin
-    call interpolate_lookup_table(iTableTR, TeSiMin, TRTable_V, &
+    call interpolate_lookup_table(iTableTR, TeSiMin, 0.0, TRTable_V, &
          DoExtrapolate=.false.)
     ! First value is now the product of the thread length in meters times
     ! a geometric mean pressure, so that
     LengthPavrSi_I(1) = TRTable_V(LengthPAvrSi_)
     do i = 1, nTRGrid
        TeSi_I(i +1) = TeSi_I(i) + DeltaTe
-       call interpolate_lookup_table(iTableTR, TeSi_I(i + 1),   &
+       call interpolate_lookup_table(iTableTR, TeSi_I(i + 1), 0.0, &
             TRTable_V, DoExtrapolate=.false.)
        LengthPavrSi_I(i + 1) = TRTable_V(LengthPAvrSi_)
        DeltaLengthPavrSi_I(i) = LengthPavrSi_I(i + 1) - LengthPavrSi_I(i)
@@ -377,7 +384,7 @@ contains
     Value_VI(TeSi_,1) = TeSiMin
     Value_VI(NeCgs_,1) = 1.0e-6*PeSi/(cBoltzmann*TeSiMin)
 
-    call interpolate_lookup_table(iTableTR, TeSiMin, TRTable_V, &
+    call interpolate_lookup_table(iTableTR, TeSiMin, 0.0, TRTable_V, &
          DoExtrapolate=.false.)
 
     ! First value is now the product of the thread length in meters times
@@ -386,7 +393,7 @@ contains
 
     do i = 2, nGrid
        Value_VI(TeSi_,i) = Value_VI(TeSi_,i-1) + DeltaTe
-       call interpolate_lookup_table(iTableTR, Value_VI(TeSi_,i),   &
+       call interpolate_lookup_table(iTableTR, Value_VI(TeSi_,i), 0.0, &
             TRTable_V, DoExtrapolate=.false.)
        LengthPavrSi_I(i) = TRTable_V(LengthPAvrSi_)
        Value_VI(NeCgs_,i) = 1.0e-6*PeSi/(cBoltzmann*Value_VI(TeSi_,i))
@@ -398,7 +405,7 @@ contains
     LengthSi_I = (LengthPavrSi_I - LengthPavrSi_I(1))/PAvrSi
     if(DoPlotEmissivity)then
        do i = 1, nGrid
-          call interpolate_lookup_table(iTable, Value_VI(TeSi_,i),   &
+          call interpolate_lookup_table(iTable, Value_VI(TeSi_,i), 0.0, &
             Value_VI(NeCgs_,i), Value_VI(NeCgs_+1:NeCgs_+nValue,i),    &
             DoExtrapolate=.false.)
           ! Multiply response function by: (1) NeCgs*NiCgs;
