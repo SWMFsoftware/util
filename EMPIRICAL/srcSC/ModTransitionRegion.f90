@@ -6,6 +6,7 @@ module ModTransitionRegion
   use ModUtilities, ONLY: CON_stop
   use ModConst,       ONLY: cBoltzmann, ceV
   implicit none
+  SAVE
   PRIVATE
   ! Normalization as used in the radcool table
   real, parameter :: RadNorm = 1.0E+22
@@ -27,9 +28,9 @@ module ModTransitionRegion
   real, public, parameter  :: CoulombLog = 20.0
 
   ! Correspondent named indexes: meaning of the columns in the table
-  integer, parameter, public :: LengthPAvrSi_ = 1, UHeat_ = 2, &
-       HeatFluxLength_ = 3, DHeatFluxXOverU_ = 4, LambdaSi_=5, &
-       DLogLambdaOverDLogT_ = 6
+  integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
+       HeatFluxLength_ = 3, dHeatFluxXOverU_ = 4, LambdaSi_=5, &
+       DlogLambdaOverDlogT_ = 6, uLengthPavrSi_ = 7
 
   ! Control parameter: minimum temerature
   real, public :: TeSiMin = 5.0e4
@@ -53,15 +54,15 @@ module ModTransitionRegion
   real,    public :: ChromoEvapCoef = 0.0
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = 1.0e8
-  integer, parameter :: nPointTe = 500, nPointU = 3
+  integer, parameter :: nPointTe = 500, nPointU = 31
    ! Global arrays used in calculating the tables
   real, dimension(nPointTe) :: TeSi_I, LambdaSi_I, DLogLambdaOverDLogT_I, &
        LengthPe_I, UHeat_I, dFluxXLengthOverDU_I
   real            :: SemiIntUheat_I(1:nPointTe-1)
-  real            :: DeltaLogTe
+  real            :: DeltaLogTe, DeltaLogTeCoef
   ! Max speed
-  real, parameter :: uMax = 1000.0
-  real, parameter :: DeltaU = 2*uMax/(nPointU - 1)
+  real, parameter :: uMax = 200.0
+  real, parameter :: DeltaU = 1.5*uMax/(nPointU - 1)
   ! Ionization potential for hydrogen
   ! cPotential_II(1,1) from util/CRASH/src/ModIonizPotential.f90:
   real, parameter :: cIonizPotentialH =  13.59844  ! eV
@@ -168,7 +169,7 @@ contains
     if(present(TypeFileIn))then
        TypeFile = TypeFileIn
     else
-       TypeFile = 'ascii'
+       TypeFile = 'real8'
     end if
     ! initialize the TR table
     call init_lookup_table(                                      &
@@ -176,15 +177,15 @@ contains
          NameCommand = 'save',                                   &
          NameVar =                                               &
          'logTe u LPe UHeat FluxXLength '//                      &
-         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT ',        &
+         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT uLPe',    &
          nIndex_I = [nPointTe,nPointU],                          &
-         IndexMin_I = [TeTrMin,-uMax],                           &
+         IndexMin_I = [TeTrMin,-0.5*uMax],                       &
          IndexMax_I = [TeTrMax, uMax],                           &
-         NameFile = 'TR.dat',                                    &
+         NameFile = 'TR8.dat',                                   &
          TypeFile = TypeFile,                                    &
          StringDescription =                                     &
          'Model for transition region: '//                       &
-         '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1]')
+         '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1] [W/m]')
 
     ! The table is now initialized.
     iTableTr = i_lookup_table('TR')
@@ -198,7 +199,8 @@ contains
     integer, intent(in):: iTableIn
     real, intent(in)   :: Arg1, Arg2
     real, intent(out)  :: Value_V(:)
-    integer:: iTe, iU, iUlast = -1
+    integer            :: iTe, iU
+    integer, save      :: iUlast = -1
     real   :: LambdaCgs_V(1)
 
     logical, save:: IsFirstCall = .true.
@@ -212,11 +214,13 @@ contains
     !     /1.0e-6    ! cm3 = 1e-6 m3
     ! real, parameter :: Radcool2Si = 1.0e-12 & ! (cm-3=>m-3)**2
     !     /RadNorm*Cgs2SiEnergyDens
-    real :: FactorStep, DeltaLogTeCoef
+    ! Misc:
+    real,save :: FactorStep, uOverTmin5, SqrtOfU2
     logical:: DoTest
     character(len=*), parameter:: NameSub = 'calc_tr_table'
     !--------------------------------------------------------------------------
     if(IsFirstCall)then
+       ! write(*,*)'Start init'
        IsFirstCall=.false.
        FactorStep = exp(DeltaLogTe)
        do iTe = 1, nPointTe
@@ -240,18 +244,23 @@ contains
             log(LambdaSi_I(npointTe)/LambdaSi_I(nPointTe-1))/DeltaLogTe
        DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
     end if
-    iU = nint( (Arg2 + uMax)/ DeltaU) + 1
+    iU = nint( (Arg2 + 0.50*uMax)/ DeltaU) + 1
     if(iU/=iUlast)then
-       LengthPe_I(1) = 0.0; UHeat_I(1) = 0.0
+       uOverTmin5 = 5*(Arg2/TeTrMin)*DeltaLogTe
+       LengthPe_I = 0.0; uHeat_I = 0.0
+       UHeat_I(1) = (max(Arg2, 0.0)*FluxTouPe)**2
        do iTe = 2, nPointTe
           ! Integrate \sqrt{2\int{\kappa_0\Lambda Te**1.5 d(log T)}}/k_B
           ! Predictor at half step
+          SqrtOfU2 = sqrt(UHeat_I(iTe-1) )
           SemiIntUheat_I(iTe-1) = sqrt( UHeat_I(iTe-1) + &
+               SqrtOfU2*uOverTmin5*TeSi_I(iTe-1)       + &
                LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50*DeltaLogTeCoef)
           UHeat_I(iTe) = UHeat_I(iTe-1) + &
-               (LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
+               SemiIntUheat_I(iTe-1)*uOverTmin5*(TeSi_I(iTe-1) + TeSi_I(iTe))&
+               + (LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
                LambdaSi_I(iTe)*TeSi_I(iTe)**1.50)*DeltaLogTeCoef
-          UHeat_I(iTe-1) = sqrt(UHeat_I(iTe-1) )
+          UHeat_I(iTe-1) = SqrtOfU2
        end do
        UHeat_I(nPointTe) = sqrt(UHeat_I(nPointTe))
        
@@ -282,10 +291,11 @@ contains
        iUlast = iU
     end if
     iTe = 1 + nint(log(Arg1/TeTrMin)/DeltaLogTe)
-    Value_V(LengthPAvrSi_:DLogLambdaOverDLogT_) = &
+    Value_V(LengthPAvrSi_:uLengthPAvrSi_) = &
          [ LengthPe_I(iTe), UHeat_I(iTe), &
-         LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe),&
-         LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe)]
+         LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe),   &
+         LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe), &
+         LengthPe_I(iTe)*Arg2]
   end subroutine calc_tr_table
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
@@ -305,7 +315,7 @@ contains
     ! mesh-centered temperature and the spatial length of intervals, in cm!!
     real    :: TeAvrSi_I(nTrGrid + 1), DeltaLCgs_I(nTrGrid + 1)
     ! Tabulated analytical solution:
-    real    :: TrTable_V(LengthPAvrSi_:DLogLambdaOverDLogT_)
+    real    :: TrTable_V(LengthPAvrSi_:uLengthPAvrSi_)
     ! Gen table values:
     real    :: Value_VI(nVar, nTrGrid +1)
     real    :: DeltaTe      ! Mesh of a temperature
