@@ -65,7 +65,7 @@ contains
   end subroutine read_in_logical
 
   subroutine read_in_string(variable)
-    character (len=100), intent(out) :: variable
+    character (len=*), intent(out) :: variable
     iline = iline + 1
     variable = StringInputLines(iline)
   end subroutine read_in_string
