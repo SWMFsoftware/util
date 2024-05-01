@@ -35,13 +35,13 @@ module ModTransitionRegion
   ! Control parameter: minimum temerature
   real, public :: TeSiMin = 5.0e4
   real, public :: SqrtZ   = 1.0
-  public :: init_tr, check_tr_table, integrate_emission, plot_tr, &
+  public :: init_tr, check_tr_table, integrate_emission, & ! plot_tr, &
        read_tr_param
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
   integer, public :: iTableTr = -1
-  
+
   ! Chromosphere top boundary
   real, public, parameter :: rChromo = 1.0
 
@@ -74,7 +74,7 @@ module ModTransitionRegion
 contains
   !============================================================================
   subroutine init_tr(Z, TeChromoSi, iComm)
-    use ModConst,       ONLY: cBoltzmann, cElectronMass, &
+    use ModConst,       ONLY: cElectronMass, &
          cEps, cElectronCharge, cTwoPi
     use ModLookupTable, ONLY: i_lookup_table
     !    use BATL_lib,       ONLY: test_start, test_stop, iProc
@@ -85,9 +85,9 @@ contains
     real, intent(in) :: TeChromoSi
     integer, optional, intent(in) :: iComm
     logical:: DoTest
+    !   call test_start(NameSub, DoTest)
     character(len=*), parameter:: NameSub = 'init_tr'
     !--------------------------------------------------------------------------
-    !   call test_start(NameSub, DoTest)
     if(.not.DoInit)RETURN
     DoInit = .false.
     ! Set model parameters
@@ -136,12 +136,12 @@ contains
   end subroutine init_tr
   !============================================================================
   subroutine read_tr_param(NameCommand)
-    
+
     use ModReadParam, ONLY: read_var
     character(len=*), intent(in):: NameCommand
     character(len=*), parameter:: NameSub = 'read_tr_param'
     !--------------------------------------------------------------------------
-    
+
     select case(NameCommand)
     case('#CHROMOEVAPORATION')
        call read_var('UseChromoEvap',UseChromoEvap)
@@ -194,8 +194,8 @@ contains
   end subroutine check_tr_table
   !============================================================================
   subroutine calc_tr_table(iTableIn, Arg1, Arg2, Value_V)
+
     use ModLookupTable, ONLY: interpolate_lookup_table
-    use ModConst,      ONLY: cBoltzmann
     integer, intent(in):: iTableIn
     real, intent(in)   :: Arg1, Arg2
     real, intent(out)  :: Value_V(:)
@@ -263,7 +263,7 @@ contains
           UHeat_I(iTe-1) = SqrtOfU2
        end do
        UHeat_I(nPointTe) = sqrt(UHeat_I(nPointTe))
-       
+
        ! Temporary fix to avoid a singularity in the first point
        do iTe = 2, nPointTe
           ! Integrate \int{\kappa_0\Lambda Te**3.5 d(log T)/UHeat}
@@ -286,7 +286,7 @@ contains
             (LengthPe_I(nPointTe)*UHeat_I(nPointTe) - &
             LengthPe_I(nPointTe-1)*UHeat_I(nPointTe-1))/&
             (DeltaLogTe*TeSi_I(nPointTe)**3.5)
-       
+
        LengthPe_I(:) = LengthPe_I(:)*HeatCondParSi
        iUlast = iU
     end if
@@ -299,7 +299,6 @@ contains
   end subroutine calc_tr_table
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
-    use ModConst, ONLY: cBoltzmann
     use ModLookupTable,  ONLY: interpolate_lookup_table
     ! INPUTS:
     ! The plasma parameters on top of the transition region:
@@ -368,6 +367,40 @@ contains
 
   end subroutine integrate_emission
   !============================================================================
+  subroutine solve_tr_face(TeCell, uPeOverTeCell, & ! cell-centered, in SI
+       LengthTr, DeltaS, & ! Distances photosphere-to-face, face-to-center
+       TeFace, PeFace, uFace, HeatFluxFace) ! SI, face centered
+
+    ! For given values of Te and u*Pavr/Te at the cell center, all inputs
+    ! are in SI and expressed in K and W/(m.K). The distance from the cell
+    ! to the face is DeltaS, from the face to photosphere is LengthTr.
+    ! All distances are measured along the magnetic field line in meters.
+    ! Outputs provided are TeFace, PeFace, uFace, HeatFluxFace, all in SI:
+    ! [K], [N/m^2], [m/s], [W/m^2], at the face.
+    use ModLookupTable, ONLY: interpolate_lookup_table
+
+    ! The plasma parameters at the cell center region:
+    real,    intent(in)  :: TeCell, uPeOverTeCell
+    ! Distances photosphere-to-face, face-to-center
+    real,    intent(in)  :: LengthTr, DeltaS
+    ! Parameters at the face, connected by the analytical TR solution to the
+    ! photosphere:
+    real,    intent(out) :: TeFace, PeFace, uFace, HeatFluxFace
+
+    ! Tabulated analytical solution:
+    real    :: TrTable_V(LengthPAvrSi_:uLengthPAvrSi_)
+
+    real    :: ConsFace, dConsFace, ConsCell, uMinTr
+    ! Newton-Rapson coefficients: dConsFace = -Res/dResdCons
+    real    :: Res, dResdCons
+    integer :: iCounter
+    !--------------------------------------------------------------------------
+
+    call interpolate_lookup_table(iTableTr, TeSiMin, 0.0, TrTable_V, &
+         DoExtrapolate=.false.)
+
+  end subroutine solve_tr_face
+  !============================================================================
   subroutine plot_tr(NamePlotFile, nGrid, TeSi, PeSi, iTable)
 
     use ModPlotFile,    ONLY: save_plot_file
@@ -396,7 +429,7 @@ contains
     real :: LengthSi_I(nGrid)
 
     ! Tabulated analytical solution:
-    real    :: TrTable_V(LengthPAvrSi_:DLogLambdaOverDLogT_)
+    real    :: TrTable_V(LengthPAvrSi_:uLengthPAvrSi_)
 
     ! Plot variables: Electron temperature and density in particles per cm3
     integer, parameter :: TeSi_ = 1, NeCgs_ = 2
