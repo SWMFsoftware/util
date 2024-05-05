@@ -25,18 +25,18 @@ module ModTransitionRegion
   real, public :: HeatCondParSi
 
   ! Coulomb logarithm
-  real, public, parameter  :: CoulombLog = 20.0
+  real, public  :: CoulombLog = 20.0
 
   ! Correspondent named indexes: meaning of the columns in the table
   integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
        HeatFluxLength_ = 3, dHeatFluxXOverU_ = 4, LambdaSi_=5, &
        DlogLambdaOverDlogT_ = 6, uLengthPavrSi_ = 7
 
-  ! Control parameter: minimum temerature
+  ! Control parameter: minimum temerature in the TR table
   real, public :: TeSiMin = 5.0e4
   real, public :: SqrtZ   = 1.0
   public :: init_tr, check_tr_table, integrate_emission, & ! plot_tr, &
-       read_tr_param
+       read_tr_param, solve_tr_face, test
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
@@ -74,8 +74,7 @@ module ModTransitionRegion
 contains
   !============================================================================
   subroutine init_tr(Z, TeChromoSi, iComm)
-    use ModConst,       ONLY: cElectronMass, &
-         cEps, cElectronCharge, cTwoPi
+    use ModConst,       ONLY: kappa_0_e
     use ModLookupTable, ONLY: i_lookup_table
     !    use BATL_lib,       ONLY: test_start, test_stop, iProc
     ! INPUTS
@@ -96,10 +95,7 @@ contains
     DeltaLogTe = log(TeTrMax/TeTrMin)/(nPointTe - 1)
     ! electron heat conduct coefficient for single charged ions
     ! = 9.2e-12 W/(m*K^(7/2))
-    HeatCondParSi = 3.2*3.0*cTwoPi/CoulombLog &
-         *sqrt(cTwoPi*cBoltzmann/cElectronMass)*cBoltzmann &
-         *((cEps/cElectronCharge)*(cBoltzmann/cElectronCharge))**2
-
+    HeatCondParSi = kappa_0_e(CoulombLog)
     iTableTr = i_lookup_table('TR')
     if(iTableTr<=0)then
       iTableRadCool = i_lookup_table('radcool')
@@ -107,6 +103,7 @@ contains
             call CON_stop('To create TR table, the radcool table is needed')
        call check_tr_table(iComm=iComm)
     end if
+    call test
     !  To make a unit test:
     ! 1. Uncomment the lines below as well as the declaration and the use
     ! of DoTest, test_start and test_stop
@@ -388,17 +385,44 @@ contains
     real,    intent(out) :: TeFace, PeFace, uFace, HeatFluxFace
 
     ! Tabulated analytical solution:
-    real    :: TrTable_V(LengthPAvrSi_:uLengthPAvrSi_)
-
-    real    :: ConsFace, dConsFace, ConsCell, uMinTr
+    real    :: Value_V(LengthPAvrSi_:uLengthPAvrSi_)
+    real, parameter :: cTwoSevenths = 2.0/7.0
+    real    :: ConsFace, dConsFace, ConsCell, uMinTr, Tolerance
     ! Newton-Rapson coefficients: dConsFace = -Res/dResdCons
     real    :: Res, dResdCons
     integer :: iCounter
+    integer, parameter :: iCounterMax=20
+    real, parameter    :: cTolerance = 1.0e-6
+    character(len=*), parameter:: NameSub = 'solve_tr_face'
     !--------------------------------------------------------------------------
-
-    call interpolate_lookup_table(iTableTr, TeSiMin, 0.0, TrTable_V, &
-         DoExtrapolate=.false.)
-
+    ConsCell = cTwoSevenths*HeatCondParSi*TeCell**3.5
+    Tolerance = cTolerance*ConsCell
+    ! In the first approximation, take TeFace = TeCell
+    ConsFace = ConsCell
+    TeFace = TeCell
+    iCounter = 0
+    do
+       call interpolate_lookup_table(iTableTr, Arg1In=TeFace,  &
+            iVal=uLengthPAvrSi_,                               &
+            ValIn=ChromoEvapCoef*LengthTr*uPeOverTeCell/SqrtZ, &
+            Value_V=Value_V,                                   &
+            Arg2Out=uMinTr,                                    &
+            DoExtrapolate=.false.)
+       HeatFluxFace = Value_V(HeatFluxLength_)/LengthTr
+       ! Solve equation HeatFlux = (ConsCell - ConsFace)/DeltaS
+       Res = DeltaS*HeatFluxFace + ConsFace - ConsCell
+       if(abs(Res) < Tolerance) EXIT
+       if(iCounter == iCounterMax)call CON_stop(NameSub//': No convergence')
+       ! New iteration:
+       iCounter = iCounter + 1
+       dResdCons = DeltaS*Value_V(dHeatFluxXOverU_)/LengthTr + 1
+       dConsFace = -Res/dResdCons
+       ConsFace = ConsFace + dConsFace
+       TeFace = (ConsFace*3.50/HeatCondParSi)**cTwoSevenths
+    end do
+    PeFace = Value_V(LengthPavrSi_)*SqrtZ/LengthTr
+    uFace  = uMinTr*TeFace/TeTrMin
+    write(*,*)log10(TeFace),Value_V
   end subroutine solve_tr_face
   !============================================================================
   subroutine plot_tr(NamePlotFile, nGrid, TeSi, PeSi, iTable)
@@ -522,6 +546,24 @@ contains
     deallocate(Value_VI)
 
   end subroutine plot_tr
+  !============================================================================
+  subroutine test
+    use ModConst, ONLY: Rsun
+    real :: PeFace, uFace, TeFace, HeatFluxFace
+    !--------------------------------------------------------------------------
+    call solve_tr_face(TeCell = 1.0e6, &
+         uPeOverTeCell = 0.0,          & ! cell-centered, in SI
+         LengthTr = 0.05*Rsun,         &
+         DeltaS   = 0.0025*Rsun,        & ! Distance face-to-center
+         TeFace   = TeFace,            &
+         PeFace   = PeFace,            &
+         uFace    = uFace,             &
+         HeatFluxFace = HeatFluxFace)
+    write(*,'(a,e13.6)')'TeFace = ',TeFace
+    write(*,'(a,e13.6)')'PeFace = ',PeFace
+    write(*,'(a,e13.6)')'uFace  = ',uFace
+    write(*,'(a,e13.6)')'Heat flux = ', HeatFluxFace
+  end subroutine test
   !============================================================================
 end module ModTransitionRegion
 !==============================================================================
