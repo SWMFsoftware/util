@@ -487,6 +487,23 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         except KeyError as er:
             nla =0
 
+    if telescope.find('SOLO/PHI/FDT')>-1:
+        magnetogram_type='SOLO'
+        try:
+            long0=g[0].header['CRLN_OBS']
+        except KeyError as er:
+            long0 = -1
+        try :
+            CR = g[0].header['CAR_ROT'] #works on GONG and MDI
+            CRnumber = CR
+        except KeyError as er:
+            CR = 0
+        try:
+            mapdate = g[0].header['DATE-OBS'] #works for GONG
+        except Keyerror as er:
+            mapdate = '0000-00-00T00:00:00'
+        grid_type='uniform'
+
     if telescope.find('NSO-GONG') > -1 :
         # long at left edge
         try:
@@ -766,6 +783,7 @@ if __name__ == '__main__':
        GONG Hourly updated
        MDI Synoptic
        HMI PolFil, Needs to be specified in the script
+       Solar Orbiter
     
     The code opens the .fits file and automatically recognizes the type of
     map it is, which determines whether it is on a sin(latitude) or regular
