@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # this magnetogram remapping can either be run as a script from 
 # the unix command line
@@ -12,9 +12,10 @@
 # separate functions for 1)remapping the grid, 2) reading fits file
 # June 2020: generalized for any types of maps that have multiple realizations
 # Read & remap HMI vector magnetogram (.fits)
+# May 2024: read HMI synoptic Pol filled maps (BinTableHDU),needs astropy
 
 import pyfits as fits
-#from astropy.io import fits
+from astropy.io import fits
 #import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
@@ -51,8 +52,8 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
              (out_grid != 'unspecified') ):
         print ("Unknown output grid type.  Choices are blank, 'unspecified',\
  'uniform' and 'sin(lat)' ")
-        return(-1)    
-
+        return(-1)
+    
     if(DoHMI !=0):
         magtype = 'HMI Synotic Vector Magnetogram'
         g=fits.open(inputfile)
@@ -66,7 +67,6 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
 
     if(DoHMI == 0):
         cc =  FITS_RECOGNIZE(inputfile)
-
         if cc == -1:
             print ("Input file not recognized.")
             return(-1)
@@ -94,7 +94,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     elif nlong < 1:
         print ("nlong has to be -1 or a positive integer.")
         return(-1)
-
+    
     #what kind of transformation are we doing?        
     if out_grid == 'unspecified':
         out_grid = grid_type
@@ -108,15 +108,22 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     else:
         print ("Unknown transformation type.")
         return(-1)
+    
     # read the data
     g = fits.open(inputfile)
-    if map_data == 'PolFil':
+    try:
+        naxis=g[0].header['NAXIS']
+    except KeyError as er:
+        naxis = -1
+
+    if map_data == 'HMI PolFill':
         header0 = g[1].header
         d = g[1].data
+        g[0].header=g[1].header
     else:
         header0 = g[0].header
         d = g[0].data
-        
+
     ind = np.where(np.isnan(d))
     d[ind] = 0.
 
@@ -429,7 +436,28 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     map_data = 'unknown'
     g = fits.open(inputfile)
     header0 = g[0].header
-    
+    try:
+        naxis=header0['NAXIS']
+    except KeyError as er:
+        naxis = -1
+
+    if naxis == 0:
+        header0=g[1].header
+        d = g[1].data
+        try:
+            nlo = g[1].header['NAXIS1']
+        except KeyError as er:
+            nlo = 0
+        try:
+            nla = g[1].header['NAXIS2']
+        except KeyError as er:
+            nla =0
+        g[0].header = g[1].header
+        map_data = 'HMI PolFill'
+    else:
+        header0=g[0].header
+        d = g[0].data
+
     # Print out the headers if needed
     if not IsSilent:
         g.info()
@@ -443,6 +471,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI
     except KeyError as er:
         telescope = 'unknown'
+
     try:
         inst = g[0].header['INSTRUME'] #works for MDI, HMI
     except KeyError as er:
@@ -468,22 +497,13 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     except KeyError as er:
         sft = 'unknown'
 
-    try :
-        nlo = g[0].header['NAXIS1'] #works on GONG, ADAPT, Syn HMI, MDI
-    except KeyError as er:
-        nlo = 0
-    try :
-        nla = g[0].header['NAXIS2']
-    except KeyError as er:
-        nla =0
-
-    if nlo == 0 and nla == 0 :
+    if naxis > 0:
         try :
-            nlo = g[0].header['ZNAXIS1'] 
+            nlo = g[0].header['NAXIS1'] #works on GONG, ADAPT, Syn HMI, MDI
         except KeyError as er:
             nlo = 0
         try :
-            nla = g[0].header['ZNAXIS2']
+            nla = g[0].header['NAXIS2']
         except KeyError as er:
             nla =0
 
@@ -583,7 +603,6 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             CRnumber = str(2*float(CR)-float(g[0].header['CRVAL1'])/360.0)
         except KeyError as er:
             CRnumber = '0'
-
         # long at left edge
         try:
             long0 = g[0].header['LONG0']
@@ -600,6 +619,8 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
                 magnetogram_type = 'HMI Synoptic'
                 grid_type = 'sin(lat)'
                 map_data = 'HMI'
+                if naxis ==0:
+                    map_data ='HMI PolFill'
         else:
             print ("unknown SDO magnetogram type")
             return(-1)
@@ -642,9 +663,9 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     # that FITS_RECOGNIZE() wants to read.
     # Therefore you can manually set those necessay parameters in this if
     # statement
-    if inputfile == 'hmi.synoptic_mr_polfil_720s.2261.Mr_polfil.fits':
+    if inputfile == 'hmi_test_fits':
         magnetogram_type = 'HMI Synoptic'
-        map_data ='PolFil'
+        map_data ='PolFill'
         grid_type = 'sin(lat)' 
         nlo = 3600
         nla = 1440
@@ -677,9 +698,13 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
 
     if not IsSilent:
         print()
-        print ("I think this is a",magnetogram_type,"magnetogram on a",\
-               str(nla),"X",str(nlo),grid_type,"grid.")
-        
+        if (naxis == -1):
+            print ("I think this is a",magnetogram_type,"magnetogram on a",\
+                   str(nla),"X",str(nlo),grid_type,"grid.")
+        else:
+            print ("I think this is a",magnetogram_type,"folar filled magnetogram on a",\
+                   str(nla),"X",str(nlo),grid_type,"grid.")
+            
     return( (magnetogram_type, grid_type, map_data, nlo, nla, CRnumber, CR, long0, bunit, mapdate) )
 
 def read_bats(inputfile):
@@ -782,7 +807,7 @@ if __name__ == '__main__':
        GONG Synoptic
        GONG Hourly updated
        MDI Synoptic
-       HMI PolFil, Needs to be specified in the script
+       HMI PolFill, needs astropy (uncomment in the beginning)
        Solar Orbiter
     
     The code opens the .fits file and automatically recognizes the type of
