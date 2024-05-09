@@ -14,7 +14,7 @@
 # May 2024: read HMI synoptic Pol filled maps (BinTableHDU),needs astropy
 
 import pyfits as fits
-from astropy.io import fits
+#from astropy.io import fits
 #import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy import integrate
