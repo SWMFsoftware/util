@@ -4,7 +4,6 @@
 # the unix command line
 # or imported into Python. See description of use in the README file
 #         by  Richard A. Frazin July 2014 - February 2015
-
 # April 2020: 
 # script updated to work for both reading & remapping fits magnetogram and 
 # to be used from EEGGL as well
@@ -82,7 +81,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
             long0 = cc[7]
             bunit = cc[8]
             mapdate = cc[9]
-
+    print('cc =',cc)
     if nlat == -1:
         nlat = nla
     elif nlat < 1:
@@ -116,7 +115,7 @@ def remap(inputfile, outputfile, nlat = -1, nlong = -1, out_grid = 'unspecified'
     except KeyError as er:
         naxis = -1
 
-    if map_data == 'HMI PolFill':
+    if naxis == 0:
         header0 = g[1].header
         d = g[1].data
         g[0].header=g[1].header
@@ -427,7 +426,8 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
       GONG Synoptic, sin(lat)
       GONG Hourly updated, sin(lat)
       MDI Synoptic, sin(lat)
-      HMI Synoptic and PolFilled
+      HMI Synoptic and PoleFilled
+      HMI SuperSynthia Maps (from D. Fouhey)
     This function returns all required details from the header to remap.
        """
 
@@ -453,7 +453,6 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         except KeyError as er:
             nla =0
         g[0].header = g[1].header
-        map_data = 'HMI PolFill'
     else:
         header0=g[0].header
         d = g[0].data
@@ -468,22 +467,22 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     
     # Which telescope & instrument
     try:
-        telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI
+        telescope = g[0].header['TELESCOP'] #works for MDI, GONG, HMI, SS
     except KeyError as er:
         telescope = 'unknown'
 
     try:
-        inst = g[0].header['INSTRUME'] #works for MDI, HMI
+        inst = g[0].header['INSTRUME'] #works for MDI, HMI, SS
     except KeyError as er:
         inst = 'unknown'
 
     try:
-        ctyp = g[0].header['CTYPE2'] #works for MDI, GONG, HMI
+        ctyp = g[0].header['CTYPE2'] #works for MDI, GONG, HMI, SS
     except KeyError as er:
         ctyp = 'unknown'
 
     try:
-        cunit = g[0].header['CUNIT2'] #works for MDI, GONG, HMI
+        cunit = g[0].header['CUNIT2'] #works for MDI, GONG, HMI, SS
     except KeyError as er:
        cunit = 'unknown'
 
@@ -592,7 +591,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             print ("unknown SoHO/MDI magnetogram type")
             return(-1)
 
-    if telescope.find('SDO/HMI') > -1:
+    if telescope.find('SDO/HMI') > -1 :  # not HMI Pole filled or SuperSyn
         # CR number
         try :
             CR = str(g[0].header['CAR_ROT']) #works on GONG and MDI
@@ -607,7 +606,12 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
         try:
             long0 = g[0].header['LONG0']
         except KeyError as er:
+            long0 = 0
+        try:
+            long_last = g[0].header['LON_LAST']
             long0 = 360*float(CR)-float(g[0].header['LON_LAST'])-180.0/nlo
+        except KeyError as er:
+            long0 = 0  # for SuperSynthia
         # Date
         try :
             mapdate = g[0].header['T_OBS']  #works for MDI, HMI
@@ -619,9 +623,18 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
                 magnetogram_type = 'HMI Synoptic'
                 grid_type = 'sin(lat)'
                 map_data = 'HMI'
-                if naxis ==0:
-                    map_data ='HMI PolFill'
-        else:
+
+            if naxis ==0 :
+                map_data = 'HMI PolFill'
+                magnetogram_type = 'HMI Syn PolFill'
+                grid_type = 'sin(lat)'
+                
+        if naxis == 0 and inst == 'HMI_COMBINED':
+            map_data = 'HMI SuperSynthia'
+            magnetogram_type = 'HMI SuperSynthia'
+            grid_type = 'uniform'
+            CRnumber = '0'
+        if map_data == 'unknown':
             print ("unknown SDO magnetogram type")
             return(-1)
 
@@ -666,7 +679,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
     if inputfile == 'hmi_test_fits':
         magnetogram_type = 'HMI Synoptic'
         map_data ='PolFill'
-        grid_type = 'sin(lat)' 
+        grid_type = 'sin(lat)'
         nlo = 3600
         nla = 1440
         cunit = 'Sine Latitude'
@@ -702,7 +715,7 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             print ("I think this is a",magnetogram_type,"magnetogram on a",\
                    str(nla),"X",str(nlo),grid_type,"grid.")
         else:
-            print ("I think this is a",magnetogram_type,"folar filled magnetogram on a",\
+            print ("I think this is a",magnetogram_type,"magnetogram on a",\
                    str(nla),"X",str(nlo),grid_type,"grid.")
             
     return( (magnetogram_type, grid_type, map_data, nlo, nla, CRnumber, CR, long0, bunit, mapdate) )
