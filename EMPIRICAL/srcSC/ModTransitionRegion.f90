@@ -24,8 +24,13 @@ module ModTransitionRegion
   ! A constant factor to calculate the electron heat conduction
   real, public :: HeatCondParSi
 
+  real, public :: cExchangeRateSi
+  
   ! Coulomb logarithm
   real, public  :: CoulombLog = 20.0
+  
+  real, parameter :: cTwoSevenths = 2.0/7.0
+  real, parameter :: cTolerance   = 1.0e-6
 
   ! Correspondent named indexes: meaning of the columns in the table
   integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
@@ -35,7 +40,8 @@ module ModTransitionRegion
   ! Control parameter: minimum temerature in the TR table
   real, public :: TeSiMin = 5.0e4
   real, public :: SqrtZ   = 1.0
-  public :: init_tr, check_tr_table, integrate_emission, & ! plot_tr, &
+  real :: Z = 1.0
+  public :: init_tr, check_tr_table, integrate_emission, plot_tr, &
        read_tr_param, solve_tr_face, test
 
   ! Table numbers needed to use lookup table
@@ -70,16 +76,19 @@ module ModTransitionRegion
   real, parameter :: FluxTouPe = cIonizPotentialH*ceV/(cBoltzmann*TeTrMin) + 5
   ! Needed for initialization:
   logical, private :: DoInit = .true.
-
+  interface advance_heat_conduction
+     module procedure advance_heat_conduction_ta
+     module procedure advance_heat_conduction_ss
+  end interface advance_heat_conduction
 contains
   !============================================================================
-  subroutine init_tr(Z, TeChromoSi, iComm)
-    use ModConst,       ONLY: kappa_0_e
+  subroutine init_tr(zIn, TeChromoSi, iComm)
+    use ModConst,       ONLY: kappa_0_e, te_ti_exchange_rate
     use ModLookupTable, ONLY: i_lookup_table
     !    use BATL_lib,       ONLY: test_start, test_stop, iProc
     ! INPUTS
     ! Average ion charge
-    real, intent(in) :: Z
+    real, intent(in) :: zIn
     ! Temperature on top of chromosphere
     real, intent(in) :: TeChromoSi
     integer, optional, intent(in) :: iComm
@@ -90,12 +99,14 @@ contains
     if(.not.DoInit)RETURN
     DoInit = .false.
     ! Set model parameters
+    Z = zIn
     SqrtZ = sqrt(Z)
     TeSiMin = TeChromoSi
     DeltaLogTe = log(TeTrMax/TeTrMin)/(nPointTe - 1)
     ! electron heat conduct coefficient for single charged ions
     ! = 9.2e-12 W/(m*K^(7/2))
-    HeatCondParSi = kappa_0_e(CoulombLog)
+    HeatCondParSi   = kappa_0_e(CoulombLog)
+    cExchangeRateSi = te_ti_exchange_rate(CoulombLog)
     iTableTr = i_lookup_table('TR')
     if(iTableTr<=0)then
       iTableRadCool = i_lookup_table('radcool')
@@ -103,7 +114,8 @@ contains
             call CON_stop('To create TR table, the radcool table is needed')
        call check_tr_table(iComm=iComm)
     end if
-    call test
+    ! call test
+    ! call CON_stop('Check test')
     !  To make a unit test:
     ! 1. Uncomment the lines below as well as the declaration and the use
     ! of DoTest, test_start and test_stop
@@ -315,7 +327,7 @@ contains
     ! Gen table values:
     real    :: Value_VI(nVar, nTrGrid +1)
     real    :: DeltaTe      ! Mesh of a temperature
-    real    :: LengthPavrSi_I(nTrGrid + 1), TeSi_I(nTrGrid + 1)
+    real    :: LengthPavrSi_I(nTrGrid + 1), Te_I(nTrGrid + 1)
     real    :: DeltaLengthPavrSi_I(nTrGrid + 1)
     integer ::  i, iVar ! Loop variables
     ! Electron density in particles per cm3:
@@ -323,19 +335,19 @@ contains
     !--------------------------------------------------------------------------
     PAvrSi = PeSi/SqrtZ
     DeltaTe = (TeSi - TeSiMin)/nTrGrid
-    TeSi_I(1) = TeSiMin
+    Te_I(1) = TeSiMin
     call interpolate_lookup_table(iTableTr, TeSiMin, 0.0, TrTable_V, &
          DoExtrapolate=.false.)
     ! First value is now the product of the thread length in meters times
     ! a geometric mean pressure, so that
     LengthPavrSi_I(1) = TrTable_V(LengthPAvrSi_)
     do i = 1, nTrGrid
-       TeSi_I(i +1) = TeSi_I(i) + DeltaTe
-       call interpolate_lookup_table(iTableTr, TeSi_I(i + 1), 0.0, &
+       Te_I(i +1) = Te_I(i) + DeltaTe
+       call interpolate_lookup_table(iTableTr, Te_I(i + 1), 0.0, &
             TrTable_V, DoExtrapolate=.false.)
        LengthPavrSi_I(i + 1) = TrTable_V(LengthPAvrSi_)
        DeltaLengthPavrSi_I(i) = LengthPavrSi_I(i + 1) - LengthPavrSi_I(i)
-       TeAvrSi_I(i) = (TeSi_I(i + 1) + TeSi_I(i))*0.50
+       TeAvrSi_I(i) = (Te_I(i + 1) + Te_I(i))*0.50
     end do
 
     TeAvrSi_I(nTrGrid + 1) = TeSi
@@ -366,7 +378,8 @@ contains
   !============================================================================
   subroutine solve_tr_face(TeCell, uPeOverTeCell, & ! cell-centered, in SI
        LengthTr, DeltaS, & ! Distances photosphere-to-face, face-to-center
-       TeFace, PeFace, uFace, HeatFluxFace) ! SI, face centered
+       TeFaceOut, HeatFluxOut, DFluxOverDConsOut, &
+       PeFaceOut, uFaceOut) ! SI, face centered
 
     ! For given values of Te and u*Pavr/Te at the cell center, all inputs
     ! are in SI and expressed in K and W/(m.K). The distance from the cell
@@ -382,17 +395,17 @@ contains
     real,    intent(in)  :: LengthTr, DeltaS
     ! Parameters at the face, connected by the analytical TR solution to the
     ! photosphere:
-    real,    intent(out) :: TeFace, PeFace, uFace, HeatFluxFace
+    real, optional, intent(out) :: TeFaceOut
+    real, optional, intent(out) :: HeatFluxOut, dFluxOverdConsOut
+    real, optional, intent(out) :: PeFaceOut, uFaceOut
 
     ! Tabulated analytical solution:
-    real    :: Value_V(LengthPAvrSi_:uLengthPAvrSi_)
-    real, parameter :: cTwoSevenths = 2.0/7.0
+    real    :: Value_V(LengthPAvrSi_:uLengthPAvrSi_), TeFace, HeatFluxFace
     real    :: ConsFace, dConsFace, ConsCell, uMinTr, Tolerance
     ! Newton-Rapson coefficients: dConsFace = -Res/dResdCons
     real    :: Res, dResdCons
     integer :: iCounter
     integer, parameter :: iCounterMax=20
-    real, parameter    :: cTolerance = 1.0e-6
     character(len=*), parameter:: NameSub = 'solve_tr_face'
     !--------------------------------------------------------------------------
     ConsCell = cTwoSevenths*HeatCondParSi*TeCell**3.5
@@ -420,10 +433,254 @@ contains
        ConsFace = ConsFace + dConsFace
        TeFace = (ConsFace*3.50/HeatCondParSi)**cTwoSevenths
     end do
-    PeFace = Value_V(LengthPavrSi_)*SqrtZ/LengthTr
-    uFace  = uMinTr*TeFace/TeTrMin
-    write(*,*)log10(TeFace),Value_V
+    if(present(TeFaceOut))TeFaceOut = TeFace
+    if(present(HeatFluxOut))HeatFluxOut = HeatFluxFace
+    if(present(dFluxOverdConsOut))then
+       dFluxOverdConsOut = Value_V(dHeatFluxXOverU_)/LengthTr
+       dFluxOverdConsOut = dFluxOverdConsOut/(1 + DeltaS*dFluxOverdConsOut)
+    end if
+    if(present(PeFaceOut))PeFaceOut = Value_V(LengthPavrSi_)*SqrtZ/LengthTr
+    if(present(uFaceOut)) uFaceOut  = uMinTr*TeFace/TeTrMin
   end subroutine solve_tr_face
+  !============================================================================
+  subroutine advance_heat_conduction_ta(nPoint, Dt, Te_I, Ti_I, Ni_I, Ds_I, &
+       U1, B_I, BFaceIn_I, PeFaceOut)
+    integer, intent(in)    :: nPoint
+    real,    intent(in)    :: Dt
+    real,    intent(inout) :: Te_I(nPoint+1), Ti_I(nPoint)
+    real,    intent(in)    :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint)
+    real, optional, intent(in) :: BFaceIn_I(nPoint+1)
+    real, optional, intent(out) :: PeFaceOut
+    ! MISC:
+    real :: Dt_I(nPoint)
+    !--------------------------------------------------------------------------
+    Dt_I = Dt
+    call advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I, &
+       U1, B_I, BFaceIn_I, PeFaceOut)
+  end subroutine advance_heat_conduction_ta
+  !============================================================================
+  subroutine advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I,&
+       U1, B_I, BFaceIn_I, PeFaceOut)
+    use ModConst, ONLY: cBoltzmann
+    use ModLookupTable, ONLY: interpolate_lookup_table
+    integer, intent(in)     :: nPoint
+    real,    intent(in)     :: Dt_I(nPoint)
+    real,    intent(inout)  :: Te_I(nPoint+1), Ti_I(nPoint)
+    real,    intent(in)     :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint)
+    real, optional, intent(in) :: BFaceIn_I(nPoint+1)
+    real, optional, intent(out) :: PeFaceOut
+
+    real :: Res_VI(2,nPoint), Weight_VI(2,nPoint), bFaceInv_I(1:nPoint+1),  &
+         Lower_VVI(2,2,nPoint), Main_VVI(2,2,nPoint), Upper_VVI(2,2,nPoint),&
+         SpecHeat_I(nPoint), ExchangeRate_I(nPoint), Cons_I(nPoint+1),      &
+         TeStart_I(nPoint), TiStart_I(nPoint), DeltaEnergy_I(nPoint),       &
+         DeltaIonEnergy_I(nPoint), dCons_VI(2,nPoint), DtInv_I(nPoint),     &
+         HeatFlux2Tr, dFluxOverdCons, Value_V(LengthPAvrSi_:uLengthPAvrSi_),&
+         Cooling, PeFace
+    real, parameter :: QuasiCfl = 0.85
+    integer, parameter :: Cons_ = 1, Ti_=2, nIterMax = 40
+    ! Misc:
+    ! Loop variable
+    integer :: iPoint, iIter
+    !--------------------------------------------------------------------------
+    if(present(BFaceIn_I))then
+       BFaceInv_I = 1/BFaceIn_I
+    else
+       BFaceInv_I(1) = 1/B_I(1); BFaceInv_I(nPoint+1) = 1/B_I(nPoint)
+       do iPoint = 2, nPoint
+          BFaceInv_I(iPoint) = 0.50/B_I(iPoint-1) + 0.50/B_I(iPoint)
+       end do
+    end if
+    ! Initialization
+    TeStart_I(1:nPoint) = Te_I(1:nPoint)
+    TiStart_I(1:nPoint) = Ti_I(1:nPoint)
+    ! dCons = kappa(Te)dTe=> Cons = 2/7 kappa*Te
+    Cons_I(1:nPoint+1) = cTwoSevenths*HeatCondParSi*Te_I(1:nPoint+1)**3.5
+  
+    SpecHeat_I     = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)/B_I
+    do iIter = 1,nIterMax
+       Main_VVI = 0.0; Upper_VVI = 0.0; Lower_VVI = 0.0
+       ! Contribution from heat conduction fluxes
+       ! Flux linearizations over small dCons
+       Upper_VVI(Cons_,Cons_,nPoint) = &
+            -BFaceInv_I(nPoint+1)/(0.50*Ds_I(nPoint) + Ds_I(nPoint+1))
+       Upper_VVI(Cons_,Cons_,1:nPoint-1) = &
+            -BFaceInv_I(2:nPoint)*2/(Ds_I(1:nPoint-1) + Ds_I(2:nPoint))
+       Lower_VVI(Cons_,Cons_,2:nPoint) = Upper_VVI(Cons_,Cons_,1:nPoint-1)
+       Main_VVI(Cons_,Cons_,2:nPoint) = &
+            - Upper_VVI(Cons_,Cons_,2:nPoint) &
+            - Lower_VVI(Cons_,Cons_,2:nPoint)
+       ! Right heat fluxes
+       Res_VI(Cons_,1:nPoint) = &
+            (Cons_I(1:nPoint) - Cons_I(2:nPoint+1)) &
+            *Upper_VVI(Cons_,Cons_,1:nPoint)
+       ! Add other left heat fluxes
+       Res_VI(Cons_,2:nPoint) = Res_VI(Cons_,2:nPoint) + &
+           (Cons_I(2:nPoint) - Cons_I(1:nPoint-1))*&
+           Lower_VVI(Cons_,Cons_,2:nPoint)
+       ! write(*,*)'Res_VI(Cons_,nPoint)=',Res_VI(Cons_,nPoint)
+       call solve_tr_face(TeCell =        Te_I(1), &
+            uPeOverTeCell = u1*cBoltzmann*Ni_I(1), & 
+            LengthTr      = Ds_I(0),               &
+            DeltaS        = 0.50*Ds_I(1),          &
+            HeatFluxOut   = HeatFlux2Tr,           &
+            DFluxOverDConsOut = dFluxOverdCons,    &
+            PeFaceOut = PeFace)
+       ! Add left heat flux to the TR
+       Res_VI(Cons_,1) = Res_VI(Cons_,1) - HeatFlux2Tr*BFaceInv_I(1)
+       ! write(*,*)'Res_VI(Cons_,1)=',Res_VI(Cons_,1)
+       ! Linearize left heat flux to the TR
+       Main_VVI(Cons_,Cons_,1) = &
+            - Upper_VVI(Cons_,Cons_,1) + dFluxOverdCons*BFaceInv_I(1)
+       ! Radiative cooling, limit timestep
+       do iPoint = 1, nPoint
+          call interpolate_lookup_table(iTableTR, Te_I(iPoint), 0.0, &
+               Value_V, &
+               DoExtrapolate=.false.)
+          Cooling =Ds_I(iPoint)/B_I(iPoint)*Value_V(LambdaSI_)*Z*&
+               (cBoltzmann*Ni_I(iPoint))**2
+          Res_VI(Cons_,iPoint) = Res_VI(Cons_,iPoint) - Cooling
+          ! linearized -dCooling/dCons
+          Main_VVI(Cons_,Cons_,iPoint) = Main_VVI(Cons_,Cons_,iPoint) +&
+               Value_V(DLogLambdaOverDLogT_)*Cooling/(3.5*Cons_I(iPoint))
+          ! Limit time step:
+          if(iIter==1)DtInv_I(iPoint) = max(1/Dt_I(iPoint),   &
+               (3.50 + max(0.0, -Value_V(DLogLambdaOverDLogT_)))*Cooling/&
+               (QuasiCfl*Z*Te_I(iPoint)*SpecHeat_I(iPoint)))
+       end do
+       ! Change in the internal energy (to correct the energy source
+       ! for the time-accurate mode):
+       DeltaEnergy_I(1:nPoint) = Z*SpecHeat_I(1:nPoint)*DtInv_I* &
+            (Te_I(1:nPoint) - TeStart_I(1:nPoint))
+       DeltaIonEnergy_I(1:nPoint) = SpecHeat_I(1:nPoint)*DtInv_I* &
+            (Ti_I(1:nPoint) - TiStart_I(1:nPoint))
+       ! Energy evolution:
+       Main_VVI(Cons_,Cons_,1:nPoint) = Main_VVI(Cons_,Cons_,1:nPoint) + &
+              DtInv_I*Z*SpecHeat_I(1:nPoint)*Te_I(1:nPoint)/   &
+              (3.5*Cons_I(1:nPoint))
+       Main_VVI(Ti_,Ti_,1:nPoint) = Main_VVI(Ti_,Ti_,1:nPoint) + &
+            DtInv_I*SpecHeat_I(1:nPoint)
+       Res_VI(Cons_,1:nPoint) = Res_VI(Cons_,1:nPoint) - &
+            DeltaEnergy_I(1:nPoint)
+       Res_VI(Ti_,1:nPoint) =  - DeltaIonEnergy_I(1:nPoint)
+       ExchangeRate_I = cExchangeRateSi*Z**2*Ni_I/Te_I(1:nPoint)**1.5
+       ! Point implicit limiter:
+       ExchangeRate_I = Z*SpecHeat_I*ExchangeRate_I/&
+            (1 + 2*ExchangeRate_I/DtInv_I)
+       Res_VI(Cons_,1:nPoint) = Res_VI(Cons_,1:nPoint) + &
+            ExchangeRate_I(1:nPoint)*&
+            (Ti_I(1:nPoint) - Te_I(1:nPoint))
+       Main_VVI(Cons_,Ti_,1:nPoint) = Main_VVI(Cons_,Ti_,1:nPoint) -&
+            ExchangeRate_I(1:nPoint)
+       Main_VVI(Cons_,Cons_,1:nPoint) = Main_VVI(Cons_,Cons_,1:nPoint) +&
+            ExchangeRate_I(1:nPoint)*Te_I(1:nPoint)/&
+            (3.5*Cons_I(1:nPoint))
+       Res_VI(Ti_,1:nPoint) = Res_VI(Ti_,1:nPoint) &
+            + ExchangeRate_I(1:nPoint)*&
+            (Te_I(1:nPoint) - Ti_I(1:nPoint))
+       Main_VVI(Ti_,Ti_,1:nPoint) = Main_VVI(Ti_,Ti_,1:nPoint) +&
+            ExchangeRate_I(1:nPoint)
+       Main_VVI(Ti_,Cons_,1:nPoint) = Main_VVI(Ti_,Cons_,1:nPoint) -&
+            ExchangeRate_I(1:nPoint)*Te_I(1:nPoint)/&
+            (3.5*Cons_I(1:nPoint))
+       ! do iPoint = 1, nPoint
+         ! write(*,*)'iPoint Res_V(:,iPoint)=',iPoint, Res_VI(:,iPoint)
+       ! end do
+       call tridiag_block22(n=nPoint,  &
+            Lower_VVI=Lower_VVI(:,:,1:nPoint),&
+            Main_VVI=Main_VVI(:,:,1:nPoint),&
+            Upper_VVI=Upper_VVI(:,:,1:nPoint),&
+            Res_VI=Res_VI(:,1:nPoint),  &
+            Weight_VI=DCons_VI(:,1:nPoint))
+       !do iPoint = 1, nPoint
+       !   write(*,*)'iPoint dcons_V(:,iPoint)=',iPoint, dCons_VI(:,iPoint)
+       ! end do
+       Cons_I(1:nPoint) = Cons_I(1:nPoint) + DCons_VI(Cons_,1:nPoint)
+       if(any(Cons_I(1:nPoint)<=0))then
+          do iPoint = 1, nPoint
+             write(*,*)'iPoint Cons_VI(:,iPoint)=',iPoint,Cons_I(iPoint),&
+                  Ti_I(iPoint) + DCons_VI(Ti_,iPoint)
+          end do
+       end if
+       ! Recover temperature
+       Te_I(1:nPoint) = (3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths
+       Ti_I(1:nPoint) = Ti_I(1:nPoint) + DCons_VI(Ti_,1:nPoint)
+       if(all(abs(DCons_VI(Cons_,1:nPoint))<cTolerance*Cons_I(1:nPoint)))EXIT
+       write(*,*)'iIter=',iIter
+    end do
+    if(present(PeFaceOut))PeFaceOut = PeFace
+  end subroutine advance_heat_conduction_ss
+  !============================================================================
+  subroutine tridiag_block22(n,Lower_VVI,Main_VVI,Upper_VVI,Res_VI,Weight_VI)
+    ! This routine solves three-diagonal system of equations:
+    !
+    !  ||m_1 u_1  0....        || ||w_1|| ||r_1||
+    !  ||l_2 m_2 u_2...        || ||w_2|| ||r_2||
+    !  || 0  l_3 m_3 u_3       ||.||w_3||=||r_3||
+    !  ||...                   || ||...|| ||...||
+    !  ||.............0 l_n m_n|| ||w_n|| ||r_n||
+    !
+    ! Prototype: Numerical Recipes, Chapter 2.6, p.40.
+    ! Here each of the components w_i and r_i are 3-component vectors and
+    ! m_i, l_i, u_i are 2*2 matrices                                       !
+
+    integer, intent(in):: n
+    real, intent(in):: &
+         Lower_VVI(2,2,n), Main_VVI(2,2,n), Upper_VVI(2,2,n),Res_VI(2,n)
+    real, intent(out):: &
+         Weight_VI(2,n)
+
+    integer:: j
+    real   :: TildeM_VV(2,2), TildeMInv_VV(2,2), TildeMInvDotU_VVI(2,2,2:n)
+
+    ! If tilde(M)+L.Inverted(\tilde(M))\dot.U = M, then the equation
+    !      (M+L+U)W = R
+    ! may be equivalently written as
+    ! (tilde(M) +L).(I + Inverted(\tilde(M)).U).W=R
+
+    character(len=*), parameter:: NameSub = 'tridiag_block22'
+    !--------------------------------------------------------------------------
+    TildeM_VV = Main_VVI(:,:,1)
+    TildeMInv_VV = inverse_matrix(TildeM_VV)
+    ! First 2-vector element of the vector, Inverted(tilde(M) + L).R
+    Weight_VI(:,1) = matmul(TildeMInv_VV,Res_VI(:,1))
+    do j=2,n
+       ! Next 3*3 blok element of the matrix, Inverted(Tilde(M)).U
+       TildeMInvDotU_VVI(:,:,j) = matmul(TildeMInv_VV,Upper_VVI(:,:,j-1))
+       ! Next 3*3 block element of matrix tilde(M), obeying the eq.
+       ! tilde(M)+L.Inverted(\tilde(M))\dot.U = M
+       TildeM_VV = Main_VVI(:,:,j) - &
+            matmul(Lower_VVI(:,:,j), TildeMInvDotU_VVI(:,:,j))
+       ! Next element of inverted(Tilde(M))
+       TildeMInv_VV = inverse_matrix(TildeM_VV)
+       ! Next 2-vector element of the vector, Inverted(tilde(M) + L).R
+       ! satisfying the eq. (tilde(M) + L).W = R
+       Weight_VI(:,j) = matmul(TildeMInv_VV,Res_VI(:,j) - &
+            matmul(Lower_VVI(:,:,j),Weight_VI(:,j-1)))
+    end do
+    do j=n-1,1,-1
+       ! Finally we solve equation
+       ! (I + Inverted(Tilde(M)).U).W =  Inverted(tilde(M) + L).R
+       Weight_VI(:,j) = Weight_VI(:,j) &
+            - matmul(TildeMInvDotU_VVI(:,:,j+1),Weight_VI(:,j+1))
+    end do
+  contains
+    !==========================================================================
+    function inverse_matrix(A_II)
+      real :: inverse_matrix(2,2)
+      real, intent(in) :: A_II(2,2)
+      real :: Determinant
+      !------------------------------------------------------------------------
+      Determinant = A_II(1,1)*A_II(2,2) - A_II(1,2)*A_II(2,1)
+      if (Determinant == 0.0) call CON_stop(NameSub//' failed')
+      inverse_matrix(1,1) =  A_II(2,2)
+      inverse_matrix(2,2) =  A_II(1,1)
+      inverse_matrix(1,2) = -A_II(1,2)
+      inverse_matrix(2,1) = -A_II(2,1)
+      inverse_matrix = inverse_matrix/Determinant
+    end function inverse_matrix
+    !==========================================================================
+  end subroutine tridiag_block22
   !============================================================================
   subroutine plot_tr(NamePlotFile, nGrid, TeSi, PeSi, iTable)
 
@@ -548,21 +805,39 @@ contains
   end subroutine plot_tr
   !============================================================================
   subroutine test
-    use ModConst, ONLY: Rsun
+    use ModConst, ONLY: Rsun, cBoltzmann
     real :: PeFace, uFace, TeFace, HeatFluxFace
+    real :: Te_I(100) = 1.0e5  ! K
+    real :: Ni_I(99) = 3.0e14 ! m-3
+    real :: Ti_I(99) = 1.0e5  ! K
+    real :: U1 = 0.0
+    real :: Ds_I(0:100) = 1.0e-3*Rsun
+    real :: B_I(99) = 5.0e-4      ! T
+    integer :: iPoint, iTime
     !--------------------------------------------------------------------------
     call solve_tr_face(TeCell = 1.0e6, &
          uPeOverTeCell = 0.0,          & ! cell-centered, in SI
          LengthTr = 0.05*Rsun,         &
          DeltaS   = 0.0025*Rsun,        & ! Distance face-to-center
-         TeFace   = TeFace,            &
-         PeFace   = PeFace,            &
-         uFace    = uFace,             &
-         HeatFluxFace = HeatFluxFace)
-    write(*,'(a,e13.6)')'TeFace = ',TeFace
-    write(*,'(a,e13.6)')'PeFace = ',PeFace
-    write(*,'(a,e13.6)')'uFace  = ',uFace
-    write(*,'(a,e13.6)')'Heat flux = ', HeatFluxFace
+         TeFaceOut   = TeFace,            &
+         PeFaceOut   = PeFace,            &
+         uFaceOut    = uFace,             &
+         HeatFluxOut = HeatFluxFace)
+    write(*,'(a,es13.6)')'TeFace = ',TeFace
+    write(*,'(a,es13.6)')'PeFace = ',PeFace
+    write(*,'(a,es13.6)')'uFace  = ',uFace
+    write(*,'(a,es13.6)')'Heat flux = ', HeatFluxFace
+    Te_I(100) = 1.0e6
+    do iTime = 1,36
+       call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I, Ni_I, Ds_I, &
+            U1, B_I, PeFaceOut = PeFace)
+       Ni_I = PeFace/(cBoltzmann*Te_I(1:99))
+    end do
+    write(*,'(a,es13.6)')'PeFace = ',PeFace,' PeFace*Length=', PeFace*0.1*Rsun
+    write(*,'(a)')'iPoint   Te     Ti    Ni'
+    do iPoint = 1,99
+       write(*,'(i2,3es13.6)')iPoint, Te_I(iPoint), Ti_I(iPoint), Ni_I(iPoint)
+    end do
   end subroutine test
   !============================================================================
 end module ModTransitionRegion
