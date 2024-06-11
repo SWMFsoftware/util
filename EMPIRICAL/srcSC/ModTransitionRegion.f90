@@ -606,7 +606,7 @@ contains
        Te_I(1:nPoint) = (3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths
        Ti_I(1:nPoint) = Ti_I(1:nPoint) + DCons_VI(Ti_,1:nPoint)
        if(all(abs(DCons_VI(Cons_,1:nPoint))<cTolerance*Cons_I(1:nPoint)))EXIT
-       write(*,*)'iIter=',iIter
+       ! write(*,*)'iIter=',iIter
     end do
     if(present(PeFaceOut))PeFaceOut = PeFace
   end subroutine advance_heat_conduction_ss
@@ -827,7 +827,7 @@ contains
     write(*,'(a,es13.6)')'PeFace = ',PeFace
     write(*,'(a,es13.6)')'uFace  = ',uFace
     write(*,'(a,es13.6)')'Heat flux = ', HeatFluxFace
-    Te_I(100) = 1.0e6
+    Te_I(100) = 2.0e6
     do iTime = 1,36
        call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I, Ni_I, Ds_I, &
             U1, B_I, PeFaceOut = PeFace)
