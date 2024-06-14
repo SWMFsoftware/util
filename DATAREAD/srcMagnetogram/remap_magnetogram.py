@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # this magnetogram remapping can either be run as a script from 
 # the unix command line
