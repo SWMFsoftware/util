@@ -8,6 +8,11 @@ module ModTransitionRegion
   implicit none
   SAVE
   PRIVATE
+  ! The Poynting flux to magnetic field ratio (one of the input parameters
+  ! in SI unins)
+  real, public :: PoyntingFluxPerBSi = 1.0e6 ! W/(m^2 T)
+  real, public :: LperpTimesSqrtBSi = 7.5e4  ! m T^(1/2)
+  
   ! Normalization as used in the radcool table
   real, parameter :: RadNorm = 1.0E+22
 
