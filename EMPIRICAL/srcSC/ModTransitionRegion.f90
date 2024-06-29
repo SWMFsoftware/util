@@ -164,6 +164,9 @@ contains
        else
           ChromoEvapCoef = 0.0
        end if
+    case("#TURBULENCE")
+       call read_var("PoyntingFluxPerBSi",PoyntingFluxPerBSi)
+       call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
     case default
        call CON_stop(NameSub//": unknown command="//trim(NameCommand))
     end select
@@ -449,31 +452,31 @@ contains
   end subroutine solve_tr_face
   !============================================================================
   subroutine advance_heat_conduction_ta(nPoint, Dt, Te_I, Ti_I, Ni_I, Ds_I, &
-       U1, B_I, BFaceIn_I, PeFaceOut)
+       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut)
     integer, intent(in)    :: nPoint
     real,    intent(in)    :: Dt
     real,    intent(inout) :: Te_I(nPoint+1), Ti_I(nPoint)
-    real,    intent(in)    :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint)
-    real, optional, intent(in) :: BFaceIn_I(nPoint+1)
-    real, optional, intent(out) :: PeFaceOut
+    real,    intent(in)    :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint+1)
+    real, optional, intent(in) :: BCellIn_I(nPoint)
+    real, optional, intent(out) :: PeFaceOut, TeFaceOut, UfaceOut
     ! MISC:
     real :: Dt_I(nPoint)
     !--------------------------------------------------------------------------
     Dt_I = Dt
     call advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I, &
-       U1, B_I, BFaceIn_I, PeFaceOut)
+       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut)
   end subroutine advance_heat_conduction_ta
   !============================================================================
   subroutine advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I,&
-       U1, B_I, BFaceIn_I, PeFaceOut)
+       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut)
     use ModConst, ONLY: cBoltzmann
     use ModLookupTable, ONLY: interpolate_lookup_table
-    integer, intent(in)     :: nPoint
-    real,    intent(in)     :: Dt_I(nPoint)
-    real,    intent(inout)  :: Te_I(nPoint+1), Ti_I(nPoint)
-    real,    intent(in)     :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint)
-    real, optional, intent(in) :: BFaceIn_I(nPoint+1)
-    real, optional, intent(out) :: PeFaceOut
+    integer, intent(in)    :: nPoint
+    real,    intent(in)    :: Dt_I(nPoint)
+    real,    intent(inout) :: Te_I(nPoint+1), Ti_I(nPoint)
+    real,    intent(in)    :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint+1)
+    real, optional, intent(in) :: BCellIn_I(nPoint)
+    real, optional, intent(out) :: PeFaceOut, TeFaceOut, UfaceOut
 
     real :: Res_VI(2,nPoint), Weight_VI(2,nPoint), bFaceInv_I(1:nPoint+1),  &
          Lower_VVI(2,2,nPoint), Main_VVI(2,2,nPoint), Upper_VVI(2,2,nPoint),&
@@ -481,20 +484,18 @@ contains
          TeStart_I(nPoint), TiStart_I(nPoint), DeltaEnergy_I(nPoint),       &
          DeltaIonEnergy_I(nPoint), dCons_VI(2,nPoint), DtInv_I(nPoint),     &
          HeatFlux2Tr, dFluxOverdCons, Value_V(LengthPAvrSi_:uLengthPAvrSi_),&
-         Cooling, PeFace
+         Cooling, PeFace, TeFace, uFace, BcellInv_I(nPoint)
     real, parameter :: QuasiCfl = 0.85
     integer, parameter :: Cons_ = 1, Ti_=2, nIterMax = 40
     ! Misc:
     ! Loop variable
     integer :: iPoint, iIter
     !--------------------------------------------------------------------------
-    if(present(BFaceIn_I))then
-       BFaceInv_I = 1/BFaceIn_I
+    BfaceInv_I = 1/B_I
+    if(present(BcellIn_I))then
+       BcellInv_I = 1/BcellIn_I
     else
-       BFaceInv_I(1) = 1/B_I(1); BFaceInv_I(nPoint+1) = 1/B_I(nPoint)
-       do iPoint = 2, nPoint
-          BFaceInv_I(iPoint) = 0.50/B_I(iPoint-1) + 0.50/B_I(iPoint)
-       end do
+       BcellInv_I = 0.50*(BFaceInv_I(1:nPoint) + BFaceInv_I(2:nPoint+1)) 
     end if
     ! Initialization
     TeStart_I(1:nPoint) = Te_I(1:nPoint)
@@ -502,7 +503,7 @@ contains
     ! dCons = kappa(Te)dTe=> Cons = 2/7 kappa*Te
     Cons_I(1:nPoint+1) = cTwoSevenths*HeatCondParSi*Te_I(1:nPoint+1)**3.5
   
-    SpecHeat_I     = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)/B_I
+    SpecHeat_I     = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)*BcellInv_I
     do iIter = 1,nIterMax
        Main_VVI = 0.0; Upper_VVI = 0.0; Lower_VVI = 0.0
        ! Contribution from heat conduction fluxes
@@ -523,17 +524,17 @@ contains
        Res_VI(Cons_,2:nPoint) = Res_VI(Cons_,2:nPoint) + &
            (Cons_I(2:nPoint) - Cons_I(1:nPoint-1))*&
            Lower_VVI(Cons_,Cons_,2:nPoint)
-       ! write(*,*)'Res_VI(Cons_,nPoint)=',Res_VI(Cons_,nPoint)
        call solve_tr_face(TeCell =        Te_I(1), &
             uPeOverTeCell = u1*cBoltzmann*Ni_I(1), & 
             LengthTr      = Ds_I(0),               &
             DeltaS        = 0.50*Ds_I(1),          &
             HeatFluxOut   = HeatFlux2Tr,           &
             DFluxOverDConsOut = dFluxOverdCons,    &
-            PeFaceOut = PeFace)
+            PeFaceOut = PeFace,                    &
+            TeFaceOut = TeFace,                    &
+            uFaceOut  = uFace)
        ! Add left heat flux to the TR
        Res_VI(Cons_,1) = Res_VI(Cons_,1) - HeatFlux2Tr*BFaceInv_I(1)
-       ! write(*,*)'Res_VI(Cons_,1)=',Res_VI(Cons_,1)
        ! Linearize left heat flux to the TR
        Main_VVI(Cons_,Cons_,1) = &
             - Upper_VVI(Cons_,Cons_,1) + dFluxOverdCons*BFaceInv_I(1)
@@ -542,7 +543,7 @@ contains
           call interpolate_lookup_table(iTableTR, Te_I(iPoint), 0.0, &
                Value_V, &
                DoExtrapolate=.false.)
-          Cooling =Ds_I(iPoint)/B_I(iPoint)*Value_V(LambdaSI_)*Z*&
+          Cooling =Ds_I(iPoint)*BcellInv_I(iPoint)*Value_V(LambdaSI_)*Z*&
                (cBoltzmann*Ni_I(iPoint))**2
           Res_VI(Cons_,iPoint) = Res_VI(Cons_,iPoint) - Cooling
           ! linearized -dCooling/dCons
@@ -588,18 +589,12 @@ contains
        Main_VVI(Ti_,Cons_,1:nPoint) = Main_VVI(Ti_,Cons_,1:nPoint) -&
             ExchangeRate_I(1:nPoint)*Te_I(1:nPoint)/&
             (3.5*Cons_I(1:nPoint))
-       ! do iPoint = 1, nPoint
-         ! write(*,*)'iPoint Res_V(:,iPoint)=',iPoint, Res_VI(:,iPoint)
-       ! end do
        call tridiag_block22(n=nPoint,  &
             Lower_VVI=Lower_VVI(:,:,1:nPoint),&
             Main_VVI=Main_VVI(:,:,1:nPoint),&
             Upper_VVI=Upper_VVI(:,:,1:nPoint),&
             Res_VI=Res_VI(:,1:nPoint),  &
             Weight_VI=DCons_VI(:,1:nPoint))
-       !do iPoint = 1, nPoint
-       !   write(*,*)'iPoint dcons_V(:,iPoint)=',iPoint, dCons_VI(:,iPoint)
-       ! end do
        Cons_I(1:nPoint) = Cons_I(1:nPoint) + DCons_VI(Cons_,1:nPoint)
        if(any(Cons_I(1:nPoint)<=0))then
           do iPoint = 1, nPoint
@@ -611,9 +606,10 @@ contains
        Te_I(1:nPoint) = (3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths
        Ti_I(1:nPoint) = Ti_I(1:nPoint) + DCons_VI(Ti_,1:nPoint)
        if(all(abs(DCons_VI(Cons_,1:nPoint))<cTolerance*Cons_I(1:nPoint)))EXIT
-       ! write(*,*)'iIter=',iIter
     end do
     if(present(PeFaceOut))PeFaceOut = PeFace
+    if(present(TeFaceOut))TeFaceOut = TeFace
+    if(present(UfaceOut))UfaceOut = uFace
   end subroutine advance_heat_conduction_ss
   !============================================================================
   subroutine tridiag_block22(n,Lower_VVI,Main_VVI,Upper_VVI,Res_VI,Weight_VI)
@@ -817,7 +813,7 @@ contains
     real :: Ti_I(99) = 1.0e5  ! K
     real :: U1 = 0.0
     real :: Ds_I(0:100) = 1.0e-3*Rsun
-    real :: B_I(99) = 5.0e-4      ! T
+    real :: B_I(100) = 5.0e-4      ! T
     integer :: iPoint, iTime
     !--------------------------------------------------------------------------
     call solve_tr_face(TeCell = 1.0e6, &
