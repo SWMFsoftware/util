@@ -85,6 +85,7 @@ module ModTransitionRegion
      module procedure advance_heat_conduction_ta
      module procedure advance_heat_conduction_ss
   end interface advance_heat_conduction
+  public :: advance_heat_conduction
 contains
   !============================================================================
   subroutine init_tr(zIn, TeChromoSi, iComm)
@@ -433,7 +434,15 @@ contains
        ! Solve equation HeatFlux = (ConsCell - ConsFace)/DeltaS
        Res = DeltaS*HeatFluxFace + ConsFace - ConsCell
        if(abs(Res) < Tolerance) EXIT
-       if(iCounter == iCounterMax)call CON_stop(NameSub//': No convergence')
+       if(iCounter == iCounterMax)then
+          write(*,*)'ChromoEvapCoef=',ChromoEvapCoef
+          write(*,*)'Lengthtr',LengthTr
+          write(*,*)'TeCell=', TeCell
+          write(*,*)'uMinTr=',uMinTr
+          write(*,*)'DeltaS=',DeltaS
+          write(*,*)'uPeOverTeCell=',uPeOverTeCell
+          call CON_stop(NameSub//': No convergence')
+       end if
        ! New iteration:
        iCounter = iCounter + 1
        dResdCons = DeltaS*Value_V(dHeatFluxXOverU_)/LengthTr + 1
