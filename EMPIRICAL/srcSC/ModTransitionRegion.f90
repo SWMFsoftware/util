@@ -40,7 +40,7 @@ module ModTransitionRegion
   ! Correspondent named indexes: meaning of the columns in the table
   integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
        HeatFluxLength_ = 3, dHeatFluxXOverU_ = 4, LambdaSi_=5, &
-       DlogLambdaOverDlogT_ = 6, uLengthPavrSi_ = 7
+       DlogLambdaOverDlogT_ = 6
 
   ! Control parameter: minimum temerature in the TR table
   real, public :: TeSiMin = 5.0e4
@@ -72,20 +72,26 @@ module ModTransitionRegion
   real            :: SemiIntUheat_I(1:nPointTe-1)
   real            :: DeltaLogTe, DeltaLogTeCoef
   ! Max speed
-  real, parameter :: uMax = 200.0
+  real, parameter :: uMax = 400.0
+  ! Parameter of the chromosphere energy budget:
+  ! How many hydrogen atoms should be ionized by the heat conduction flux
+  ! to lift a single pair of proton+electron to the solar wind
+  real, parameter :: cEnergyEfficiency = 1.0
   real, parameter :: DeltaU = 1.5*uMax/(nPointU - 1)
   ! Ionization potential for hydrogen
   ! cPotential_II(1,1) from util/CRASH/src/ModIonizPotential.f90:
   real, parameter :: cIonizPotentialH =  13.59844  ! eV
   ! Ratio of enthalpy flux, divided by (u(Tmin)*Pe):
-  real, parameter :: FluxTouPe = cIonizPotentialH*ceV/(cBoltzmann*TeTrMin) + 5
+  real, parameter :: FluxTouPe = cEnergyEfficiency*&
+       cIonizPotentialH*ceV/(cBoltzmann*TeTrMin)   & ! ionization loss per ion
+       + 5                                           ! enthalpy
   ! Needed for initialization:
   logical, private :: DoInit = .true.
   interface advance_heat_conduction
      module procedure advance_heat_conduction_ta
      module procedure advance_heat_conduction_ss
   end interface advance_heat_conduction
-  public :: advance_heat_conduction
+  public :: advance_heat_conduction, cooling_rate
 contains
   !============================================================================
   subroutine init_tr(zIn, TeChromoSi, iComm)
@@ -193,9 +199,11 @@ contains
     call init_lookup_table(                                      &
          NameTable = 'TR',                                       &
          NameCommand = 'save',                                   &
+         Param_I = [cEnergyEfficiency, uMax],                    &
          NameVar =                                               &
          'logTe u LPe UHeat FluxXLength '//                      &
-         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT uLPe',    &
+         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT uLPe'//&
+         'EnergyEff uMax',    &
          nIndex_I = [nPointTe,nPointU],                          &
          IndexMin_I = [TeTrMin,-0.5*uMax],                       &
          IndexMax_I = [TeTrMax, uMax],                           &
@@ -203,7 +211,8 @@ contains
          TypeFile = TypeFile,                                    &
          StringDescription =                                     &
          'Model for transition region: '//                       &
-         '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1] [W/m]')
+         '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1] [W/m]'//&
+         ' [1] [m/s]')
 
     ! The table is now initialized.
     iTableTr = i_lookup_table('TR')
@@ -309,11 +318,10 @@ contains
        iUlast = iU
     end if
     iTe = 1 + nint(log(Arg1/TeTrMin)/DeltaLogTe)
-    Value_V(LengthPAvrSi_:uLengthPAvrSi_) = &
+    Value_V(LengthPAvrSi_:DlogLambdaOverDlogT_) = &
          [ LengthPe_I(iTe), UHeat_I(iTe), &
          LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe),   &
-         LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe), &
-         LengthPe_I(iTe)*Arg2]
+         LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe)]
   end subroutine calc_tr_table
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
@@ -332,7 +340,7 @@ contains
     ! mesh-centered temperature and the spatial length of intervals, in cm!!
     real    :: TeAvrSi_I(nTrGrid + 1), DeltaLCgs_I(nTrGrid + 1)
     ! Tabulated analytical solution:
-    real    :: TrTable_V(LengthPAvrSi_:uLengthPAvrSi_)
+    real    :: TrTable_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
     ! Gen table values:
     real    :: Value_VI(nVar, nTrGrid +1)
     real    :: DeltaTe      ! Mesh of a temperature
@@ -385,7 +393,7 @@ contains
 
   end subroutine integrate_emission
   !============================================================================
-  subroutine solve_tr_face(TeCell, uPeOverTeCell, & ! cell-centered, in SI
+  subroutine solve_tr_face(TeCell, U1, & ! cell-centered, in SI
        LengthTr, DeltaS, & ! Distances photosphere-to-face, face-to-center
        TeFaceOut, HeatFluxOut, DFluxOverDConsOut, &
        PeFaceOut, uFaceOut) ! SI, face centered
@@ -398,8 +406,8 @@ contains
     ! [K], [N/m^2], [m/s], [W/m^2], at the face.
     use ModLookupTable, ONLY: interpolate_lookup_table
 
-    ! The plasma parameters at the cell center region:
-    real,    intent(in)  :: TeCell, uPeOverTeCell
+    ! The plasma parameters at the cell center:
+    real,    intent(in)  :: TeCell, U1
     ! Distances photosphere-to-face, face-to-center
     real,    intent(in)  :: LengthTr, DeltaS
     ! Parameters at the face, connected by the analytical TR solution to the
@@ -409,7 +417,8 @@ contains
     real, optional, intent(out) :: PeFaceOut, uFaceOut
 
     ! Tabulated analytical solution:
-    real    :: Value_V(LengthPAvrSi_:uLengthPAvrSi_), TeFace, HeatFluxFace
+    real    :: Value_V(LengthPAvrSi_:DlogLambdaOverDlogT_), TeFace,&
+         HeatFluxFace
     real    :: ConsFace, dConsFace, ConsCell, uMinTr, Tolerance
     ! Newton-Rapson coefficients: dConsFace = -Res/dResdCons
     real    :: Res, dResdCons
@@ -423,12 +432,10 @@ contains
     ConsFace = ConsCell
     TeFace = TeCell
     iCounter = 0
+    uMinTr = ChromoEvapCoef*U1/TeCell
     do
-       call interpolate_lookup_table(iTableTr, Arg1In=TeFace,  &
-            iVal=uLengthPAvrSi_,                               &
-            ValIn=ChromoEvapCoef*LengthTr*uPeOverTeCell/SqrtZ, &
+       call interpolate_lookup_table(iTableTr, TeFace, uMinTr, &
             Value_V=Value_V,                                   &
-            Arg2Out=uMinTr,                                    &
             DoExtrapolate=.false.)
        HeatFluxFace = Value_V(HeatFluxLength_)/LengthTr
        ! Solve equation HeatFlux = (ConsCell - ConsFace)/DeltaS
@@ -440,7 +447,6 @@ contains
           write(*,*)'TeCell=', TeCell
           write(*,*)'uMinTr=',uMinTr
           write(*,*)'DeltaS=',DeltaS
-          write(*,*)'uPeOverTeCell=',uPeOverTeCell
           call CON_stop(NameSub//': No convergence')
        end if
        ! New iteration:
@@ -460,24 +466,46 @@ contains
     if(present(uFaceOut)) uFaceOut  = uMinTr*TeFace/TeTrMin
   end subroutine solve_tr_face
   !============================================================================
+  real function cooling_rate(RhoSi, PeSi)
+    ! Volumetric radiation energy loss divided by the electron internal energy
+
+    use ModConst, ONLY: cProtonMass
+    use ModLookupTable, ONLY: interpolate_lookup_table
+    real, intent(in) :: RhoSi, PeSi
+    real :: TeSi, NiSi, Cooling
+    ! Tabulated analytical solution:
+    real    :: Value_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
+    !--------------------------------------------------------------------------
+
+    NiSi = RhoSi/cProtonMass
+    TeSi = PeSi/(cBoltzmann*Z*NiSi)
+    call interpolate_lookup_table(iTableTR, TeSi, 0.0, &
+         Value_V, &
+         DoExtrapolate=.false.)
+    Cooling =Value_V(LambdaSI_)*Z*(cBoltzmann*NiSi)**2
+    cooling_rate =  (3.50 + max(0.0, -Value_V(DLogLambdaOverDLogT_)))*Cooling/&
+               (1.5*PeSi)
+  end function cooling_rate
+  !============================================================================
   subroutine advance_heat_conduction_ta(nPoint, Dt, Te_I, Ti_I, Ni_I, Ds_I, &
-       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut)
+       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut, DoLimitTimestep)
     integer, intent(in)    :: nPoint
     real,    intent(in)    :: Dt
     real,    intent(inout) :: Te_I(nPoint+1), Ti_I(nPoint)
     real,    intent(in)    :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint+1)
     real, optional, intent(in) :: BCellIn_I(nPoint)
     real, optional, intent(out) :: PeFaceOut, TeFaceOut, UfaceOut
+    logical, optional, intent(in) :: DoLimitTimestep
     ! MISC:
     real :: Dt_I(nPoint)
     !--------------------------------------------------------------------------
     Dt_I = Dt
     call advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I, &
-       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut)
+       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut, DoLimitTimestep)
   end subroutine advance_heat_conduction_ta
   !============================================================================
   subroutine advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I,&
-       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut)
+       U1, B_I, BCellIn_I, PeFaceOut, TeFaceOut, UfaceOut, DoLimitTimestep)
     use ModConst, ONLY: cBoltzmann
     use ModLookupTable, ONLY: interpolate_lookup_table
     integer, intent(in)    :: nPoint
@@ -486,14 +514,15 @@ contains
     real,    intent(in)    :: Ni_I(nPoint), Ds_I(0:nPoint+1), U1, B_I(nPoint+1)
     real, optional, intent(in) :: BCellIn_I(nPoint)
     real, optional, intent(out) :: PeFaceOut, TeFaceOut, UfaceOut
+    logical, optional, intent(in) :: DoLimitTimestep
 
     real :: Res_VI(2,nPoint), Weight_VI(2,nPoint), bFaceInv_I(1:nPoint+1),  &
          Lower_VVI(2,2,nPoint), Main_VVI(2,2,nPoint), Upper_VVI(2,2,nPoint),&
          SpecHeat_I(nPoint), ExchangeRate_I(nPoint), Cons_I(nPoint+1),      &
          TeStart_I(nPoint), TiStart_I(nPoint), DeltaEnergy_I(nPoint),       &
          DeltaIonEnergy_I(nPoint), dCons_VI(2,nPoint), DtInv_I(nPoint),     &
-         HeatFlux2Tr, dFluxOverdCons, Value_V(LengthPAvrSi_:uLengthPAvrSi_),&
-         Cooling, PeFace, TeFace, uFace, BcellInv_I(nPoint)
+         HeatFlux2Tr, dFluxOverdCons, Cooling, PeFace, TeFace, uFace,       &
+         Value_V(LengthPAvrSi_:DlogLambdaOverDlogT_), BcellInv_I(nPoint)
     real, parameter :: QuasiCfl = 0.85
     integer, parameter :: Cons_ = 1, Ti_=2, nIterMax = 40
     ! Misc:
@@ -534,7 +563,7 @@ contains
            (Cons_I(2:nPoint) - Cons_I(1:nPoint-1))*&
            Lower_VVI(Cons_,Cons_,2:nPoint)
        call solve_tr_face(TeCell =        Te_I(1), &
-            uPeOverTeCell = u1*cBoltzmann*Ni_I(1), & 
+            u1 = u1,                               &
             LengthTr      = Ds_I(0),               &
             DeltaS        = 0.50*Ds_I(1),          &
             HeatFluxOut   = HeatFlux2Tr,           &
@@ -559,9 +588,15 @@ contains
           Main_VVI(Cons_,Cons_,iPoint) = Main_VVI(Cons_,Cons_,iPoint) +&
                Value_V(DLogLambdaOverDLogT_)*Cooling/(3.5*Cons_I(iPoint))
           ! Limit time step:
-          if(iIter==1)DtInv_I(iPoint) = max(1/Dt_I(iPoint),   &
-               (3.50 + max(0.0, -Value_V(DLogLambdaOverDLogT_)))*Cooling/&
-               (QuasiCfl*Z*Te_I(iPoint)*SpecHeat_I(iPoint)))
+          if(iIter==1)then
+             if(present(DoLimitTimestep))then
+                DtInv_I(iPoint) = max(1/Dt_I(iPoint),   &
+                     (3.50 + max(0.0, -Value_V(DLogLambdaOverDLogT_)))&
+                     *Cooling/(QuasiCfl*Z*Te_I(iPoint)*SpecHeat_I(iPoint)))
+             else
+                DtInv_I(iPoint) = 1/Dt_I(iPoint)
+             end if
+          end if
        end do
        ! Change in the internal energy (to correct the energy source
        ! for the time-accurate mode):
@@ -720,7 +755,7 @@ contains
     real :: LengthSi_I(nGrid)
 
     ! Tabulated analytical solution:
-    real    :: TrTable_V(LengthPAvrSi_:uLengthPAvrSi_)
+    real    :: TrTable_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
 
     ! Plot variables: Electron temperature and density in particles per cm3
     integer, parameter :: TeSi_ = 1, NeCgs_ = 2
@@ -826,7 +861,7 @@ contains
     integer :: iPoint, iTime
     !--------------------------------------------------------------------------
     call solve_tr_face(TeCell = 1.0e6, &
-         uPeOverTeCell = 0.0,          & ! cell-centered, in SI
+         u1 = 0.0,                     & ! cell-centered, in SI
          LengthTr = 0.05*Rsun,         &
          DeltaS   = 0.0025*Rsun,        & ! Distance face-to-center
          TeFaceOut   = TeFace,            &
@@ -840,7 +875,7 @@ contains
     Te_I(100) = 2.0e6
     do iTime = 1,36
        call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I, Ni_I, Ds_I, &
-            U1, B_I, PeFaceOut = PeFace)
+            U1, B_I, PeFaceOut = PeFace, DoLimitTimestep=.true.)
        Ni_I = PeFace/(cBoltzmann*Te_I(1:99))
     end do
     write(*,'(a,es13.6)')'PeFace = ',PeFace,' PeFace*Length=', PeFace*0.1*Rsun
