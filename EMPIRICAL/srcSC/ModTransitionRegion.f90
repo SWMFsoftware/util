@@ -4,7 +4,7 @@
 module ModTransitionRegion
 
   use ModUtilities, ONLY: CON_stop
-  use ModConst,       ONLY: cBoltzmann, ceV
+  use ModConst,       ONLY: cBoltzmann, ceV, cProtonMass
   implicit none
   SAVE
   PRIVATE
@@ -40,20 +40,21 @@ module ModTransitionRegion
   ! Correspondent named indexes: meaning of the columns in the table
   integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
        HeatFluxLength_ = 3, dHeatFluxXOverU_ = 4, LambdaSi_=5, &
-       DlogLambdaOverDlogT_ = 6
+       DlogLambdaOverDlogT_ = 6, dHeatFluxOverVel_ = 7
 
-  ! Control parameter: minimum temerature in the TR table
+  ! Control parameter: below TeSiMin the observables are not calculated 
   real, public :: TeSiMin = 5.0e4
+  ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
   public :: init_tr, check_tr_table, integrate_emission, plot_tr, &
-       read_tr_param, solve_tr_face, test
+       read_tr_param, solve_tr_face, apportion_heating, test
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
   integer, public :: iTableTr = -1
 
-  ! Chromosphere top boundary
+  ! Chromosphere top boundary, in Rsun
   real, public, parameter :: rChromo = 1.0
 
   ! By default, this logical is .false. the entholpy increase needed to
@@ -63,28 +64,21 @@ module ModTransitionRegion
   logical, public :: UseChromoEvap  = .false.
   ! To apply CromoEvaporation, the factor below is non-zero.
   real,    public :: ChromoEvapCoef = 0.0
+  ! Parameters of the TR table:
   real, parameter :: TeTrMin = 1.0e4
-  real, parameter :: TeTrMax = 1.0e8
-  integer, parameter :: nPointTe = 500, nPointU = 31
-   ! Global arrays used in calculating the tables
-  real, dimension(nPointTe) :: TeSi_I, LambdaSi_I, DLogLambdaOverDLogT_I, &
-       LengthPe_I, UHeat_I, dFluxXLengthOverDU_I
-  real            :: SemiIntUheat_I(1:nPointTe-1)
-  real            :: DeltaLogTe, DeltaLogTeCoef
+  real, parameter :: TeTrMax = real(2.9988442312309672D+06)
+  integer, parameter :: nPointTe = 310, nPointU = 31
+  ! Global array used in calculating the table
+  ! To be allocated as Value_VII (dHeatFluxOverVel_,nPointTe,nPointU)
+  real, allocatable :: Value_VII(:,:,:)
+  real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 400.0
+  real, parameter :: uMax = 400.0, uMin = -200.0
+  real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Parameter of the chromosphere energy budget:
   ! How many hydrogen atoms should be ionized by the heat conduction flux
   ! to lift a single pair of proton+electron to the solar wind
   real, parameter :: cEnergyEfficiency = 1.0
-  real, parameter :: DeltaU = 1.5*uMax/(nPointU - 1)
-  ! Ionization potential for hydrogen
-  ! cPotential_II(1,1) from util/CRASH/src/ModIonizPotential.f90:
-  real, parameter :: cIonizPotentialH =  13.59844  ! eV
-  ! Ratio of enthalpy flux, divided by (u(Tmin)*Pe):
-  real, parameter :: FluxTouPe = cEnergyEfficiency*&
-       cIonizPotentialH*ceV/(cBoltzmann*TeTrMin)   & ! ionization loss per ion
-       + 5                                           ! enthalpy
   ! Needed for initialization:
   logical, private :: DoInit = .true.
   interface advance_heat_conduction
@@ -92,6 +86,12 @@ module ModTransitionRegion
      module procedure advance_heat_conduction_ss
   end interface advance_heat_conduction
   public :: advance_heat_conduction, cooling_rate
+  ! Dimensionless parameters for stochastic heating
+  logical,public :: UseStochasticHeating = .true.
+  real :: StochasticExponent   = 0.21
+  real :: StochasticAmplitude  = 0.18
+  real :: StochasticExponent2  = 0.21
+  real :: StochasticAmplitude2 = 0.0 ! 1.17
 contains
   !============================================================================
   subroutine init_tr(zIn, TeChromoSi, iComm)
@@ -171,6 +171,16 @@ contains
        else
           ChromoEvapCoef = 0.0
        end if
+    case("#STOCHASTICHEATING")
+       UseStochasticHeating = .true.
+       ! Stochastic heating when Beta_proton is below 1
+       call read_var('StochasticExponent', StochasticExponent)
+       call read_var('StochasticAmplitude', StochasticAmplitude)
+    case("#HIGHBETASTOCHASTIC")
+       ! Correction for stochastic heating when Beta_proton is between 1 and 30
+       ! KAWs are non-propagating for Beta_proton > 30.
+       call read_var('StochasticExponent2', StochasticExponent2)
+       call read_var('StochasticAmplitude2', StochasticAmplitude2)
     case("#TURBULENCE")
        call read_var("PoyntingFluxPerBSi",PoyntingFluxPerBSi)
        call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
@@ -181,12 +191,45 @@ contains
   !============================================================================
   subroutine check_tr_table(TypeFileIn,iComm)
     use ModLookupTable, ONLY: i_lookup_table, &
-         init_lookup_table, make_lookup_table
+         init_lookup_table, make_lookup_table, interpolate_lookup_table
 
     character(LEN=*),optional,intent(in)::TypeFileIn
     integer, optional, intent(in):: iComm
 
     character(len=5)::TypeFile
+    ! Ionization potential for hydrogen
+    ! cPotential_II(1,1) from util/CRASH/src/ModIonizPotential.f90:
+    real, parameter :: cIonizPotentialH =  13.59844  ! eV
+    ! Ratio of enthalpy flux, divided by (u(Tmin)*Pe):
+    real, parameter :: FluxTouPe = cEnergyEfficiency*&
+         cIonizPotentialH*ceV/(cBoltzmann*TeTrMin)   & ! ionization loss,
+         + 5                                           ! enthalpy, per ion
+    ! Misc:
+    ! Loop variables
+    integer            :: iTe, iU
+    ! Arguments corresponding to these indexes:
+    real   :: TeSi_I(nPointTe), uTr
+
+    real, dimension(nPointTe) :: LambdaSi_I, DLogLambdaOverDLogT_I, &
+         LengthPe_I, UHeat_I, dFluxXLengthOverDU_I
+    real            :: SemiIntUheat_I(1:nPointTe-1)
+    real            :: DeltaLogTeCoef
+    
+    real   :: LambdaCgs_V(1)
+
+    ! at the moment, radcool not a function of Ne, but need a dummy 2nd
+    ! index, and might want to include Ne dependence in table later.
+    ! Table variable should be normalized to radloss_cgs * 10E+22
+    ! since we don't want to deal with such tiny numbers
+    ! real, parameter :: RadNorm = 1.0E+22
+    ! real, parameter :: Cgs2SiEnergyDens = &
+    !     1.0e-7&   ! erg = 1e-7 J
+    !     /1.0e-6    ! cm3 = 1e-6 m3
+    ! real, parameter :: Radcool2Si = 1.0e-12 & ! (cm-3=>m-3)**2
+    !     /RadNorm*Cgs2SiEnergyDens
+    ! Misc:
+    real :: FactorStep, uOverTmin5, SqrtOfU2
+    
 
     character(len=*), parameter:: NameSub = 'check_tr_table'
     !--------------------------------------------------------------------------
@@ -199,83 +242,54 @@ contains
     call init_lookup_table(                                      &
          NameTable = 'TR',                                       &
          NameCommand = 'save',                                   &
-         Param_I = [cEnergyEfficiency, uMax],                    &
+         Param_I = [cEnergyEfficiency, uMin, uMax],              &
          NameVar =                                               &
          'logTe u LPe UHeat FluxXLength '//                      &
-         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT uLPe'//&
-         'EnergyEff uMax',    &
+         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT '//   &
+         'EnergyEff uMin uMax',                                  &
          nIndex_I = [nPointTe,nPointU],                          &
-         IndexMin_I = [TeTrMin,-0.5*uMax],                       &
+         IndexMin_I = [TeTrMin, uMin],                           &
          IndexMax_I = [TeTrMax, uMax],                           &
          NameFile = 'TR8.dat',                                   &
          TypeFile = TypeFile,                                    &
          StringDescription =                                     &
          'Model for transition region: '//                       &
          '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1] [W/m]'//&
-         ' [1] [m/s]')
+         ' [1] [m/s] [m/s]')
 
     ! The table is now initialized.
     iTableTr = i_lookup_table('TR')
-    ! Fill in the table
-    call make_lookup_table(iTableTr, calc_tr_table, iComm)
-  end subroutine check_tr_table
-  !============================================================================
-  subroutine calc_tr_table(iTableIn, Arg1, Arg2, Value_V)
-
-    use ModLookupTable, ONLY: interpolate_lookup_table
-    integer, intent(in):: iTableIn
-    real, intent(in)   :: Arg1, Arg2
-    real, intent(out)  :: Value_V(:)
-    integer            :: iTe, iU
-    integer, save      :: iUlast = -1
-    real   :: LambdaCgs_V(1)
-
-    logical, save:: IsFirstCall = .true.
-    ! at the moment, radcool not a function of Ne, but need a dummy 2nd
-    ! index, and might want to include Ne dependence in table later.
-    ! Table variable should be normalized to radloss_cgs * 10E+22
-    ! since we don't want to deal with such tiny numbers
-    ! real, parameter :: RadNorm = 1.0E+22
-    ! real, parameter :: Cgs2SiEnergyDens = &
-    !     1.0e-7&   ! erg = 1e-7 J
-    !     /1.0e-6    ! cm3 = 1e-6 m3
-    ! real, parameter :: Radcool2Si = 1.0e-12 & ! (cm-3=>m-3)**2
-    !     /RadNorm*Cgs2SiEnergyDens
-    ! Misc:
-    real,save :: FactorStep, uOverTmin5, SqrtOfU2
-    logical:: DoTest
-    character(len=*), parameter:: NameSub = 'calc_tr_table'
-    !--------------------------------------------------------------------------
-    if(IsFirstCall)then
-       ! write(*,*)'Start init'
-       IsFirstCall=.false.
-       FactorStep = exp(DeltaLogTe)
-       do iTe = 1, nPointTe
-          if(iTe==1)then
-             TeSi_I(1) = TeTrMin
-          else
-             TeSi_I(iTe) = TeSi_I(iTe-1)*FactorStep
-          end if
-          call interpolate_lookup_table(iTableRadCool,&
-               TeSi_I(iTe), LambdaCgs_V)
-          LambdaSi_I(iTe) = LambdaCgs_V(1)*Radcool2Si
-       end do
-       ! Calculate dLogLambda/DLogTe
-       DLogLambdaOverDLogT_I(1) = &
-            log(LambdaSi_I(2)/LambdaSi_I(1))/DeltaLogTe
-       do iTe = 2,nPointTe-1
-          DLogLambdaOverDLogT_I(iTe) = &
-               log(LambdaSi_I(iTe+1)/LambdaSi_I(iTe-1))/(2*DeltaLogTe)
-       end do
-       DLogLambdaOverDLogT_I(nPointTe) = &
-            log(LambdaSi_I(npointTe)/LambdaSi_I(nPointTe-1))/DeltaLogTe
-       DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
-    end if
-    iU = nint( (Arg2 + 0.50*uMax)/ DeltaU) + 1
-    if(iU/=iUlast)then
-       uOverTmin5 = 5*(Arg2/TeTrMin)*DeltaLogTe
+    ! Fill in the array of tabulated values:
+    allocate(Value_VII (dHeatFluxOverVel_,nPointTe,nPointU))
+    
+    FactorStep = exp(DeltaLogTe)
+    ! Fill in TeSi array
+    TeSi_I(1) = TeTrMin
+    do iTe = 2, nPointTe
+       TeSi_I(iTe) = TeSi_I(iTe-1)*FactorStep
+    end do
+    ! Fill in LambdaSi
+    do iTe = 1, nPointTe
+       call interpolate_lookup_table(iTableRadCool,&
+            TeSi_I(iTe), LambdaCgs_V)
+       LambdaSi_I(iTe) = LambdaCgs_V(1)*Radcool2Si
+    end do
+    ! Calculate dLogLambda/DLogTe
+    DLogLambdaOverDLogT_I(1) = &
+         log(LambdaSi_I(2)/LambdaSi_I(1))/DeltaLogTe
+    do iTe = 2,nPointTe-1
+       DLogLambdaOverDLogT_I(iTe) = &
+            log(LambdaSi_I(iTe+1)/LambdaSi_I(iTe-1))/(2*DeltaLogTe)
+    end do
+    DLogLambdaOverDLogT_I(nPointTe) = &
+         log(LambdaSi_I(npointTe)/LambdaSi_I(nPointTe-1))/DeltaLogTe
+    
+    DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
+    do iU = 1, nPointU
+       uTr = (iU - 1)*DeltaU + uMin 
+       uOverTmin5 = 5*(uTr/TeTrMin)*DeltaLogTe
        LengthPe_I = 0.0; uHeat_I = 0.0
-       UHeat_I(1) = (max(Arg2, 0.0)*FluxTouPe)**2
+       UHeat_I(1) = (max(uTr, 0.0)*FluxTouPe)**2
        do iTe = 2, nPointTe
           ! Integrate \sqrt{2\int{\kappa_0\Lambda Te**1.5 d(log T)}}/k_B
           ! Predictor at half step
@@ -291,7 +305,6 @@ contains
        end do
        UHeat_I(nPointTe) = sqrt(UHeat_I(nPointTe))
 
-       ! Temporary fix to avoid a singularity in the first point
        do iTe = 2, nPointTe
           ! Integrate \int{\kappa_0\Lambda Te**3.5 d(log T)/UHeat}
           LengthPe_I(iTe) = LengthPe_I(iTe-1) + 0.5*DeltaLogTe* &
@@ -315,13 +328,39 @@ contains
             (DeltaLogTe*TeSi_I(nPointTe)**3.5)
 
        LengthPe_I(:) = LengthPe_I(:)*HeatCondParSi
-       iUlast = iU
-    end if
+       do iTe = 1, nPointTe
+          Value_VII(LengthPAvrSi_:DlogLambdaOverDlogT_, iTe, iU) = &
+               [ LengthPe_I(iTe), UHeat_I(iTe), &
+               LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe),   &
+               LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe)]
+       end do
+    end do
+    ! Fill in the velocity derivative
+    Value_VII (dHeatFluxOverVel_,:,1) = 0
+    do iU = 2, nPointU - 1
+       Value_VII (dHeatFluxOverVel_,:,iU) = &
+            (Value_VII(Uheat_,:,iU+1)*Value_VII (LengthPavrSi_,:,iU+1) - &
+            Value_VII (Uheat_,:,iU-1)*Value_VII (LengthPavrSi_,:,iU-1))/ &
+            (2*DeltaU)
+    end do
+    Value_VII (dHeatFluxOverVel_,:,nPointU) = 0
+    ! Shape the table using the filled in array
+    call make_lookup_table(iTableTr, calc_tr_table, iComm)
+    deallocate(Value_VII)
+  end subroutine check_tr_table
+  !============================================================================
+  subroutine calc_tr_table(iTableIn, Arg1, Arg2, Value_V)
+
+    integer, intent(in):: iTableIn
+    real, intent(in)   :: Arg1, Arg2
+    real, intent(out)  :: Value_V(:)
+    integer            :: iTe, iU
+    logical:: DoTest
+    character(len=*), parameter:: NameSub = 'calc_tr_table'
+    !--------------------------------------------------------------------------
     iTe = 1 + nint(log(Arg1/TeTrMin)/DeltaLogTe)
-    Value_V(LengthPAvrSi_:DlogLambdaOverDlogT_) = &
-         [ LengthPe_I(iTe), UHeat_I(iTe), &
-         LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe),   &
-         LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe)]
+    iU = nint( (Arg2 - uMin)/ DeltaU) + 1
+    Value_V(:) = Value_VII(LengthPAvrSi_:DlogLambdaOverDlogT_, iTe, iU)
   end subroutine calc_tr_table
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
@@ -469,7 +508,6 @@ contains
   real function cooling_rate(RhoSi, PeSi)
     ! Volumetric radiation energy loss divided by the electron internal energy
 
-    use ModConst, ONLY: cProtonMass
     use ModLookupTable, ONLY: interpolate_lookup_table
     real, intent(in) :: RhoSi, PeSi
     real :: TeSi, NiSi, Cooling
@@ -653,7 +691,7 @@ contains
     end do
     if(present(PeFaceOut))PeFaceOut = PeFace
     if(present(TeFaceOut))TeFaceOut = TeFace
-    if(present(UfaceOut))UfaceOut = uFace
+    if(present(UfaceOut ))UfaceOut  = uFace
   end subroutine advance_heat_conduction_ss
   !============================================================================
   subroutine tridiag_block22(n,Lower_VVI,Main_VVI,Upper_VVI,Res_VI,Weight_VI)
@@ -727,6 +765,121 @@ contains
     !==========================================================================
   end subroutine tridiag_block22
   !============================================================================
+  subroutine apportion_heating(&
+       ! Inputs, all in SI:
+       PparIn, PperpIn, PeIn, RhoIn, BIn, &
+       WmajorIn, WminorIn,                &
+       DissRateMajorIn, DissRateMinorIn,  &
+       ! Outputs:
+       QparPerQtotal, QperpPerQtotal, QePerQtotal)
+
+    use ModConst, ONLY: cMu, cProtonMass, cElectronCharge
+    ! Input pressures
+    real, intent(in) :: PparIn, PperpIn, PeIn
+    ! Input density and magnetic field
+    real, intent(in) :: RhoIn, Bin
+    ! Input wave energy densities
+    real, intent(in) :: WmajorIn, WminorIn
+    ! Dissipation rates:
+    real, intent(in) :: DissRateMajorIn, DissRateMinorIn
+    ! Outputs
+    real, intent(out) :: QparPerQtotal, QperpPerQtotal, QePerQtotal
+    
+    real :: SqrtRho, Wmajor, Wminor, Qmajor, Qminor, Valfven, P
+    real :: BetaProton, BetaElectron, TeByTp, Vperp, Qtotal
+    real :: DampingElectron, DampingPar, DampingPerp, DampingProton
+    real :: GyroRadiusTimesB, InvGyroRadius, LperpInvGyroRad
+    real :: WmajorGyro, WminorGyro, Wgyro
+    real :: CascadeTimeMajor, CascadeTimeMinor, DeltaU, Epsilon, DeltaB, Delta
+    real :: Qproton, QminorFraction, QmajorFraction 
+    real, parameter :: cTwoThird = 2.0/3.0, cThird = 1.0/3.0
+
+#ifndef SCALAR
+    character(len=*), parameter:: NameSub = 'apportion_heating'
+    !--------------------------------------------------------------------------
+
+    SqrtRho = PoyntingFluxPerBsi*sqrt(cMu*RhoIn)
+    ! Recover wave energy densities from representatives
+    Wmajor = WmajorIn*SqrtRho
+    Wminor = WminorIn*SqrtRho
+    ! Energy dissipation rates
+    Qmajor = Wmajor*DissRateMajorIn
+    Qminor = Wminor*DissRateMinorIn
+    Qtotal = Qmajor + Qminor
+    
+    Valfven = Bin/sqrt(RhoIn)
+    P = cTwoThird*PperpIn + cThird*PparIn
+    BetaProton = 2.0*cMu*P/(Bin*Bin)
+    TeByTp = PeIn/P
+
+    BetaElectron = 2.0*cMu*PeIn/(Bin*Bin)
+
+    DampingElectron = 0.01*sqrt(TeByTp/BetaProton) &
+         *(1.0 + 0.17*BetaProton**1.3) &
+         /(1.0 +(2800.0*BetaElectron)**(-1.25))
+    DampingPar = 0.08*sqrt(sqrt(TeByTp))*BetaProton**0.7 &
+               *exp(-1.3/BetaProton)
+
+    ! Stochasting heating contributes to perpendicular ion heating.
+
+    ! Perpendicular ion thermal speed
+    Vperp = sqrt(2.0*PperpIn/RhoIn)
+
+    GyroRadiusTimesB = Vperp*cProtonMass/cElectronCharge
+
+    InvGyroRadius = Bin/GyroRadiusTimesB
+
+    LperpInvGyroRad = InvGyroRadius*LperpTimesSqrtBsi/sqrt(Bin)
+          
+    WmajorGyro = Wmajor/sqrt(LperpInvGyroRad)
+    WminorGyro = Wminor/sqrt(LperpInvGyroRad)
+
+    Wgyro = WmajorGyro + WminorGyro
+    
+    ! Cascade timescale at the gyroscale
+    CascadeTimeMajor = WmajorGyro/max(Qmajor,1e-30)
+    CascadeTimeMinor = WminorGyro/max(Qminor,1e-30)
+    
+    ! For protons the following would be DeltaU and DeltaB at ion gyro
+    ! radius, except that we assumed that the Alfven ratio is one.
+    DeltaU = sqrt(Wgyro/RhoIn)
+    DeltaB = sqrt(cMu*Wgyro)
+
+    Epsilon = DeltaU/Vperp
+    Delta = DeltaB/Bin
+
+    ! Damping rate for stochastic heating.
+    ! It interpolates between the beta<1 and 1<beta<30 version.
+    ! This formula is at the moment only suitable for protons.
+    DampingPerp = (StochasticAmplitude &
+         *exp(-StochasticExponent/max(Epsilon,1e-15)) &
+         + StochasticAmplitude2*sqrt(BetaProton) &
+         *exp(-StochasticExponent2/max(Delta,1e-15))) &
+         *RhoIn*DeltaU**3 &
+         *InvGyroRadius/max(Wgyro,1e-15)
+    
+    ! Set k_parallel*V_Alfven = 1/t_minor (critical balance)
+    DampingElectron = DampingElectron/max(CascadeTimeMinor,1e-30)
+    DampingPar = DampingPar/max(CascadeTimeMinor, 1e-30)
+    
+    ! Total damping rate around proton gyroscale
+    DampingProton = DampingElectron + DampingPar + DampingPerp
+          
+    QmajorFraction = DampingProton*CascadeTimeMajor &
+         /(1.0 + DampingProton*CascadeTimeMajor)
+    QminorFraction = DampingProton*CascadeTimeMinor &
+         /(1.0 + DampingProton*CascadeTimeMinor)
+
+    Qproton = (QmajorFraction*Qmajor &
+         + QminorFraction*Qminor)/Qtotal
+
+    QparPerQtotal = DampingPar/DampingProton*Qproton
+    
+    QperpPerQtotal = DampingPerp/DampingProton*Qproton
+    
+    QePerQtotal = 1 - QparPerQtotal - QperpPerQtotal
+#endif
+  end subroutine apportion_heating
   subroutine plot_tr(NamePlotFile, nGrid, TeSi, PeSi, iTable)
 
     use ModPlotFile,    ONLY: save_plot_file
