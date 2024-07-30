@@ -67,13 +67,13 @@ module ModTransitionRegion
   ! Parameters of the TR table:
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
-  integer, parameter :: nPointTe = 310, nPointU = 31
+  integer, parameter :: nPointTe = 310, nPointU = 89
   ! Global array used in calculating the table
   ! To be allocated as Value_VII (dHeatFluxOverVel_,nPointTe,nPointU)
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 400.0, uMin = -200.0
+  real, parameter :: uMax = 2000.0, uMin = -200.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Parameter of the chromosphere energy budget:
   ! How many hydrogen atoms should be ionized by the heat conduction flux
@@ -228,7 +228,7 @@ contains
     ! real, parameter :: Radcool2Si = 1.0e-12 & ! (cm-3=>m-3)**2
     !     /RadNorm*Cgs2SiEnergyDens
     ! Misc:
-    real :: FactorStep, uOverTmin5, SqrtOfU2
+    real :: FactorStep, uOverTmin5, SqrtOfU2, KinEnergyFlux
     
 
     character(len=*), parameter:: NameSub = 'check_tr_table'
@@ -288,17 +288,21 @@ contains
     do iU = 1, nPointU
        uTr = (iU - 1)*DeltaU + uMin 
        uOverTmin5 = 5*(uTr/TeTrMin)*DeltaLogTe
+       KinEnergyFlux = (cProtonMass/cBoltzmann)*(uTr/TeTrMin)**3*DeltaLogTe
        LengthPe_I = 0.0; uHeat_I = 0.0
-       UHeat_I(1) = (max(uTr, 0.0)*FluxTouPe)**2
+       UHeat_I(1) = (max(uTr, 0.0)*(FluxTouPe + &
+            0.50*cProtonMass*uTr**2/(cBoltzmann*TeTrMin)))**2
        do iTe = 2, nPointTe
           ! Integrate \sqrt{2\int{\kappa_0\Lambda Te**1.5 d(log T)}}/k_B
           ! Predictor at half step
           SqrtOfU2 = sqrt(UHeat_I(iTe-1) )
           SemiIntUheat_I(iTe-1) = sqrt( UHeat_I(iTe-1) + &
-               SqrtOfU2*uOverTmin5*TeSi_I(iTe-1)       + &
+               SqrtOfU2*(uOverTmin5*TeSi_I(iTe-1)      + &
+               KinEnergyFlux*TeSi_I(iTe-1)**2)         + &
                LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50*DeltaLogTeCoef)
-          UHeat_I(iTe) = UHeat_I(iTe-1) + &
-               SemiIntUheat_I(iTe-1)*uOverTmin5*(TeSi_I(iTe-1) + TeSi_I(iTe))&
+          UHeat_I(iTe) = UHeat_I(iTe-1) + SemiIntUheat_I(iTe-1)*&
+               (uOverTmin5*(TeSi_I(iTe-1) + TeSi_I(iTe)) +&
+               KinEnergyFlux*(TeSi_I(iTe-1)**2 + TeSi_I(iTe)**2) ) &
                + (LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
                LambdaSi_I(iTe)*TeSi_I(iTe)**1.50)*DeltaLogTeCoef
           UHeat_I(iTe-1) = SqrtOfU2
