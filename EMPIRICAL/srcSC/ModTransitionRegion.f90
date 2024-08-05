@@ -12,7 +12,7 @@ module ModTransitionRegion
   ! in SI unins)
   real, public :: PoyntingFluxPerBSi = 1.0e6 ! W/(m^2 T)
   real, public :: LperpTimesSqrtBSi = 7.5e4  ! m T^(1/2)
-  real, public :: rMinWaveReflection = 0.0
+  real, public :: rMinReflectionTr = 0.0
   
   ! Normalization as used in the radcool table
   real, parameter :: RadNorm = 1.0E+22
@@ -187,7 +187,7 @@ contains
     case("#TURBULENCE")
        call read_var("PoyntingFluxPerBSi",PoyntingFluxPerBSi)
        call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
-       call read_var("rMinWaveReflection", rMinWaveReflection)
+       call read_var("rMinReflectionTr", rMinReflectionTr)
     case default
        call CON_stop(NameSub//": unknown command="//trim(NameCommand))
     end select
