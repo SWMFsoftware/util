@@ -95,6 +95,47 @@ module ModTransitionRegion
   real :: StochasticAmplitude  = 0.18
   real :: StochasticExponent2  = 0.21
   real :: StochasticAmplitude2 = 0.0 ! 1.17
+  logical, public :: UseNonLinearAWDissipation = .false.
+  type OpenThread
+     ! The Length along the thread, from the face i to the face i+1
+     ! Exceptions: LengthSi_G(-nCell-1) is the length from
+     ! the chromosphere to the face with the index -nCell
+     ! LengthSi_G(0) is the distance from the center of interface
+     ! between the threaded gap and the computational domain to
+     ! simulate SC, and the point used to interpolate the state variables
+     ! at the said interface. In meters
+     real, pointer :: LengthSi_G(:)
+     ! Magnetic field intensity (SI) in the points further associated to
+     ! being the faces of the control volume scheme
+     real, pointer :: BSi_F(:)
+     ! (Dimensionless) spherical coordinates (of the faces)
+     real, pointer :: Coord_DF(:,:)
+     ! CELL (nor face!) centered array of the physical quantities
+     ! to be solved for the given thread
+     real, pointer :: State_VC(:,:)
+     ! Since the arrays are further updated with different routines,
+     ! we store the intermediate results of simulation:
+     ! 1. Local time step (set be the hydro update procedure)
+     real, pointer :: Dt_C(:)
+     ! 2. The transition region parameters, solved in
+     ! the heat conduction routine, and the global time step
+     real :: TeTr = -1, uTr = -1, PeTr = -1, Dt = -1
+     ! number of cells, the _C arrays has the index range
+     ! from -nCell to -1
+     integer :: nCell
+     real    :: OpenFlux ! [Gs Rsun**2]
+  end type OpenThread
+  public :: OpenThread
+  ! Named indexes for state variables (all names start with "s")
+  integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
+       sWplus_ = 5, sWminus_ = 6, sTi_=7,  sTe_=8!, sWdiff_ = 9, sPpar_ = 10
+  ! Named indexes for primitive variables (all names start with "p")
+  integer, public, parameter :: pRho_ = 1, pU_ = 2, pPpar_ = 3, pPperp_ = 4, &
+       pPePar_ = 5, pPePerp_ = 6, pWmajor_ = 7, pWminor_ = 8! , pWdiff_ = 9
+  ! Named indexes for the conserved variables/fluxes (names start with "c")
+  integer, public, parameter :: cRho_ = 1, cRhoU_ = 2, cEnergy_ = 3, &
+       cPperp_ = 4, cPePar_ = 5, cPePerp_ = 6, cWmajor_ = 7, cWminor_ = 8
+  !, cWdiff_ = 9
 contains
   !============================================================================
   subroutine init_tr(zIn, TeChromoSi, iComm)
@@ -188,6 +229,8 @@ contains
        call read_var("PoyntingFluxPerBSi",PoyntingFluxPerBSi)
        call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
        call read_var("rMinReflectionTr", rMinReflectionTr)
+    case("#NONLINAWDISSIPATION")
+       call read_var('UseNonLinearAWDissipation',UseNonLinearAWDissipation)
     case default
        call CON_stop(NameSub//": unknown command="//trim(NameCommand))
     end select
