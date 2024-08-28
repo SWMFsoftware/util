@@ -129,7 +129,7 @@ module ModTransitionRegion
      integer :: nCell
      real    :: OpenFlux ! [Gs Rsun**2]
   end type OpenThread
-  public :: OpenThread, set_thread
+  public :: OpenThread, set_thread, save_plot_thread
   ! Named indexes for state variables (all names start with "s")
   integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
        sWplus_ = 5, sWminus_ = 6, sTi_=7,  sTe_=8!, sWdiff_ = 9, sPpar_ = 10
@@ -456,7 +456,7 @@ contains
     iU = nint( (Arg2 - uMin)/ DeltaU) + 1
     Value_V(:) = Value_VII(:, iTe, iU)
   end subroutine calc_tr_table
-    !============================================================================
+  !============================================================================
   subroutine set_thread(XyzIn_D, FaceArea, OpenThread1, &
        xyz_to_coord, get_field)
     ! Origin point coordinates (Xyz)
@@ -1859,6 +1859,41 @@ contains
     deallocate(Value_VI)
 
   end subroutine plot_tr
+  !============================================================================
+  subroutine save_plot_thread(OpenThread1, NameFile)
+
+    use ModPlotFile, ONLY: save_plot_file
+
+    type(OpenThread),intent(inout) :: OpenThread1
+    character(LEN=*), intent(in) :: NameFile
+    real :: Value_VI(sRho_:sTe_+1,-nPointMax:-1)
+    integer :: nCell
+    integer, parameter :: R_ = 1
+    !--------------------------------------------------------------------------
+    nCell = OpenThread1%nCell
+    Value_VI(sRho_:sTe_,-nCell:-1) = &
+         OpenThread1%State_VC(:,-nCell:-1)
+    Value_VI(sTe_+1,-nCell:-1) = &
+         OpenThread1%BSi_F(-nCell:-1)*Si2Gs
+    call save_plot_file(NameFile = NameFile,  &
+         nDimIn  = 1,                       &
+         ParamIn_I= [OpenThread1%TeTr,&
+         OpenThread1%uTr,&
+         OpenThread1%PeTr,&
+         OpenThread1%Dt],&
+         VarIn_VI= Value_VI(:,-nCell:-1), &
+         TypeFileIn    = 'ascii',           &
+         CoordIn_I  = 0.5*(OpenThread1%Coord_DF(R_,-nCell:-1) +&
+         OpenThread1%Coord_DF(R_,-nCell+1:0)), &
+         StringHeaderIn  = 'Thread file ', &
+         NameUnitsIn  = &
+         '[Rsun] '//&
+         '[kg/m3] [m/s] [J/m3] [J/m3] [J/m3] [J/m3] [K] [K] [Gs] '//&
+         '[K] [m/s] [J/m3] [s]',&
+         NameVarIn = 'R '//&
+         'Rho U P Pe Wp Wm Ti Te B'//&
+         ' TeTR UTR PeTR Dt' )
+  end subroutine save_plot_thread
   !============================================================================
   subroutine test
     use ModConst, ONLY: Rsun, cBoltzmann
