@@ -129,7 +129,7 @@ module ModTransitionRegion
      integer :: nCell
      real    :: OpenFlux ! [Gs Rsun**2]
   end type OpenThread
-  public :: OpenThread
+  public :: OpenThread, set_thread
   ! Named indexes for state variables (all names start with "s")
   integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
        sWplus_ = 5, sWminus_ = 6, sTi_=7,  sTe_=8!, sWdiff_ = 9, sPpar_ = 10
@@ -140,6 +140,16 @@ module ModTransitionRegion
   integer, public, parameter :: cRho_ = 1, cRhoU_ = 2, cEnergy_ = 3, &
        cPperp_ = 4, cPePar_ = 5, cPePerp_ = 6, cWmajor_ = 7, cWminor_ = 8
   !, cWdiff_ = 9
+ ! Threads are traced from rMax toward rMin
+  real,    public :: rMin = 1.0, rMax = 2.5
+  integer, public, parameter :: nPointMax = 10000
+  ! integration step at R = 1, dS propto R for R > 1
+  real, public    :: dS0 = 0.001
+  ! Field unit conversion:
+  real, public, parameter :: Si2Gs = 10000.0, Gs2Si = 1.0e-4
+  ! Minimum field at the source surface and at the inner boundary
+  real, public :: BssMinSi = 0.002*Gs2Si
+  real, public :: BMinSi  = 0.0125*Gs2Si
 
   ! Minimum pressure and density
   real :: MinPress = 0.0
@@ -152,6 +162,7 @@ module ModTransitionRegion
   logical :: DoLimitLogVar = .false.
   integer, parameter :: iLogVar_V(5) = &
        [pRho_, pPpar_, pPperp_, pPePar_, pPePerp_]
+  character(len=*), parameter:: NameMod = 'ModTransitionRegion'
 contains
   !============================================================================
   subroutine init_tr(zIn, TeChromoSi, iComm)
@@ -445,6 +456,138 @@ contains
     iU = nint( (Arg2 - uMin)/ DeltaU) + 1
     Value_V(:) = Value_VII(:, iTe, iU)
   end subroutine calc_tr_table
+    !============================================================================
+  subroutine set_thread(XyzIn_D, FaceArea, OpenThread1, &
+       xyz_to_coord, get_field)
+    ! Origin point coordinates (Xyz)
+    real, intent(in) :: XyzIn_D(3)
+    ! Face area, to calculate flux
+    real, intent(in) :: FaceArea
+    ! Thread to set
+    type(OpenThread), intent(inout) :: OpenThread1
+    interface
+       subroutine xyz_to_coord(Xyz_D, Coord_D)
+         implicit none
+         real, intent(in) :: Xyz_D(3)
+         real, intent(out):: Coord_D(3)
+       end subroutine xyz_to_coord
+       subroutine get_field(Xyz_D, B0_D)
+         implicit none
+         real, intent(in) :: Xyz_D(3)
+         real, intent(out):: B0_D(3)
+       end subroutine get_field
+    end interface
+    ! loop variable
+    integer :: iPoint, nPoint
+    ! Length interval, ! Heliocentric distance
+    real :: Ds, R
+    ! coordinates, field vector and modulus
+    real :: Xyz_D(3), B0_D(3), B0, BMax
+    !  for ourward directed field, -1 otherwise
+    real ::SignBr
+    ! Radial field at the source surface
+    real :: BrSS
+    ! Coordinates and magnetic field in the midpoint
+    ! within the framework of the Runge-Kutta scheme
+    real :: XyzAux_D(3), B0Aux_D(3)
+    ! Aux
+    real :: ROld, Aux
+    real :: XyzOld_D(3), Dir1_D(3), Dir2_D(3), Dir3_D(3), Dir4_D(3)
+    real :: BSi_F(-nPointMax:0), Length_I(-nPointMax:0)
+    real :: Coord_DI(3,-nPointMax:0)
+    ! Trace the open thread with the given origin point
+    character(len=*), parameter:: NameSub = 'set_thread'
+    !--------------------------------------------------------------------------
+    Xyz_D = XyzIn_D
+    R = norm2(Xyz_D)
+    call get_field(Xyz_D,B0_D)
+    BrSS = sum(Xyz_D*B0_D)/R*Si2Gs
+    OpenThread1%OpenFlux = FaceArea*BrSS
+    B0 = norm2(B0_D)
+    call xyz_to_coord(Xyz_D,Coord_DI(:,0))
+    iPoint = 0
+    SignBr = sign(1.0, sum(Xyz_D*B0_D) )
+    BMax = max(B0, BssMinSi)
+    BSi_F(0) = B0
+    do
+       iPoint = iPoint + 1
+       ! If the number of gridpoints in the theads is too
+       ! high, coarsen the grid
+       if(iPoint > nPointMax)call CON_stop(&
+            NameMod//':'//NameSub//': too long open thread')
+
+       ! For the previous point given are Xyz_D, B0_D, B0
+       ! R is only used near the photospheric end.
+       ! Store R
+       ROld = R
+       ! Store a point
+       XyzOld_D = Xyz_D
+       ! Four-stage Runge-Kutta
+       BMax = max(BMax, B0)
+       Ds = Ds0*R*SignBr/BMax
+       Dir1_D = B0_D
+       ! 1. Point at the half of length interval:
+       XyzAux_D = Xyz_D - 0.50*Ds*Dir1_D
+       ! 2. Magnetic field in this point:
+       call get_field(XyzAux_D, Dir2_D)
+       XyzAux_D = Xyz_D - 0.50*Ds*Dir2_D
+       call get_field(XyzAux_D, Dir3_D)
+       XyzAux_D = Xyz_D - Ds*Dir3_D
+       call get_field(XyzAux_D, Dir4_D)
+       ! 3. New grid point:
+       Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
+       R = norm2(Xyz_D)
+       if(R >  rMax)then
+          nPoint = iPoint
+          write(*,*)'BrSS=', BrSS,' Gs, SignBr=', SignBr
+          do iPoint = 0, nPoint-1
+             write(*,*)iPoint, Coord_DI(:,-iPoint), BSi_F(-iPoint)*Si2Gs
+          end do
+          call CON_stop(&
+               NameMod//':'//NameSub//': thread comes beyond source surface')
+       end if
+       call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
+       call get_field(Xyz_D, B0_D)
+       B0 = norm2(B0_D)
+       BSi_F(-iPoint) = B0
+       Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
+       if(R <= rMin + Ds0*max(1 - abs(B0)/BMinSi,0.0))EXIT
+    end do
+    ! Calculate more accurately the intersection point
+    ! with the photosphere surface
+    Aux = (ROld - RMin) / (ROld - R)
+    Xyz_D = (1 - Aux)*XyzOld_D +  Aux*Xyz_D
+    ! Store the last point
+    call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
+    call get_field(Xyz_D, B0_D)
+    B0 = norm2(B0_D)
+    BSi_F(-iPoint) = B0
+    Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
+    ! Allocate thread and store results from tracing
+    allocate(OpenThread1%LengthSi_G(-iPoint+1:0))
+    ! For true cells
+    OpenThread1%LengthSi_G(-iPoint+2:-1) = &
+         Length_I(-iPoint+2:-1)*Rsun
+    ! Length of the analytical transition region,
+    ! combined from the last two intervals
+    OpenThread1%LengthSi_G(-iPoint+1) = &
+         (Length_I(-iPoint) + Length_I(-iPoint+1))*Rsun
+    ! Distance from the "ghost point" to the interface (0 index)
+    OpenThread1%LengthSi_G(0) = 0.0
+    allocate(OpenThread1%BSi_F(-iPoint:0))
+    OpenThread1%BSi_F(-iPoint:0) = BSi_F(-iPoint:0)
+    allocate(OpenThread1%Coord_DF(3,-iPoint:0))
+    OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
+
+    ! Allocate state variables,
+
+    allocate(OpenThread1%State_VC(&
+         sRho_:sTe_,-iPoint+2:-1))
+    allocate(OpenThread1%Dt_C(-iPoint+2:-1))
+    ! Set nPoint.
+
+    OpenThread1%nCell = iPoint - 2
+  end subroutine set_thread
   !============================================================================
   subroutine get_trtable_value(Te, uFace)
 
