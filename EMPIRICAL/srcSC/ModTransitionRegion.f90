@@ -458,7 +458,7 @@ contains
   end subroutine calc_tr_table
   !============================================================================
   subroutine set_thread(XyzIn_D, FaceArea, OpenThread1, &
-       xyz_to_coord, get_field)
+       xyz_to_coord, get_field, iBeginOut)
     ! Origin point coordinates (Xyz)
     real, intent(in) :: XyzIn_D(3)
     ! Face area, to calculate flux
@@ -477,12 +477,13 @@ contains
          real, intent(out):: B0_D(3)
        end subroutine get_field
     end interface
+    integer, optional, intent(out) :: iBeginOut
     ! loop variable
-    integer :: iPoint, nPoint
+    integer :: iPoint, nPoint, iBegin
     ! Length interval, ! Heliocentric distance
     real :: Ds, R
     ! coordinates, field vector and modulus
-    real :: Xyz_D(3), B0_D(3), B0, BMax
+    real :: XyzStart_D(3), Xyz_D(3), B0_D(3), B0, BMax
     !  for ourward directed field, -1 otherwise
     real ::SignBr
     ! Radial field at the source surface
@@ -498,61 +499,63 @@ contains
     ! Trace the open thread with the given origin point
     character(len=*), parameter:: NameSub = 'set_thread'
     !--------------------------------------------------------------------------
-    Xyz_D = XyzIn_D
-    R = norm2(Xyz_D)
-    call get_field(Xyz_D,B0_D)
-    BrSS = sum(Xyz_D*B0_D)/R*Si2Gs
-    OpenThread1%OpenFlux = FaceArea*BrSS
-    B0 = norm2(B0_D)
-    call xyz_to_coord(Xyz_D,Coord_DI(:,0))
-    iPoint = 0
-    SignBr = sign(1.0, sum(Xyz_D*B0_D) )
-    BMax = max(B0, BssMinSi)
-    BSi_F(0) = B0
-    do
-       iPoint = iPoint + 1
-       ! If the number of gridpoints in the theads is too
-       ! high, coarsen the grid
-       if(iPoint > nPointMax)call CON_stop(&
-            NameMod//':'//NameSub//': too long open thread')
-
-       ! For the previous point given are Xyz_D, B0_D, B0
-       ! R is only used near the photospheric end.
-       ! Store R
-       ROld = R
-       ! Store a point
-       XyzOld_D = Xyz_D
-       ! Four-stage Runge-Kutta
-       BMax = max(BMax, B0)
-       Ds = Ds0*R*SignBr/BMax
-       Dir1_D = B0_D
-       ! 1. Point at the half of length interval:
-       XyzAux_D = Xyz_D - 0.50*Ds*Dir1_D
-       ! 2. Magnetic field in this point:
-       call get_field(XyzAux_D, Dir2_D)
-       XyzAux_D = Xyz_D - 0.50*Ds*Dir2_D
-       call get_field(XyzAux_D, Dir3_D)
-       XyzAux_D = Xyz_D - Ds*Dir3_D
-       call get_field(XyzAux_D, Dir4_D)
-       ! 3. New grid point:
-       Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
-       R = norm2(Xyz_D)
-       if(R >  rMax)then
-          nPoint = iPoint
-          write(*,*)'BrSS=', BrSS,' Gs, SignBr=', SignBr
-          do iPoint = 0, nPoint-1
-             write(*,*)iPoint, Coord_DI(:,-iPoint), BSi_F(-iPoint)*Si2Gs
-          end do
-          call CON_stop(&
-               NameMod//':'//NameSub//': thread comes beyond source surface')
-       end if
-       call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
-       call get_field(Xyz_D, B0_D)
+    XyzStart_D = XyzIn_D
+    iBegin = 0
+    IBEGINLOOP: do 
+       R = norm2(XyzStart_D)
+       call get_field(XyzStart_D, B0_D)
+       BrSS = sum(XyzStart_D*B0_D)/R*Si2Gs
+       OpenThread1%OpenFlux = FaceArea*(R/Rmax)**2*BrSS
        B0 = norm2(B0_D)
-       BSi_F(-iPoint) = B0
-       Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
-       if(R <= rMin + Ds0*max(1 - abs(B0)/BMinSi,0.0))EXIT
-    end do
+       call xyz_to_coord(XyzStart_D,Coord_DI(:,-iBegin))
+       iPoint = iBegin
+       SignBr = sign(1.0, sum(XyzStart_D*B0_D) )
+       BMax = max(B0, BssMinSi)
+       BSi_F(-iBegin) = B0
+       Xyz_D = XyzStart_D
+       POINTS: do
+          iPoint = iPoint + 1
+          ! If the number of gridpoints in the theads is too
+          ! high, coarsen the grid
+          if(iPoint > nPointMax)call CON_stop(&
+               NameMod//':'//NameSub//': too long open thread')
+          
+          ! For the previous point given are Xyz_D, B0_D, B0
+          ! R is only used near the photospheric end.
+          ! Store R
+          ROld = R
+          ! Store a point
+          XyzOld_D = Xyz_D
+          ! Four-stage Runge-Kutta
+          BMax = max(BMax, B0)
+          Ds = Ds0*R*SignBr/BMax
+          Dir1_D = B0_D
+          ! 1. Point at the half of length interval:
+          XyzAux_D = Xyz_D - 0.50*Ds*Dir1_D
+          ! 2. Magnetic field in this point:
+          call get_field(XyzAux_D, Dir2_D)
+          XyzAux_D = Xyz_D - 0.50*Ds*Dir2_D
+          call get_field(XyzAux_D, Dir3_D)
+          XyzAux_D = Xyz_D - Ds*Dir3_D
+          call get_field(XyzAux_D, Dir4_D)
+          ! 3. New grid point:
+          Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
+          R = norm2(Xyz_D)
+          if(R >  rMax)then
+             ! Displace the start point of the line by Ds0*R down  
+             iBegin = iBegin + 1
+             XyzStart_D = XyzStart_D*(1 - Ds0)
+             ! Trace the line from new starting point toward the Sun
+             CYCLE IBEGINLOOP
+          end if
+          call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
+          call get_field(Xyz_D, B0_D)
+          B0 = norm2(B0_D)
+          BSi_F(-iPoint) = B0
+          Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
+          if(R <= rMin + Ds0*max(1 - abs(B0)/BMinSi,0.0))EXIT IBEGINLOOP
+       end do POINTS
+    end do IBEGINLOOP
     ! Calculate more accurately the intersection point
     ! with the photosphere surface
     Aux = (ROld - RMin) / (ROld - R)
