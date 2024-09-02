@@ -119,6 +119,8 @@ module ModTransitionRegion
      real, pointer :: Coord_DF(:,:)
      ! Gravity potential at the face center (m^2 s^-2), negative.
      real, pointer :: GravityPot_F(:)
+     ! Heliocentric distance at the face center.
+     ! real, pointer :: R_F(:)
      ! CELL (nor face!) centered array of the physical quantities
      ! to be solved for the given thread
      real, pointer :: State_VC(:,:)
@@ -502,6 +504,7 @@ contains
     real :: XyzOld_D(3), Dir1_D(3), Dir2_D(3), Dir3_D(3), Dir4_D(3)
     real :: BSi_F(-nPointMax:0), Length_I(-nPointMax:0)
     real :: Coord_DI(3,-nPointMax:0), rInv_F(-nPointMax:0)
+    ! R_F(-nPointMax:0)
     ! Trace the open thread with the given origin point
     character(len=*), parameter:: NameSub = 'set_thread'
     !--------------------------------------------------------------------------
@@ -576,6 +579,7 @@ contains
     B0 = norm2(B0_D)
     BSi_F(-iPoint) = B0
     Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
+    ! R_F(-iPoint) = norm2(Xyz_D)
     rInv_F(-iPoint) = 1/norm2(Xyz_D)
     ! Allocate thread and store results from tracing
     allocate(OpenThread1%LengthSi_G(-iPoint+1:0))
@@ -592,10 +596,13 @@ contains
     OpenThread1%BSi_F(-iPoint:0) = BSi_F(-iPoint:0)
     allocate(OpenThread1%Coord_DF(3,-iPoint:0))
     OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
+    ! allocate(OpenThread1%R_F(-iPoint+2:0))
+    !OpenThread1%R_F(-iPoint+2:0) = &
+    !     R_F(-iPoint+2:0)
     allocate(OpenThread1%GravityPot_F(-iPoint+2:0))
     OpenThread1%GravityPot_F(-iPoint+2:0) = &
          cGravityPotAt1Rs*rInv_F(-iPoint+2:0)
-
+         !cGravityPotAt1Rs/R_F(-iPoint+2:0)
     ! Allocate state variables,
 
     allocate(OpenThread1%State_VC(&
@@ -799,7 +806,6 @@ contains
     real, parameter :: cThird = 1.0/3.0, cTwoThird = 2.0/3.0, Beta = 1.50
     ! Staging:
     integer, parameter :: nStage = 2
-    ! integer :: iStage ! 1 or 2
     real    :: StageCoef
     ! Misc:
     real :: Source_V(cRho_:cWminor_)
@@ -867,6 +873,9 @@ contains
        ! Gravity force projection onto the field direction
        ! Is calculated as the negative of increment in gravity potential
        ! divided by the mesh length.
+       ! GravityAcc_C(iCell) =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
+       !     (1/OpenThread1%R_F(iCell) -    &
+       !     1/OpenThread1%R_F(iCell+1)) /  &
        GravityAcc_C(iCell) =         & ! Calc -\delta Grav.Pot.
             (OpenThread1%GravityPot_F(iCell) -    &
             OpenThread1%GravityPot_F(iCell+1)) /  &
@@ -1133,63 +1142,64 @@ contains
     !
     ! Finalize the stage
     !
+    ! Transform to primitives, set minimum pressure and density
+    do iCell = -nCell, -1
+       Primitive_VG(pRho_,iCell) = max(MinRho,                 &
+            Conservative_VC(cRho_,iCell) )
+       Primitive_VG(pU_,iCell)   = Conservative_VC(cRhoU_,iCell) / &
+            Primitive_VG(pRho_,iCell)
+
+       ! Ppar = 2*Energy - Rho U**2
+       Primitive_VG(pPpar_,iCell)   = max(MinPress, &
+            2*Conservative_VC(cEnergy_,iCell)  - &
+            Primitive_VG(pRho_,iCell)  * &
+            Primitive_VG(pU_,iCell)**2 )
+
+       Primitive_VG(pPperp_,iCell)   = max(MinPress,&
+            Conservative_VC(cPperp_,iCell))
+
+       Primitive_VG(pPePar_,iCell)   = max(MinPress, &
+            2*Conservative_VC(cPePar_,iCell) )
+
+       Primitive_VG(pPePerp_,iCell)  = max(MinPress,&
+            Conservative_VC(cPePerp_,iCell))
+
+       Primitive_VG(pWmajor_:pWminor_,iCell)  = &
+            Conservative_VC(cWmajor_:cWminor_,iCell)
+
+       State_VC(sRho_:sU_,iCell) = &
+            Primitive_VG(pRho_:pU_,iCell)
+       ! Pressure = 2/3 Pperp +1/3 Ppar
+       State_VC(sP_,iCell) = cThird*Primitive_VG(pPpar_,iCell) &
+            + cTwoThird*Primitive_VG(pPperp_,iCell)
+       State_VC(sPe_,iCell) = cThird*Primitive_VG(pPePar_,iCell) &
+            + cTwoThird*Primitive_VG(pPePerp_,iCell)
+    end do
     if(iStage==1)then
-       ! Transform to primitives, set minimum pressure and density
-       do iCell = -nCell, -1
-          Primitive_VG(pRho_,iCell) = max(MinRho,                 &
-               Conservative_VC(cRho_,iCell) )
-          Primitive_VG(pU_,iCell)   = Conservative_VC(cRhoU_,iCell) / &
-               Primitive_VG(pRho_,iCell)
-          
-          ! Ppar = 2*Energy - Rho U**2
-          Primitive_VG(pPpar_,iCell)   = max(MinPress, &
-               2*Conservative_VC(cEnergy_,iCell)  - &
-               Primitive_VG(pRho_,iCell)  * &
-               Primitive_VG(pU_,iCell)**2 )
-          
-          Primitive_VG(pPperp_,iCell)   = max(MinPress,&
-               Conservative_VC(cPperp_,iCell))
-          
-          Primitive_VG(pPePar_,iCell)   = max(MinPress, &
-               2*Conservative_VC(cPePar_,iCell) )
-          
-          Primitive_VG(pPePerp_,iCell)  = max(MinPress,&
-               Conservative_VC(cPePerp_,iCell))
-          
-          Primitive_VG(pWmajor_:pWminor_,iCell)  = &
-               Conservative_VC(cWmajor_:cWminor_,iCell)
-       end do
+       ! Put the calculated wave dimensionless function to wave amplitudes
+       ! choose dominant wave depending on sign Br
+       if(SignBr >0)then
+          do iCell = -nCell, -1
+             State_VC(sWplus_,iCell) = Primitive_VG(pWmajor_,iCell)&
+                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
+             State_VC(sWminus_,iCell) = Primitive_VG(pWminor_,iCell)&
+                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
+          end do
+       else
+          do iCell = -nCell, -1
+             State_VC(sWminus_,iCell) = Primitive_VG(pWmajor_,iCell)&
+                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
+             State_VC(sWplus_,iCell) = Primitive_VG(pWminor_,iCell)&
+                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
+          end do
+       end if
        RETURN
     end if
-    ! go back to state vars, set minimum pressure and density
-    do iCell = -nCell, -1
-       State_VC(sRho_,iCell) = max(MinRho,   &
-            Conservative_VC(cRho_,iCell) )
-       State_VC(sU_,iCell)   = &
-            Conservative_VC(cRhoU_,iCell)/&
-            State_VC(sRho_,iCell)
-       ! Pressure = 2/3 Pperp +1/3 Ppar
-       ! Ppar = 2*Energy - Rho U**2
-       State_VC(sP_,iCell)   = max(MinPress, &
-            cTwoThird*Conservative_VC(cPperp_,iCell)   + &
-            cThird*(2*Conservative_VC(cEnergy_,iCell)  - &
-            State_VC(sRho_,iCell)          * &
-            State_VC(sU_,iCell)**2 )       )
-       State_VC(sPe_,iCell)   = max(MinPress, &
-            cTwoThird*Conservative_VC(cPePerp_,iCell)   + &
-            cTwoThird*Conservative_VC(cPePar_,iCell)      )
-       ! Transform to primitive, the transformation to state vars
-       ! is done after the semi-implicit stage
-       Primitive_VG(pWmajor_,iCell)  = &
-            Conservative_VC(cWmajor_,iCell)
-       Primitive_VG(pWminor_,iCell)  = &
-            Conservative_VC(cWminor_,iCell)
-       VaDtOverDs_C(iCell) = VaCell_C(iCell)*Dt_C(iCell)/Ds_G(iCell)
-    end do
     ! Semi-implicit stage
     ! First, solve implicit equation
     ! Wmajor_i^{n+1} -Wmajor_i^n +(Va*Dt/Ds)*(-W^{n+1}_{i-1} + W^{n+1)_i)
     do iCell = -nCell, -1
+       VaDtOverDs_C(iCell) = VaCell_C(iCell)*Dt_C(iCell)/Ds_G(iCell)
        Primitive_VG(pWmajor_,iCell) = ( Primitive_VG(pWmajor_,iCell) +&
             Primitive_VG(pWmajor_,iCell-1)*VaDtOverDs_C(iCell)) / &
             (1 + VaDtOverDs_C(iCell))
@@ -1227,8 +1237,7 @@ contains
     ! rRatio is the ratio of the ratio of the cell centered radius
     ! of the last physical cell, 0.5*(Rface_{-1} + Rface_0) to the
     ! the last face center radius, Rface_0, which equals
-    ! 0.5*(1 + Rface_{-1}/Rface_{0}). The ratio of radii is the inverse of
-    ! ratio of gravity potentials
+    ! 0.5*(1 + Rface_{-1}/Rface_{0}).
     rRatio = 0.5*(1 + OpenThread1%GravityPot_F(0)&
          /OpenThread1%GravityPot_F(-1))
     Te_G(0) = Te_G(-1)*rRatio
