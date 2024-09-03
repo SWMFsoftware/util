@@ -100,7 +100,6 @@ module ModTransitionRegion
   real :: StochasticAmplitude  = 0.18
   real :: StochasticExponent2  = 0.21
   real :: StochasticAmplitude2 = 0.0 ! 1.17
-  logical, public :: UseNonLinearAWDissipation = .false.
   ! If use gravity
   logical :: UseGravity = .true.
   type OpenThread
@@ -267,8 +266,6 @@ contains
        call read_var("PoyntingFluxPerBSi",PoyntingFluxPerBSi)
        call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
        call read_var("rMinReflectionTr", rMinReflectionTr)
-    case("#NONLINAWDISSIPATION")
-       call read_var('UseNonLinearAWDissipation',UseNonLinearAWDissipation)
     case("#MINPRESS")
        call read_var('MinPress', MinPress)
     case("#MINRHO")
@@ -844,19 +841,6 @@ contains
     Primitive_VG => OpenThread1%Primitive_VG
     ! Face centered field, in Si
     B_F = OpenThread1%BSi_F(-nCell:0)
-    if(UseNonLinearAWDissipation)then
-       B_F(-nCell) = max(B_F(-nCell),&
-            cMu*(State_VC(sWplus_,-nCell) +   &
-            State_VC(sWminus_,-nCell) )       )
-       B_F(-nCell+1:-1) = max(B_F(-nCell+1:-1),&
-            cMu*(State_VC(sWplus_,-nCell:-2) +   &
-            State_VC(sWminus_,-nCell:-2) ),      &
-            cMu*(State_VC(sWplus_,-nCell+1:-1) + &
-            State_VC(sWminus_,-nCell+1:-1) )     )
-       B_F(0) = max(B_F(0),&
-            cMu*(State_VC(sWplus_,-1) + &
-            State_VC(sWminus_,-1) )     )
-    end if
     ! Face area
     FaceArea_F(-nCell:0) = 1/B_F
 
