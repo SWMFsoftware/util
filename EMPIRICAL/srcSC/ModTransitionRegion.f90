@@ -15,7 +15,7 @@ module ModTransitionRegion
   real, public :: PoyntingFluxPerBSi = 1.0e6 ! W/(m^2 T)
   real, public :: LperpTimesSqrtBSi = 7.5e4  ! m T^(1/2)
   real, public :: rMinReflectionTr = 0.0
-  
+
   ! Normalization as used in the radcool table
   real, parameter :: RadNorm = 1.0E+22
 
@@ -36,10 +36,10 @@ module ModTransitionRegion
 
   ! Gravity potential at the solar surface (m^2 s^-2), negative
   real, parameter :: cGravityPotAt1Rs = -cGravitation*mSun/rSun
-  
+
   ! Coulomb logarithm
   real, public  :: CoulombLog = 20.0
-  
+
   real, parameter :: cTwoSevenths = 2.0/7.0
   real, parameter :: cTolerance   = 1.0e-6
 
@@ -50,7 +50,7 @@ module ModTransitionRegion
   ! Tabulated analytical solution:
   real, public :: TrTable_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
 
-  ! Control parameter: below TeSiMin the observables are not calculated 
+  ! Control parameter: below TeSiMin the observables are not calculated
   real, public :: TeSiMin = 5.0e4
   ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
@@ -93,7 +93,8 @@ module ModTransitionRegion
      module procedure advance_heat_conduction_ta
      module procedure advance_heat_conduction_ss
   end interface advance_heat_conduction
-  public :: advance_heat_conduction, cooling_rate, advance_thread
+  public :: advance_heat_conduction, cooling_rate, advance_thread, &
+       deallocate_thread
   ! Dimensionless parameters for stochastic heating
   logical,public :: UseStochasticHeating = .true.
   real :: StochasticExponent   = 0.21
@@ -134,7 +135,7 @@ module ModTransitionRegion
      real :: TeTr = -1, uTr = -1, PeTr = -1, Dt = -1
      ! number of cells, the _C arrays has the index range
      ! from -nCell to -1
-     integer :: nCell
+     integer :: nCell = -1
      real    :: OpenFlux ! [Gs Rsun**2]
   end type OpenThread
   public :: OpenThread, set_thread, save_plot_thread
@@ -323,7 +324,6 @@ contains
     !     /RadNorm*Cgs2SiEnergyDens
     ! Misc:
     real :: FactorStep, uOverTmin5, SqrtOfU2, KinEnergyFlux
-    
 
     character(len=*), parameter:: NameSub = 'check_tr_table'
     !--------------------------------------------------------------------------
@@ -355,7 +355,7 @@ contains
     iTableTr = i_lookup_table('TR')
     ! Fill in the array of tabulated values:
     allocate(Value_VII(DlogLambdaOverDlogT_,nPointTe,nPointU))
-    
+
     FactorStep = exp(DeltaLogTe)
     ! Fill in TeSi array
     TeSi_I(1) = TeTrMin
@@ -377,10 +377,10 @@ contains
     end do
     DLogLambdaOverDLogT_I(nPointTe) = &
          log(LambdaSi_I(npointTe)/LambdaSi_I(nPointTe-1))/DeltaLogTe
-    
+
     DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
     do iU = 1, nPointU
-       uTr = (iU - 1)*DeltaU + uMin 
+       uTr = (iU - 1)*DeltaU + uMin
        uOverTmin5 = 5*(uTr/TeTrMin)*DeltaLogTe
        KinEnergyFlux = (cProtonMass/cBoltzmann)*(uTr/TeTrMin)**3*DeltaLogTe
        LengthPe_I = 0.0; uHeat_I = 0.0
@@ -511,7 +511,7 @@ contains
     call get_field(XyzStart_D, B0_D)
     BrSS = sum(XyzStart_D*B0_D)/R
     OpenThread1%OpenFlux = FaceArea*BrSS*Si2Gs
-    IBEGINLOOP: do 
+    IBEGINLOOP: do
        B0 = norm2(B0_D)
        call xyz_to_coord(XyzStart_D,Coord_DI(:,-iBegin))
        iPoint = iBegin
@@ -526,7 +526,7 @@ contains
           ! high, coarsen the grid
           if(iPoint > nPointMax)call CON_stop(&
                NameMod//':'//NameSub//': too long open thread')
-          
+
           ! For the previous point given are Xyz_D, B0_D, B0
           ! R is only used near the photospheric end.
           ! Store R
@@ -549,7 +549,7 @@ contains
           Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
           R = norm2(Xyz_D)
           if(R >  rMax)then
-             ! Displace the start point of the line by Ds0*R down  
+             ! Displace the start point of the line by Ds0*R down
              iBegin = iBegin + 1
              XyzStart_D = XyzStart_D*(1 - Ds0)
              R = norm2(XyzStart_D)
@@ -594,12 +594,12 @@ contains
     allocate(OpenThread1%Coord_DF(3,-iPoint:0))
     OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
     ! allocate(OpenThread1%R_F(-iPoint+2:0))
-    !OpenThread1%R_F(-iPoint+2:0) = &
+    ! OpenThread1%R_F(-iPoint+2:0) = &
     !     R_F(-iPoint+2:0)
     allocate(OpenThread1%GravityPot_F(-iPoint+2:0))
     OpenThread1%GravityPot_F(-iPoint+2:0) = &
          cGravityPotAt1Rs*rInv_F(-iPoint+2:0)
-         !cGravityPotAt1Rs/R_F(-iPoint+2:0)
+         ! cGravityPotAt1Rs/R_F(-iPoint+2:0)
     ! Allocate state variables,
 
     allocate(OpenThread1%State_VC(&
@@ -613,6 +613,26 @@ contains
          OpenThread1%Primitive_VG(pRho_:pWminor_,-OpenThread1%nCell-1:0))
     if(present(iBeginOut)) iBeginOut = iBegin
   end subroutine set_thread
+  !============================================================================
+  subroutine deallocate_thread(OpenThread1)
+
+    ! Thread to set
+    type(OpenThread), intent(inout) :: OpenThread1
+    !--------------------------------------------------------------------------
+    deallocate(OpenThread1%Primitive_VG)
+    deallocate(OpenThread1%ConservativeOld_VC)
+    deallocate(OpenThread1%Dt_C)
+    deallocate(OpenThread1%State_VC)
+    deallocate(OpenThread1%GravityPot_F)
+    deallocate(OpenThread1%Coord_DF)
+    deallocate(OpenThread1%BSi_F)
+    deallocate(OpenThread1%LengthSi_G)
+    OpenThread1%TeTr = -1.0
+    OpenThread1%uTr  = -1.0
+    OpenThread1%PeTr = -1.0
+    OpenThread1%Dt   = -1.0
+    OpenThread1%nCell = -1
+  end subroutine deallocate_thread
   !============================================================================
   subroutine get_trtable_value(Te, uFace)
 
@@ -1052,7 +1072,7 @@ contains
     !
     do iCell = -nCell, -1
        ! Apply fluxes
-       
+
        ! dU = dt / Volume * (F_{i-1/2}*FaceArea_{i-1/2} &
        !                        -F_{i+1/2}*FaceArea_{i+1/2} )
        Conservative_VC(:,iCell) = ConservativeOld_VC(:,iCell) + &
@@ -1399,8 +1419,8 @@ contains
 
     real, intent(in) :: RhoSi, PeSi
     real :: TeSi, NiSi, Cooling
-    !--------------------------------------------------------------------------
 
+    !--------------------------------------------------------------------------
     NiSi = RhoSi/cProtonMass
     TeSi = PeSi/(cBoltzmann*Z*NiSi)
     call get_trtable_value(TeSi)
@@ -1455,14 +1475,14 @@ contains
     if(present(BcellIn_I))then
        BcellInv_I = 1/BcellIn_I
     else
-       BcellInv_I = 0.50*(BFaceInv_I(1:nPoint) + BFaceInv_I(2:nPoint+1)) 
+       BcellInv_I = 0.50*(BFaceInv_I(1:nPoint) + BFaceInv_I(2:nPoint+1))
     end if
     ! Initialization
     TeStart_I(1:nPoint) = Te_I(1:nPoint)
     TiStart_I(1:nPoint) = Ti_I(1:nPoint)
     ! dCons = kappa(Te)dTe=> Cons = 2/7 kappa*Te
     Cons_I(1:nPoint+1) = cTwoSevenths*HeatCondParSi*Te_I(1:nPoint+1)**3.5
-  
+
     SpecHeat_I     = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)*BcellInv_I
     do iIter = 1,nIterMax
        Main_VVI = 0.0; Upper_VVI = 0.0; Lower_VVI = 0.0
@@ -1645,6 +1665,7 @@ contains
   !============================================================================
   subroutine apportion_heating(&
        ! Inputs, all in SI:
+    !--------------------------------------------------------------------------
        PparIn, PperpIn, PeIn, RhoIn, BIn, &
        WmajorIn, WminorIn,                &
        DissRateMajorIn, DissRateMinorIn,  &
@@ -1662,14 +1683,14 @@ contains
     real, intent(in) :: DissRateMajorIn, DissRateMinorIn
     ! Outputs
     real, intent(out) :: QparPerQtotal, QperpPerQtotal, QePerQtotal
-    
+
     real :: SqrtRho, Wmajor, Wminor, Qmajor, Qminor, Valfven, P
     real :: BetaProton, BetaElectron, TeByTp, Vperp, Qtotal
     real :: DampingElectron, DampingPar, DampingPerp, DampingProton
     real :: GyroRadiusTimesB, InvGyroRadius, LperpInvGyroRad
     real :: WmajorGyro, WminorGyro, Wgyro
     real :: CascadeTimeMajor, CascadeTimeMinor, DeltaU, Epsilon, DeltaB, Delta
-    real :: Qproton, QminorFraction, QmajorFraction 
+    real :: Qproton, QminorFraction, QmajorFraction
     real, parameter :: cTwoThird = 2.0/3.0, cThird = 1.0/3.0
 
 #ifndef SCALAR
@@ -1684,7 +1705,7 @@ contains
     Qmajor = Wmajor*DissRateMajorIn
     Qminor = Wminor*DissRateMinorIn
     Qtotal = Qmajor + Qminor
-    
+
     Valfven = Bin/sqrt(RhoIn)
     P = cTwoThird*PperpIn + cThird*PparIn
     BetaProton = 2.0*cMu*P/(Bin*Bin)
@@ -1708,16 +1729,16 @@ contains
     InvGyroRadius = Bin/GyroRadiusTimesB
 
     LperpInvGyroRad = InvGyroRadius*LperpTimesSqrtBsi/sqrt(Bin)
-          
+
     WmajorGyro = Wmajor/sqrt(LperpInvGyroRad)
     WminorGyro = Wminor/sqrt(LperpInvGyroRad)
 
     Wgyro = WmajorGyro + WminorGyro
-    
+
     ! Cascade timescale at the gyroscale
     CascadeTimeMajor = WmajorGyro/max(Qmajor,1e-30)
     CascadeTimeMinor = WminorGyro/max(Qminor,1e-30)
-    
+
     ! For protons the following would be DeltaU and DeltaB at ion gyro
     ! radius, except that we assumed that the Alfven ratio is one.
     DeltaU = sqrt(Wgyro/RhoIn)
@@ -1735,14 +1756,14 @@ contains
          *exp(-StochasticExponent2/max(Delta,1e-15))) &
          *RhoIn*DeltaU**3 &
          *InvGyroRadius/max(Wgyro,1e-15)
-    
+
     ! Set k_parallel*V_Alfven = 1/t_minor (critical balance)
     DampingElectron = DampingElectron/max(CascadeTimeMinor,1e-30)
     DampingPar = DampingPar/max(CascadeTimeMinor, 1e-30)
-    
+
     ! Total damping rate around proton gyroscale
     DampingProton = DampingElectron + DampingPar + DampingPerp
-          
+
     QmajorFraction = DampingProton*CascadeTimeMajor &
          /(1.0 + DampingProton*CascadeTimeMajor)
     QminorFraction = DampingProton*CascadeTimeMinor &
@@ -1752,9 +1773,9 @@ contains
          + QminorFraction*Qminor)/Qtotal
 
     QparPerQtotal = DampingPar/DampingProton*Qproton
-    
+
     QperpPerQtotal = DampingPerp/DampingProton*Qproton
-    
+
     QePerQtotal = 1 - QparPerQtotal - QperpPerQtotal
 #endif
   end subroutine apportion_heating
