@@ -619,6 +619,12 @@ contains
     ! Thread to set
     type(OpenThread), intent(inout) :: OpenThread1
     !--------------------------------------------------------------------------
+    OpenThread1%TeTr = -1.0
+    OpenThread1%uTr  = -1.0
+    OpenThread1%PeTr = -1.0
+    OpenThread1%Dt   = -1.0
+    OpenThread1%nCell = -1
+    if(.not.associated(OpenThread1%Coord_DF))RETURN
     deallocate(OpenThread1%Primitive_VG)
     deallocate(OpenThread1%ConservativeOld_VC)
     deallocate(OpenThread1%Dt_C)
@@ -627,11 +633,6 @@ contains
     deallocate(OpenThread1%Coord_DF)
     deallocate(OpenThread1%BSi_F)
     deallocate(OpenThread1%LengthSi_G)
-    OpenThread1%TeTr = -1.0
-    OpenThread1%uTr  = -1.0
-    OpenThread1%PeTr = -1.0
-    OpenThread1%Dt   = -1.0
-    OpenThread1%nCell = -1
   end subroutine deallocate_thread
   !============================================================================
   subroutine get_trtable_value(Te, uFace)
