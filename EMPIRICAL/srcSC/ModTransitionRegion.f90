@@ -58,7 +58,8 @@ module ModTransitionRegion
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
   public :: init_tr, check_tr_table, get_trtable_value, integrate_emission, &
-       plot_tr, read_tr_param, solve_tr_face, apportion_heating, test
+       plot_tr, read_tr_param, check_tr_param, solve_tr_face, &
+       apportion_heating, test
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
@@ -153,7 +154,7 @@ module ModTransitionRegion
        cPperp_ = 4, cPePar_ = 5, cPePerp_ = 6, cWmajor_ = 7, cWminor_ = 8
   !, cWdiff_ = 9
   ! Threads are traced from rMax toward rMin
-  real,    public :: rMin = 1.0, rMax = 2.5
+  real,    public :: rMin = rChromo, rMax = 2.5
   integer, public, parameter :: nPointMax = 10000
   ! integration step at R = 1, dS propto R for R > 1
   real, public :: dS0 = 0.001
@@ -273,9 +274,9 @@ contains
     case("#INNERBOUNDARY")
        call read_var('TempInner', TempInner)
        call read_var('PressInner', PressInner)
-    case("#MINPRESS")
+    case("#MINPRESSTR")
        call read_var('MinPress', MinPress)
-    case("#MINRHO")
+    case("#MINRHOTR")
        call read_var('MinRho', MinRho)
     case("#LIMITLOGVAR")
        call read_var('DoLimitLogVar', DoLimitLogVar)
@@ -288,6 +289,46 @@ contains
        call CON_stop(NameSub//": unknown command="//trim(NameCommand))
     end select
   end subroutine read_tr_param
+  !============================================================================
+  subroutine check_tr_param(rMaxIn, rMinReflectionTrIn, &
+       TempInnerIn, PressInnerIn,                       &
+       UseStochasticHeatingIn,                          &
+       StochasticExponentIn, StochasticAmplitudeIn,     &
+       StochasticExponent2In, StochasticAmplitude2In,   &
+       QparPerQtotalIn, QperpPerQtotalIn)
+    real, intent(in) :: rMaxIn, rMinReflectionTrIn
+    real, intent(in) :: TempInnerIn, PressInnerIn ! Coronal base parameters SI
+    ! Dimensionless parameters for turbulent heating
+    logical, intent(in) :: UseStochasticHeatingIn
+    ! If UseStochastic heating, assign the following:
+    real, optional, intent(in) :: StochasticExponentIn
+    real, optional, intent(in) :: StochasticAmplitudeIn
+    real, optional, intent(in) :: StochasticExponent2In
+    real, optional, intent(in) :: StochasticAmplitude2In
+    ! Else
+    real, optional, intent(in) :: QparPerQtotalIn
+    real, optional, intent(in) :: QperpPerQtotalIn
+    !--------------------------------------------------------------------------
+    rMax = rMaxIn
+    rMinReflectionTr = rMinReflectionTrIn
+    TempInner = TempInnerIn
+    PressInner = PressInnerIn
+    UseStochasticHeating = UseStochasticHeatingIn
+    if(UseStochasticHeating)then
+       if(present(StochasticExponentIn))&
+            StochasticExponent = StochasticExponentIn
+       if(present(StochasticAmplitudeIn))&
+            StochasticAmplitude = StochasticAmplitudeIn
+       if(present(StochasticExponent2In))&
+            StochasticExponent2 = StochasticExponent2In
+       if(present(StochasticAmplitude2In))&
+            StochasticAmplitude2 = StochasticAmplitude2In
+    else
+       if(present(QparPerQtotalIn))QparPerQtotal = QparPerQtotalIn
+       if(present(QperpPerQtotalIn))QperpPerQtotal = QperpPerQtotalIn
+       QePerQtotal = 1 - (QparPerQtotal + QperpPerQtotal)
+    end if
+  end subroutine check_tr_param
   !============================================================================
   subroutine check_tr_table(TypeFileIn,iComm)
     use ModLookupTable, ONLY: i_lookup_table, &
