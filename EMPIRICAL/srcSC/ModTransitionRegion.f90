@@ -30,15 +30,15 @@ module ModTransitionRegion
                           *Cgs2SiEnergyDens/RadNorm
 
   ! A constant factor to calculate the electron heat conduction
-  real, public :: HeatCondParSi
+  real :: HeatCondParSi
 
-  real, public :: cExchangeRateSi
+  real :: cExchangeRateSi
 
   ! Gravity potential at the solar surface (m^2 s^-2), negative
   real, parameter :: cGravityPotAt1Rs = -cGravitation*mSun/rSun
 
   ! Coulomb logarithm
-  real, public  :: CoulombLog = 20.0
+  real  :: CoulombLog = 20.0
 
   real, parameter :: cTwoSevenths = 2.0/7.0
   real, parameter :: cTolerance   = 1.0e-6
@@ -49,6 +49,7 @@ module ModTransitionRegion
        DlogLambdaOverDlogT_ = 6
   ! Tabulated analytical solution:
   real, public :: TrTable_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
+  integer, parameter :: R_=1 ! to mark the radial coordinate, in R_sun
 
   ! Control parameter: below TeSiMin the observables are not calculated
   real, public :: TeSiMin = 5.0e4
@@ -88,21 +89,22 @@ module ModTransitionRegion
   ! to lift a single pair of proton+electron to the solar wind
   real, parameter :: cEnergyEfficiency = 1.0
   ! Needed for initialization:
-  logical, private :: DoInit = .true.
+  logical :: DoInit = .true.
   interface advance_heat_conduction
      module procedure advance_heat_conduction_ta
      module procedure advance_heat_conduction_ss
   end interface advance_heat_conduction
   public :: advance_heat_conduction, cooling_rate, advance_thread, &
        deallocate_thread
+  ! Inner boundary
+  ! To be read from the parameter file
+  real :: TempInner = 2.0e6, PressInner = 4.0e-3
   ! Dimensionless parameters for stochastic heating
-  logical,public :: UseStochasticHeating = .true.
+  logical :: UseStochasticHeating = .true.
   real :: StochasticExponent   = 0.21
   real :: StochasticAmplitude  = 0.18
   real :: StochasticExponent2  = 0.21
   real :: StochasticAmplitude2 = 0.0 ! 1.17
-  ! If use gravity
-  logical :: UseGravity = .true.
   type OpenThread
      ! The Length along the thread, from the face i to the face i+1
      ! Exceptions: LengthSi_G(-nCell-1) is the length from
@@ -138,7 +140,7 @@ module ModTransitionRegion
      integer :: nCell = -1
      real    :: OpenFlux ! [Gs Rsun**2]
   end type OpenThread
-  public :: OpenThread, set_thread, save_plot_thread
+  public :: OpenThread, set_thread, init_thread_variables, save_plot_thread
   ! Named indexes for state variables (all names start with "s")
   integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
        sWplus_ = 5, sWminus_ = 6, sTi_=7,  sTe_=8!, sWdiff_ = 9, sPpar_ = 10
@@ -149,11 +151,11 @@ module ModTransitionRegion
   integer, public, parameter :: cRho_ = 1, cRhoU_ = 2, cEnergy_ = 3, &
        cPperp_ = 4, cPePar_ = 5, cPePerp_ = 6, cWmajor_ = 7, cWminor_ = 8
   !, cWdiff_ = 9
- ! Threads are traced from rMax toward rMin
+  ! Threads are traced from rMax toward rMin
   real,    public :: rMin = 1.0, rMax = 2.5
   integer, public, parameter :: nPointMax = 10000
   ! integration step at R = 1, dS propto R for R > 1
-  real, public    :: dS0 = 0.001
+  real, public :: dS0 = 0.001
   ! Field unit conversion:
   real, public, parameter :: Si2Gs = 10000.0, Gs2Si = 1.0e-4
   ! Minimum field at the source surface and at the inner boundary
@@ -267,12 +269,13 @@ contains
        call read_var("PoyntingFluxPerBSi",PoyntingFluxPerBSi)
        call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
        call read_var("rMinReflectionTr", rMinReflectionTr)
+    case("#INNERBOUNDARY")
+       call read_var('TempInner', TempInner)
+       call read_var('PressInner', PressInner)
     case("#MINPRESS")
        call read_var('MinPress', MinPress)
     case("#MINRHO")
        call read_var('MinRho', MinRho)
-    case("#GRAVITY")
-       call read_var('UseGravity', UseGravity)
     case("#LIMITLOGVAR")
        call read_var('DoLimitLogVar', DoLimitLogVar)
     case('#UNIFORMPARTITION')
@@ -613,6 +616,57 @@ contains
          OpenThread1%Primitive_VG(pRho_:pWminor_,-OpenThread1%nCell-1:0))
     if(present(iBeginOut)) iBeginOut = iBegin
   end subroutine set_thread
+    !============================================================================
+  subroutine init_thread_variables(OpenThread1)
+
+    use ModConst,only : cBoltzmann, cProtonMass
+
+    type(OpenThread),intent(inout) :: OpenThread1
+
+    real :: RInvCenter_I(-OpenThread1%nCell:-1)
+
+    !--------------------------------------------------------------------------
+    RInvCenter_I(-OpenThread1%nCell:-1) = &
+         (1/OpenThread1%Coord_DF(R_,-OpenThread1%nCell  :-1) + &
+         1/OpenThread1%Coord_DF(R_,-OpenThread1%nCell+1: 0))*0.50
+
+    ! initial velocity is zero
+
+    OpenThread1%State_VC(sU_,:) = 0.0
+
+    ! exponential pressure
+
+    OpenThread1%State_VC(sP_,:) = PressInner * 0.5 * exp( &
+         cProtonMass * mSun * cGravitation / cBoltzmann / &
+         TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
+    OpenThread1%State_VC(sPe_,:) = PressInner * 0.5 * exp( &
+         cProtonMass * mSun * cGravitation / cBoltzmann / &
+         TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
+
+    ! Pi = n * kB * T, n = Rho / Mp
+    ! -> Rho = Mp * Pi / (kB * T)
+    OpenThread1%State_VC(sRho_,:) = cProtonMass * &
+         OpenThread1%State_VC(sP_,:) / &
+         (cBoltzmann * TempInner)
+
+    if(sign(1.0, OpenThread1%OpenFlux) > 0)then
+       OpenThread1%State_VC(sWplus_,:) = PoyntingFluxPerBsi*sqrt(cMu*&
+            OpenThread1%State_VC(sRho_,:))
+       OpenThread1%State_VC(sWminus_,:) = &
+            1.0e-8*OpenThread1%State_VC(sWplus_,:)
+    else
+       OpenThread1%State_VC(sWminus_,:) = PoyntingFluxPerBsi*sqrt(cMu*&
+            OpenThread1%State_VC(sRho_,:))
+       OpenThread1%State_VC(sWplus_,:) = &
+            1.0e-8*OpenThread1%State_VC(sWminus_,:)
+    end if
+    OpenThread1%State_VC(sTi_:sTe_,:) = TempInner
+
+    OpenThread1%TeTr = TempInner
+    OpenThread1%uTr  = 0.0
+    OpenThread1%PeTr = 0.50*PressInner
+
+  end subroutine init_thread_variables
   !============================================================================
   subroutine deallocate_thread(OpenThread1)
 
@@ -827,7 +881,7 @@ contains
     real    :: StageCoef
     ! Misc:
     real :: Source_V(cRho_:cWminor_)
-    real :: GravitySource = 0.0 ! Stays zero unless UseGravity
+    real :: GravitySource = 0.0
     real :: WavePress, WavePperpSource, WavePpar
     real :: PperpSource,PePerpSource,PePar, SignBr
     real :: Un_F(-OpenThread1%nCell:0), Rho_F(-OpenThread1%nCell:0),&
@@ -842,7 +896,6 @@ contains
     real :: DissMinor_C(-OpenThread1%nCell:-1)
     real :: Heating_C(-OpenThread1%nCell:-1)
     real :: Reflection_C(-OpenThread1%nCell:-1)
-    ! Fractions of heating going to electrons and to ions
     ! Calculated using the constants above or by applying apportion_heating
     real :: PparHeating, PperpHeating, PeHeating
     ! Loop variables:
@@ -1119,8 +1172,7 @@ contains
        PperpHeating = QperpPerQtotal*Heating_C(iCell)
        PeHeating    = QePerQtotal   *Heating_C(iCell)
        ! 7. Gravity force density, rho*g:
-       if(UseGravity)GravitySource = &
-            Primitive_VG(pRho_,iCell)*GravityAcc_C(iCell)
+       GravitySource = Primitive_VG(pRho_,iCell)*GravityAcc_C(iCell)
        !
        ! Get full source vector
        !
