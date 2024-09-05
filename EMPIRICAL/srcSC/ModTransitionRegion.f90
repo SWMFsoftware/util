@@ -9,7 +9,8 @@ module ModTransitionRegion
        rSun, cMu
   implicit none
   SAVE
-  PRIVATE
+  PRIVATE ! except for a random set of 100 things below
+
   ! The Poynting flux to magnetic field ratio (one of the input parameters
   ! in SI unins)
   real, public :: PoyntingFluxPerBSi = 1.0e6 ! W/(m^2 T)
@@ -30,7 +31,7 @@ module ModTransitionRegion
                           *Cgs2SiEnergyDens/RadNorm
 
   ! A constant factor to calculate the electron heat conduction
-  real :: HeatCondParSi
+  real, public :: HeatCondParSi
 
   real :: cExchangeRateSi
 
@@ -38,7 +39,7 @@ module ModTransitionRegion
   real, parameter :: cGravityPotAt1Rs = -cGravitation*mSun/rSun
 
   ! Coulomb logarithm
-  real  :: CoulombLog = 20.0
+  real, public  :: CoulombLog = 20.0
 
   real, parameter :: cTwoSevenths = 2.0/7.0
   real, parameter :: cTolerance   = 1.0e-6
