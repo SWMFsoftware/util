@@ -58,7 +58,7 @@ module ModTransitionRegion
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
   public :: init_tr, check_tr_table, get_trtable_value, integrate_emission, &
-       plot_tr, read_tr_param, check_tr_param, solve_tr_face, &
+       plot_tr, read_tr_param, check_tr_param, solve_tr_face, init_thread, &
        apportion_heating, test
 
   ! Table numbers needed to use lookup table
@@ -657,8 +657,9 @@ contains
     allocate(&
          OpenThread1%Primitive_VG(pRho_:pWminor_,-OpenThread1%nCell-1:0))
     if(present(iBeginOut)) iBeginOut = iBegin
+    call init_thread_variables(OpenThread1)
   end subroutine set_thread
-    !============================================================================
+  !============================================================================
   subroutine init_thread_variables(OpenThread1)
 
     use ModConst,only : cBoltzmann, cProtonMass
@@ -709,6 +710,27 @@ contains
     OpenThread1%PeTr = 0.50*PressInner
 
   end subroutine init_thread_variables
+  !============================================================================
+  subroutine init_thread(OpenThread1)
+
+    ! Thread to set
+    type(OpenThread), intent(inout) :: OpenThread1
+    !--------------------------------------------------------------------------
+
+    nullify(OpenThread1%Primitive_VG)
+    nullify(OpenThread1%ConservativeOld_VC)
+    nullify(OpenThread1%Dt_C)
+    nullify(OpenThread1%State_VC)
+    nullify(OpenThread1%GravityPot_F)
+    nullify(OpenThread1%Coord_DF)
+    nullify(OpenThread1%BSi_F)
+    nullify(OpenThread1%LengthSi_G)
+    OpenThread1%TeTr = -1.0
+    OpenThread1%uTr  = -1.0
+    OpenThread1%PeTr = -1.0
+    OpenThread1%Dt   = -1.0
+    OpenThread1%nCell = -1
+  end subroutine init_thread
   !============================================================================
   subroutine deallocate_thread(OpenThread1)
 
