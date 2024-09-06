@@ -142,7 +142,7 @@ module ModTransitionRegion
      integer :: nCell = -1
      real    :: OpenFlux ! [Gs Rsun**2]
   end type OpenThread
-  public :: OpenThread, set_thread, init_thread_variables, save_plot_thread
+  public :: OpenThread, set_thread, save_plot_thread
   ! Named indexes for state variables (all names start with "s")
   integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
        sWplus_ = 5, sWminus_ = 6, sTi_=7,  sTe_=8!, sWdiff_ = 9, sPpar_ = 10
@@ -529,7 +529,7 @@ contains
     end interface
     integer, optional, intent(out) :: iBeginOut
     ! loop variable
-    integer :: iPoint, nPoint, iBegin
+    integer :: iPoint, nCell, iBegin
     ! Length interval, ! Heliocentric distance
     real :: Ds, R
     ! coordinates, field vector and modulus
@@ -623,41 +623,64 @@ contains
     Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
     ! R_F(-iPoint) = norm2(Xyz_D)
     rInv_F(-iPoint) = 1/norm2(Xyz_D)
+    nCell = iPoint - 2
     ! Allocate thread and store results from tracing
-    allocate(OpenThread1%LengthSi_G(-iPoint+1:0))
+    if(.not.associated(OpenThread1%LengthSi_G))then
+       call allocate_pointer
+    elseif(nCell/=OpenThread1%nCell)then
+       call deallocate_pointer
+       call allocate_pointer
+    end if
     ! For true cells
-    OpenThread1%LengthSi_G(-iPoint+2:-1) = &
-         Length_I(-iPoint+2:-1)*Rsun
+    OpenThread1%LengthSi_G(-nCell:-1) = &
+         Length_I(-nCell:-1)*Rsun
     ! Length of the analytical transition region,
     ! combined from the last two intervals
-    OpenThread1%LengthSi_G(-iPoint+1) = &
+    OpenThread1%LengthSi_G(-nCell-1) = &
          (Length_I(-iPoint) + Length_I(-iPoint+1))*Rsun
     ! Distance from the "ghost point" to the interface (0 index)
     OpenThread1%LengthSi_G(0) = 0.0
-    allocate(OpenThread1%BSi_F(-iPoint:0))
     OpenThread1%BSi_F(-iPoint:0) = BSi_F(-iPoint:0)
-    allocate(OpenThread1%Coord_DF(3,-iPoint:0))
     OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
     ! allocate(OpenThread1%R_F(-iPoint+2:0))
     ! OpenThread1%R_F(-iPoint+2:0) = &
     !     R_F(-iPoint+2:0)
-    allocate(OpenThread1%GravityPot_F(-iPoint+2:0))
-    OpenThread1%GravityPot_F(-iPoint+2:0) = &
-         cGravityPotAt1Rs*rInv_F(-iPoint+2:0)
+    OpenThread1%GravityPot_F(-nCell:0) = &
+         cGravityPotAt1Rs*rInv_F(-nCell:0)
          ! cGravityPotAt1Rs/R_F(-iPoint+2:0)
-    ! Allocate state variables,
-
-    allocate(OpenThread1%State_VC(&
-         sRho_:sTe_,-iPoint+2:-1))
-    allocate(OpenThread1%Dt_C(-iPoint+2:-1))
-    ! Set nPoint
-    OpenThread1%nCell = iPoint - 2
-    allocate(&
-         OpenThread1%ConservativeOld_VC(cRho_:cWminor_,-OpenThread1%nCell:-1))
-    allocate(&
-         OpenThread1%Primitive_VG(pRho_:pWminor_,-OpenThread1%nCell-1:0))
+    if(.not.associated(OpenThread1%State_VC))then
+       ! Allocate state variables,
+       allocate(OpenThread1%State_VC(sRho_:sTe_,-nCell:-1))
+       ! Set nPoint
+       OpenThread1%nCell = nCell
+       ! Then initiate their values
+       call init_thread_variables(OpenThread1)
+    end if
     if(present(iBeginOut)) iBeginOut = iBegin
-    call init_thread_variables(OpenThread1)
+  contains
+    !==========================================================================
+    subroutine allocate_pointer
+      allocate(OpenThread1%BSi_F(-iPoint:0))
+      allocate(OpenThread1%LengthSi_G(-nCell-1:0))
+      allocate(OpenThread1%Coord_DF(3,-iPoint:0))
+      allocate(OpenThread1%Dt_C(-nCell:-1))
+      allocate(OpenThread1%GravityPot_F(-nCell:0))
+      allocate(&
+           OpenThread1%ConservativeOld_VC(cRho_:cWminor_,-nCell:-1))
+      allocate(&
+           OpenThread1%Primitive_VG(pRho_:pWminor_,-nCell-1:0))
+    end subroutine allocate_pointer
+    !==========================================================================
+    subroutine deallocate_pointer
+      deallocate(OpenThread1%BSi_F)
+      deallocate(OpenThread1%LengthSi_G)
+      deallocate(OpenThread1%Coord_DF)
+      deallocate(OpenThread1%Dt_C)
+      deallocate(OpenThread1%GravityPot_F)
+      deallocate(OpenThread1%ConservativeOld_VC)
+      deallocate(OpenThread1%Primitive_VG)
+    end subroutine deallocate_pointer
+    !==========================================================================
   end subroutine set_thread
   !============================================================================
   subroutine init_thread_variables(OpenThread1)
