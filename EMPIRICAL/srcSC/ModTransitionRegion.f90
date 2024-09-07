@@ -58,8 +58,7 @@ module ModTransitionRegion
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
   public :: init_tr, check_tr_table, get_trtable_value, integrate_emission, &
-       plot_tr, read_tr_param, check_tr_param, solve_tr_face, init_thread, &
-       apportion_heating, test
+       plot_tr, read_tr_param, check_tr_param, init_thread, test
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
@@ -122,9 +121,9 @@ module ModTransitionRegion
      ! (Dimensionless) spherical coordinates (of the faces)
      real, pointer :: Coord_DF(:,:)
      ! Gravity potential at the face center (m^2 s^-2), negative.
-     real, pointer :: GravityPot_F(:)
+     ! real, pointer :: GravityPot_F(:)
      ! Heliocentric distance at the face center.
-     ! real, pointer :: R_F(:)
+     real, pointer :: R_F(:)
      ! CELL (nor face!) centered array of the physical quantities
      ! to be solved for the given thread
      real, pointer :: State_VC(:,:)
@@ -545,7 +544,7 @@ contains
     real :: ROld, Aux
     real :: XyzOld_D(3), Dir1_D(3), Dir2_D(3), Dir3_D(3), Dir4_D(3)
     real :: BSi_F(-nPointMax:0), Length_I(-nPointMax:0)
-    real :: Coord_DI(3,-nPointMax:0), rInv_F(-nPointMax:0)
+    real :: Coord_DI(3,-nPointMax:0), R_F(-nPointMax:0)
     ! R_F(-nPointMax:0)
     ! Trace the open thread with the given origin point
     character(len=*), parameter:: NameSub = 'set_thread'
@@ -564,23 +563,17 @@ contains
        BMax = max(maxval(BSi_F(-iBegin:0)), BssMinSi)
        Xyz_D = XyzStart_D
        SignBr = sign(1.0, sum(XyzStart_D*B0_D) )
-       rInv_F(-iBegin) = 1/R
+       R_F(-iBegin) = R
        POINTS: do
           iPoint = iPoint + 1
-          ! If the number of gridpoints in the theads is too
-          ! high, coarsen the grid
-          if(iPoint > nPointMax)call CON_stop(&
-               NameMod//':'//NameSub//': too long open thread')
-
           ! For the previous point given are Xyz_D, B0_D, B0
-          ! R is only used near the photospheric end.
           ! Store R
           ROld = R
           ! Store a point
           XyzOld_D = Xyz_D
           ! Four-stage Runge-Kutta
           BMax = max(BMax, B0)
-          Ds = Ds0*R*SignBr/BMax
+          Ds = Ds0*R*SignBr/min(BMax, 10*B0)
           Dir1_D = B0_D
           ! 1. Point at the half of length interval:
           XyzAux_D = Xyz_D - 0.50*Ds*Dir1_D
@@ -593,16 +586,18 @@ contains
           ! 3. New grid point:
           Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
           R = norm2(Xyz_D)
-          if(R >  rMax)then
+          if(R >  rMax.or.iPoint==nPointMax)then
              ! Displace the start point of the line by Ds0*R down
              iBegin = iBegin + 1
+             XyzOld_D = XyzStart_D
              XyzStart_D = XyzStart_D*(1 - Ds0)
+             Length_I(-iBegin) = norm2(XyzStart_D - XyzOld_D)
              R = norm2(XyzStart_D)
              call get_field(XyzStart_D, B0_D)
              ! Trace the line from new starting point toward the Sun
              CYCLE IBEGINLOOP
           end if
-          rInv_F(-iPoint) = 1/R
+          R_F(-iPoint) = R
           call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
           call get_field(Xyz_D, B0_D)
           B0 = norm2(B0_D)
@@ -622,7 +617,7 @@ contains
     BSi_F(-iPoint) = B0
     Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
     ! R_F(-iPoint) = norm2(Xyz_D)
-    rInv_F(-iPoint) = 1/norm2(Xyz_D)
+    R_F(-iPoint) = norm2(Xyz_D)
     nCell = iPoint - 2
     ! Allocate thread and store results from tracing
     if(.not.associated(OpenThread1%LengthSi_G))then
@@ -631,7 +626,6 @@ contains
        call deallocate_pointer
        call allocate_pointer
     end if
-    ! For true cells
     OpenThread1%LengthSi_G(-nCell:-1) = &
          Length_I(-nCell:-1)*Rsun
     ! Length of the analytical transition region,
@@ -642,11 +636,11 @@ contains
     OpenThread1%LengthSi_G(0) = 0.0
     OpenThread1%BSi_F(-iPoint:0) = BSi_F(-iPoint:0)
     OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
-    ! allocate(OpenThread1%R_F(-iPoint+2:0))
-    ! OpenThread1%R_F(-iPoint+2:0) = &
-    !     R_F(-iPoint+2:0)
-    OpenThread1%GravityPot_F(-nCell:0) = &
-         cGravityPotAt1Rs*rInv_F(-nCell:0)
+    allocate(OpenThread1%R_F(-nCell:0))
+    OpenThread1%R_F(-nCell:0) = &
+         R_F(-nCell:0)
+    ! OpenThread1%GravityPot_F(-nCell:0) = &
+         ! cGravityPotAt1Rs*rInv_F(-nCell:0)
          ! cGravityPotAt1Rs/R_F(-iPoint+2:0)
     if(.not.associated(OpenThread1%State_VC))then
        ! Allocate state variables,
@@ -664,7 +658,7 @@ contains
       allocate(OpenThread1%LengthSi_G(-nCell-1:0))
       allocate(OpenThread1%Coord_DF(3,-iPoint:0))
       allocate(OpenThread1%Dt_C(-nCell:-1))
-      allocate(OpenThread1%GravityPot_F(-nCell:0))
+      allocate(OpenThread1%R_F(-nCell:0))
       allocate(&
            OpenThread1%ConservativeOld_VC(cRho_:cWminor_,-nCell:-1))
       allocate(&
@@ -676,7 +670,7 @@ contains
       deallocate(OpenThread1%LengthSi_G)
       deallocate(OpenThread1%Coord_DF)
       deallocate(OpenThread1%Dt_C)
-      deallocate(OpenThread1%GravityPot_F)
+      deallocate(OpenThread1%R_F)
       deallocate(OpenThread1%ConservativeOld_VC)
       deallocate(OpenThread1%Primitive_VG)
     end subroutine deallocate_pointer
@@ -693,8 +687,8 @@ contains
 
     !--------------------------------------------------------------------------
     RInvCenter_I(-OpenThread1%nCell:-1) = &
-         (1/OpenThread1%Coord_DF(R_,-OpenThread1%nCell  :-1) + &
-         1/OpenThread1%Coord_DF(R_,-OpenThread1%nCell+1: 0))*0.50
+         (1/OpenThread1%R_F(-OpenThread1%nCell  :-1) + &
+         1/OpenThread1%R_F(-OpenThread1%nCell+1: 0))*0.50
 
     ! initial velocity is zero
 
@@ -744,7 +738,7 @@ contains
     nullify(OpenThread1%ConservativeOld_VC)
     nullify(OpenThread1%Dt_C)
     nullify(OpenThread1%State_VC)
-    nullify(OpenThread1%GravityPot_F)
+    nullify(OpenThread1%R_F)
     nullify(OpenThread1%Coord_DF)
     nullify(OpenThread1%BSi_F)
     nullify(OpenThread1%LengthSi_G)
@@ -770,7 +764,7 @@ contains
     deallocate(OpenThread1%ConservativeOld_VC)
     deallocate(OpenThread1%Dt_C)
     deallocate(OpenThread1%State_VC)
-    deallocate(OpenThread1%GravityPot_F)
+    deallocate(OpenThread1%R_F)
     deallocate(OpenThread1%Coord_DF)
     deallocate(OpenThread1%BSi_F)
     deallocate(OpenThread1%LengthSi_G)
@@ -1018,12 +1012,12 @@ contains
        ! Gravity force projection onto the field direction
        ! Is calculated as the negative of increment in gravity potential
        ! divided by the mesh length.
-       ! GravityAcc_C(iCell) =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
-       !     (1/OpenThread1%R_F(iCell) -    &
-       !     1/OpenThread1%R_F(iCell+1)) /  &
-       GravityAcc_C(iCell) =         & ! Calc -\delta Grav.Pot.
-            (OpenThread1%GravityPot_F(iCell) -    &
-            OpenThread1%GravityPot_F(iCell+1)) /  &
+       GravityAcc_C(iCell) =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
+            (1/OpenThread1%R_F(iCell) -    &
+            1/OpenThread1%R_F(iCell+1)) /  &
+       ! GravityAcc_C(iCell) =         & ! Calc -\delta Grav.Pot.
+            ! (OpenThread1%GravityPot_F(iCell) -    &
+            ! OpenThread1%GravityPot_F(iCell+1)) /  &
             OpenThread1%LengthSi_G(iCell)  ! Divide by \delta s
     end do
     if(iStage==1)then
@@ -1382,8 +1376,8 @@ contains
     ! of the last physical cell, 0.5*(Rface_{-1} + Rface_0) to the
     ! the last face center radius, Rface_0, which equals
     ! 0.5*(1 + Rface_{-1}/Rface_{0}).
-    rRatio = 0.5*(1 + OpenThread1%GravityPot_F(0)&
-         /OpenThread1%GravityPot_F(-1))
+    rRatio = 0.5*(1 + OpenThread1%R_F(-1)&
+         /OpenThread1%R_F(0))
     Te_G(0) = Te_G(-1)*rRatio
     Ti_C(-nCell:-1) = State_VC(sP_,-nCell:-1)/(cBoltzmann*N_C)
     call advance_heat_conduction(&
@@ -2062,8 +2056,8 @@ contains
          OpenThread1%Dt],&
          VarIn_VI= Value_VI(:,-nCell:-1), &
          TypeFileIn    = 'ascii',           &
-         CoordIn_I  = 0.5*(OpenThread1%Coord_DF(R_,-nCell:-1) +&
-         OpenThread1%Coord_DF(R_,-nCell+1:0)), &
+         CoordIn_I  = 0.5*(OpenThread1%R_F(-nCell:-1) +&
+         OpenThread1%R_F(-nCell+1:0)), &
          StringHeaderIn  = 'Thread file ', &
          NameUnitsIn  = &
          '[Rsun] '//&
