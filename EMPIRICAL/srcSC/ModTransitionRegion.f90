@@ -144,7 +144,7 @@ module ModTransitionRegion
   public :: OpenThread, set_thread, save_plot_thread
   ! Named indexes for state variables (all names start with "s")
   integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
-       sWplus_ = 5, sWminus_ = 6!, sWdiff_ = 9, sPpar_ = 10
+       sWmajor_ = 5, sWminor_ = 6!, sWdiff_ = 9, sPpar_ = 10
   ! Named indexes for primitive variables (all names start with "p")
   integer, public, parameter :: pRho_ = 1, pU_ = 2, pPpar_ = 3, pPperp_ = 4, &
        pPePar_ = 5, pPePerp_ = 6, pWmajor_ = 7, pWminor_ = 8! , pWdiff_ = 9
@@ -639,12 +639,9 @@ contains
     allocate(OpenThread1%R_F(-nCell:0))
     OpenThread1%R_F(-nCell:0) = &
          R_F(-nCell:0)
-    ! OpenThread1%GravityPot_F(-nCell:0) = &
-         ! cGravityPotAt1Rs*rInv_F(-nCell:0)
-         ! cGravityPotAt1Rs/R_F(-iPoint+2:0)
     if(.not.associated(OpenThread1%State_VC))then
        ! Allocate state variables,
-       allocate(OpenThread1%State_VC(sRho_:sWminus_,-nCell:-1))
+       allocate(OpenThread1%State_VC(sRho_:sWminor_,-nCell:-1))
        ! Set nPoint
        OpenThread1%nCell = nCell
        ! Then initiate their values
@@ -709,19 +706,9 @@ contains
          OpenThread1%State_VC(sP_,:) / &
          (cBoltzmann * TempInner)
 
-    if(sign(1.0, OpenThread1%OpenFlux) > 0)then
-       OpenThread1%State_VC(sWplus_,:) = PoyntingFluxPerBsi*sqrt(cMu*&
-            OpenThread1%State_VC(sRho_,:))
-       OpenThread1%State_VC(sWminus_,:) = &
-            1.0e-8*OpenThread1%State_VC(sWplus_,:)
-    else
-       OpenThread1%State_VC(sWminus_,:) = PoyntingFluxPerBsi*sqrt(cMu*&
-            OpenThread1%State_VC(sRho_,:))
-       OpenThread1%State_VC(sWplus_,:) = &
-            1.0e-8*OpenThread1%State_VC(sWminus_,:)
-    end if
-    ! OpenThread1%State_VC(sTi_:sTe_,:) = TempInner
-
+    OpenThread1%State_VC(sWmajor_,:) = 1.0
+    OpenThread1%State_VC(sWminor_,:) = 1.0e-8
+    
     OpenThread1%TeTr = TempInner
     OpenThread1%uTr  = 0.0
     OpenThread1%PeTr = 0.50*PressInner
@@ -988,7 +975,6 @@ contains
     real, pointer :: State_VC(:,:)
     real :: rRatio
     !--------------------------------------------------------------------------
-    SignBr = sign(1.0, OpenThread1%OpenFlux)
     nCell = OpenThread1%nCell
     Dt_C=>OpenThread1%Dt_C
     State_VC => OpenThread1%State_VC
@@ -1028,20 +1014,8 @@ contains
           Primitive_VG(pRho_:pU_,iCell) = State_VC(sRho_:sU_,iCell)
           Primitive_VG(pPpar_:pPperp_,iCell) = State_VC(sP_,iCell)
           Primitive_VG(pPePar_:pPePerp_,iCell) = State_VC(sPe_,iCell)
-          ! Choose dominant wave depending on sign Br
-          ! Convert the dimensional wave energy densities to their
-          ! dimensionless representative functions
-          if(SignBr >0)then
-             Primitive_VG(pWmajor_,iCell) = State_VC(sWplus_,iCell)/&
-                  (PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell)))
-             Primitive_VG(pWminor_,iCell) = State_VC(sWminus_,iCell)/&
-                  (PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell)))
-          else
-             Primitive_VG(pWmajor_,iCell) = State_VC(sWminus_,iCell)/&
-                  (PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell)))
-             Primitive_VG(pWminor_,iCell) = State_VC(sWplus_,iCell)/&
-                  (PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell)))
-          end if
+          Primitive_VG(pWmajor_,iCell) = State_VC(sWmajor_,iCell)
+          Primitive_VG(pWminor_,iCell) = State_VC(sWminor_,iCell)
           !
           ! Initial values for the conserved variables:
           !
@@ -1314,23 +1288,11 @@ contains
             + cTwoThird*Primitive_VG(pPePerp_,iCell)
     end do
     if(iStage==1)then
-       ! Put the calculated wave dimensionless function to wave amplitudes
-       ! choose dominant wave depending on sign Br
-       if(SignBr >0)then
-          do iCell = -nCell, -1
-             State_VC(sWplus_,iCell) = Primitive_VG(pWmajor_,iCell)&
-                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-             State_VC(sWminus_,iCell) = Primitive_VG(pWminor_,iCell)&
-                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-          end do
-       else
-          do iCell = -nCell, -1
-             State_VC(sWminus_,iCell) = Primitive_VG(pWmajor_,iCell)&
-                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-             State_VC(sWplus_,iCell) = Primitive_VG(pWminor_,iCell)&
-                  *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-          end do
-       end if
+       ! Put the calculated wave dimensionless amplitudes
+       do iCell = -nCell, -1
+          State_VC(sWmajor_:sWMinor_,iCell) = &
+               Primitive_VG(pWmajor_:pWminor_,iCell)
+       end do
        RETURN
     end if
     ! Semi-implicit stage
@@ -1349,23 +1311,11 @@ contains
             Primitive_VG(pWminor_,iCell+1)*VaDtOverDs_C(iCell)) / &
             (1 + VaDtOverDs_C(iCell))
     end do
-    ! Put the calculated wave dimensionless function to wave amplitudes
-    ! choose dominant wave depending on sign Br
-    if(SignBr >0)then
-       do iCell = -nCell, -1
-          State_VC(sWplus_,iCell) = Primitive_VG(pWmajor_,iCell)&
-               *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-          State_VC(sWminus_,iCell) = Primitive_VG(pWminor_,iCell)&
-               *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-       end do
-    else
-       do iCell = -nCell, -1
-          State_VC(sWminus_,iCell) = Primitive_VG(pWmajor_,iCell)&
-               *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-          State_VC(sWplus_,iCell) = Primitive_VG(pWminor_,iCell)&
-               *PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
-       end do
-    end if
+    ! Put the calculated wave dimensionless amplitudes
+    do iCell = -nCell, -1
+       State_VC(sWmajor_:sWminor_,iCell) = &
+            Primitive_VG(pWmajor_:pWminor_,iCell)
+    end do
     ! Electron heat conduction and losses
     N_C(-nCell:-1) = State_VC(sRho_,-nCell:-1)/cProtonMass
     Te_G(-nCell:-1) = State_VC(sPe_,-nCell:-1)/(cBoltzmann*N_C)
@@ -2037,7 +1987,7 @@ contains
 
     type(OpenThread),intent(inout) :: OpenThread1
     character(LEN=*), intent(in) :: NameFile
-    integer, parameter :: sTi_=7,  sTe_=8
+    integer, parameter :: sWPlus_ = 5, sWminus_ = 6,sTi_=7,  sTe_=8
     real :: Value_VI(sRho_:sTe_+1,-nPointMax:-1)
     real, pointer :: State_VC(:,:)
     integer :: nCell
@@ -2045,6 +1995,18 @@ contains
     nCell = OpenThread1%nCell
     State_VC => OpenThread1%State_VC
     Value_VI(sRho_:sWminus_,-nCell:-1) = State_VC(sRho_:sWminus_,-nCell:-1)
+    if(sign(1.0, OpenThread1%OpenFlux) > 0)then
+       Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VC(sRho_,-nCell:-1))*State_VC(sWmajor_,-nCell:-1)
+       Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VC(sRho_,-nCell:-1))*State_VC(sWminor_,-nCell:-1)
+
+    else
+       Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VC(sRho_,-nCell:-1))*State_VC(sWminor_,-nCell:-1)
+       Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VC(sRho_,-nCell:-1))*State_VC(sWmajor_,-nCell:-1)
+    end if
     Value_VI(sTi_,-nCell:-1) = State_VC(sP_,-nCell:-1)*cProtonMass/&
          (cBoltzmann*State_VC(sRho_,-nCell:-1))
     Value_VI(sTe_,-nCell:-1) = State_VC(sPe_,-nCell:-1)*cProtonMass/&
