@@ -144,7 +144,7 @@ module ModTransitionRegion
   public :: OpenThread, set_thread, save_plot_thread
   ! Named indexes for state variables (all names start with "s")
   integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
-       sWplus_ = 5, sWminus_ = 6, sTi_=7,  sTe_=8!, sWdiff_ = 9, sPpar_ = 10
+       sWplus_ = 5, sWminus_ = 6!, sWdiff_ = 9, sPpar_ = 10
   ! Named indexes for primitive variables (all names start with "p")
   integer, public, parameter :: pRho_ = 1, pU_ = 2, pPpar_ = 3, pPperp_ = 4, &
        pPePar_ = 5, pPePerp_ = 6, pWmajor_ = 7, pWminor_ = 8! , pWdiff_ = 9
@@ -644,7 +644,7 @@ contains
          ! cGravityPotAt1Rs/R_F(-iPoint+2:0)
     if(.not.associated(OpenThread1%State_VC))then
        ! Allocate state variables,
-       allocate(OpenThread1%State_VC(sRho_:sTe_,-nCell:-1))
+       allocate(OpenThread1%State_VC(sRho_:sWminus_,-nCell:-1))
        ! Set nPoint
        OpenThread1%nCell = nCell
        ! Then initiate their values
@@ -720,7 +720,7 @@ contains
        OpenThread1%State_VC(sWplus_,:) = &
             1.0e-8*OpenThread1%State_VC(sWminus_,:)
     end if
-    OpenThread1%State_VC(sTi_:sTe_,:) = TempInner
+    ! OpenThread1%State_VC(sTi_:sTe_,:) = TempInner
 
     OpenThread1%TeTr = TempInner
     OpenThread1%uTr  = 0.0
@@ -1391,8 +1391,6 @@ contains
          B_I  = OpenThread1%BSi_F(-nCell:0), &
          PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
          TeFaceOut = OpenThread1%TeTr)
-    State_VC(sTi_,-nCell:-1) = Ti_C(-nCell:-1)
-    State_VC(sTe_,-nCell:-1) = Te_G(-nCell:-1)
     State_VC(sP_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
     State_VC(sPe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
   contains
@@ -2039,13 +2037,18 @@ contains
 
     type(OpenThread),intent(inout) :: OpenThread1
     character(LEN=*), intent(in) :: NameFile
+    integer, parameter :: sTi_=7,  sTe_=8
     real :: Value_VI(sRho_:sTe_+1,-nPointMax:-1)
+    real, pointer :: State_VC(:,:)
     integer :: nCell
-    integer, parameter :: R_ = 1
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
-    Value_VI(sRho_:sTe_,-nCell:-1) = &
-         OpenThread1%State_VC(:,-nCell:-1)
+    State_VC => OpenThread1%State_VC
+    Value_VI(sRho_:sWminus_,-nCell:-1) = State_VC(sRho_:sWminus_,-nCell:-1)
+    Value_VI(sTi_,-nCell:-1) = State_VC(sP_,-nCell:-1)*cProtonMass/&
+         (cBoltzmann*State_VC(sRho_,-nCell:-1))
+    Value_VI(sTe_,-nCell:-1) = State_VC(sPe_,-nCell:-1)*cProtonMass/&
+         (cBoltzmann*State_VC(sRho_,-nCell:-1))
     Value_VI(sTe_+1,-nCell:-1) = &
          OpenThread1%BSi_F(-nCell:-1)*Si2Gs
     call save_plot_file(NameFile = NameFile,  &
