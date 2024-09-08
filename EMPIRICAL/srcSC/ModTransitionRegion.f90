@@ -128,7 +128,6 @@ module ModTransitionRegion
      ! to be solved for the given thread
      real, pointer :: State_VC(:,:)
      real, pointer :: ConservativeOld_VC(:,:)
-     real, pointer :: Primitive_VG(:,:)
      ! Since the arrays are further updated with different routines,
      ! we store the intermediate results of simulation:
      ! 1. Local time step (set be the hydro update procedure)
@@ -142,16 +141,10 @@ module ModTransitionRegion
      real    :: OpenFlux ! [Gs Rsun**2]
   end type OpenThread
   public :: OpenThread, set_thread, save_plot_thread
-  ! Named indexes for state variables (all names start with "s")
-  integer, public, parameter :: sRho_ = 1, sU_ = 2, sP_ = 3, sPe_ = 4, &
-       sWmajor_ = 5, sWminor_ = 6!, sWdiff_ = 9, sPpar_ = 10
-  ! Named indexes for primitive variables (all names start with "p")
-  integer, public, parameter :: pRho_ = 1, pU_ = 2, pPpar_ = 3, pPperp_ = 4, &
-       pPePar_ = 5, pPePerp_ = 6, pWmajor_ = 7, pWminor_ = 8! , pWdiff_ = 9
-  ! Named indexes for the conserved variables/fluxes (names start with "c")
-  integer, public, parameter :: cRho_ = 1, cRhoU_ = 2, cEnergy_ = 3, &
-       cPperp_ = 4, cPePar_ = 5, cPePerp_ = 6, cWmajor_ = 7, cWminor_ = 8
-  !, cWdiff_ = 9
+  ! Named indexes for state variables
+  integer, public, parameter :: Rho_ = 1, U_ = 2, RhoU_ = 2, Ppar_ = 3, &
+       Energy_ = 3, P_ = 4, Pperp_= 4, PePar_ = 5, PePerp_ = 6, Pe_ = 6,&
+       Wmajor_ = 7, Wminor_ = 8!, Wdiff_ = 9
   ! Threads are traced from rMax toward rMin
   real,    public :: rMin = rChromo, rMax = 2.5
   integer, public, parameter :: nPointMax = 10000
@@ -173,7 +166,7 @@ module ModTransitionRegion
   real, public :: CflLocal = 0.5
   logical :: DoLimitLogVar = .false.
   integer, parameter :: iLogVar_V(5) = &
-       [pRho_, pPpar_, pPperp_, pPePar_, pPePerp_]
+       [Rho_, Ppar_, Pperp_, PePar_, PePerp_]
   character(len=*), parameter:: NameMod = 'ModTransitionRegion'
 contains
   !============================================================================
@@ -641,7 +634,7 @@ contains
          R_F(-nCell:0)
     if(.not.associated(OpenThread1%State_VC))then
        ! Allocate state variables,
-       allocate(OpenThread1%State_VC(sRho_:sWminor_,-nCell:-1))
+       allocate(OpenThread1%State_VC(Rho_:Wminor_,-nCell:-1))
        ! Set nPoint
        OpenThread1%nCell = nCell
        ! Then initiate their values
@@ -656,10 +649,7 @@ contains
       allocate(OpenThread1%Coord_DF(3,-iPoint:0))
       allocate(OpenThread1%Dt_C(-nCell:-1))
       allocate(OpenThread1%R_F(-nCell:0))
-      allocate(&
-           OpenThread1%ConservativeOld_VC(cRho_:cWminor_,-nCell:-1))
-      allocate(&
-           OpenThread1%Primitive_VG(pRho_:pWminor_,-nCell-1:0))
+      allocate(OpenThread1%ConservativeOld_VC(Rho_:Wminor_,-nCell:-1))
     end subroutine allocate_pointer
     !==========================================================================
     subroutine deallocate_pointer
@@ -669,7 +659,6 @@ contains
       deallocate(OpenThread1%Dt_C)
       deallocate(OpenThread1%R_F)
       deallocate(OpenThread1%ConservativeOld_VC)
-      deallocate(OpenThread1%Primitive_VG)
     end subroutine deallocate_pointer
     !==========================================================================
   end subroutine set_thread
@@ -689,25 +678,24 @@ contains
 
     ! initial velocity is zero
 
-    OpenThread1%State_VC(sU_,:) = 0.0
+    OpenThread1%State_VC(U_,:) = 0.0
 
     ! exponential pressure
 
-    OpenThread1%State_VC(sP_,:) = PressInner * 0.5 * exp( &
+    OpenThread1%State_VC(P_,:) = PressInner * 0.5 * exp( &
          cProtonMass * mSun * cGravitation / cBoltzmann / &
          TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
-    OpenThread1%State_VC(sPe_,:) = PressInner * 0.5 * exp( &
-         cProtonMass * mSun * cGravitation / cBoltzmann / &
-         TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
+    OpenThread1%State_VC(Ppar_,:) = OpenThread1%State_VC(P_,:)
+    OpenThread1%State_VC(Pe_,:) = OpenThread1%State_VC(P_,:)
+    OpenThread1%State_VC(PePar_,:) = OpenThread1%State_VC(Pe_,:)
 
     ! Pi = n * kB * T, n = Rho / Mp
     ! -> Rho = Mp * Pi / (kB * T)
-    OpenThread1%State_VC(sRho_,:) = cProtonMass * &
-         OpenThread1%State_VC(sP_,:) / &
-         (cBoltzmann * TempInner)
+    OpenThread1%State_VC(Rho_,:) = cProtonMass * &
+         OpenThread1%State_VC(P_,:) / (cBoltzmann*TempInner)
 
-    OpenThread1%State_VC(sWmajor_,:) = 1.0
-    OpenThread1%State_VC(sWminor_,:) = 1.0e-8
+    OpenThread1%State_VC(Wmajor_,:) = 1.0
+    OpenThread1%State_VC(Wminor_,:) = 1.0e-8
     
     OpenThread1%TeTr = TempInner
     OpenThread1%uTr  = 0.0
@@ -721,7 +709,6 @@ contains
     type(OpenThread), intent(inout) :: OpenThread1
     !--------------------------------------------------------------------------
 
-    nullify(OpenThread1%Primitive_VG)
     nullify(OpenThread1%ConservativeOld_VC)
     nullify(OpenThread1%Dt_C)
     nullify(OpenThread1%State_VC)
@@ -747,7 +734,6 @@ contains
     OpenThread1%Dt   = -1.0
     OpenThread1%nCell = -1
     if(.not.associated(OpenThread1%Coord_DF))RETURN
-    deallocate(OpenThread1%Primitive_VG)
     deallocate(OpenThread1%ConservativeOld_VC)
     deallocate(OpenThread1%Dt_C)
     deallocate(OpenThread1%State_VC)
@@ -883,7 +869,7 @@ contains
     ! Local time step for a given cell
     real, pointer :: Dt_C(:)
     ! Fluxes for all variables, thorough a given face
-    real :: Flux_VF(cRho_:cWminor_,-OpenThread1%nCell:0)
+    real :: Flux_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
     ! Face area (divided by the flux)
     real    :: FaceArea_F(-OpenThread1%nCell:0)
     ! Control volume (the inverse of)
@@ -908,10 +894,12 @@ contains
     ! in the state VC array:
     ! 1 - density
     ! 2 - velocity
-    ! 3 - ion pressure
-    ! 4 - electron pressure
-    ! 5 - Wave "plus" - propagating parallel to the field, energy density
-    ! 6 - Wave "minus" - propagating antiparallel to the field, energy density
+    ! 3 - ion par pressure
+    ! 4 - ion pressure = 2/3 PerpPressure + 1/3 ParPressure
+    ! 5 - electron par pressure
+    ! 6 - electron pressure = 2/3 Perp pressure + 1/3 ParPressure
+    ! 7 - "Major wave" - propagating from the Sun outward/representative
+    ! 8 - "Minor wave" - propagating toward the Sun/representative
     ! Primitive variables:
     ! 1 - density
     ! 2 - velocity
@@ -930,28 +918,27 @@ contains
     ! 6 - PperpElectron
     ! 7 - "Major wave" - propagating from the Sun outward/representative
     ! 8 - "Minor wave" - propagating toward the Sun/representative
+
     ! Primitive variables (inputs for the limited interpolation procedure)
     ! Include one layer of ghost cells
-    real, pointer    :: Primitive_VG(:,:)
+    real    :: Primitive_VG(Rho_:Wminor_,-OpenThread1%nCell-1:0)
     ! Conservative variables, in the physical cells only
-    real    :: Conservative_VC(cRho_:cWminor_,-OpenThread1%nCell:-1)
     real, pointer    :: ConservativeOld_VC(:,:)
     ! Interpolated left and right states at the face
-    real    :: pLeft_VF(pRho_:pWminor_,-OpenThread1%nCell:0)
-    real    :: pRight_VF(pRho_:pWminor_,-OpenThread1%nCell:0)
+    real    :: pLeft_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
+    real    :: pRight_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
     ! Differences across the face, to be limited
-    real    :: dVarUp_V(pRho_:pWminor_), dVarDown_V(pRho_:pWminor_)
+    real    :: dVarUp_V(Rho_:Wminor_), dVarDown_V(Rho_:Wminor_)
     ! To get the radial component of spherical coordinates
-    integer, parameter :: R_ = 1
     real, parameter :: cThird = 1.0/3.0, cTwoThird = 2.0/3.0, Beta = 1.50
     ! Staging:
     integer, parameter :: nStage = 2
     real    :: StageCoef
     ! Misc:
-    real :: Source_V(cRho_:cWminor_)
+    real :: Source_V(Rho_:Wminor_)
     real :: GravitySource = 0.0
     real :: WavePress, WavePperpSource, WavePpar
-    real :: PperpSource,PePerpSource,PePar, SignBr
+    real :: PperpSource,PePerpSource,PePar
     real :: Un_F(-OpenThread1%nCell:0), Rho_F(-OpenThread1%nCell:0),&
          B_F(-OpenThread1%nCell:0)
     real :: Cleft_F(-OpenThread1%nCell:0)
@@ -979,7 +966,6 @@ contains
     Dt_C=>OpenThread1%Dt_C
     State_VC => OpenThread1%State_VC
     ConservativeOld_VC => OpenThread1%ConservativeOld_VC
-    Primitive_VG => OpenThread1%Primitive_VG
     ! Face centered field, in Si
     B_F = OpenThread1%BSi_F(-nCell:0)
     ! Face area
@@ -1001,34 +987,28 @@ contains
        GravityAcc_C(iCell) =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
             (1/OpenThread1%R_F(iCell) -    &
             1/OpenThread1%R_F(iCell+1)) /  &
-       ! GravityAcc_C(iCell) =         & ! Calc -\delta Grav.Pot.
-            ! (OpenThread1%GravityPot_F(iCell) -    &
-            ! OpenThread1%GravityPot_F(iCell+1)) /  &
             OpenThread1%LengthSi_G(iCell)  ! Divide by \delta s
     end do
+    Primitive_VG(:,-nCell:-1) = State_VC(:,-nCell:-1)
+    Primitive_VG(Pperp_,-nCell:-1) = Primitive_VG(P_,-nCell:-1) + 0.5* &
+         (Primitive_VG(P_,-nCell:-1) - Primitive_VG(Ppar_,-nCell:-1))
+    Primitive_VG(PePerp_,-nCell:-1) = Primitive_VG(Pe_,-nCell:-1) + 0.5* &
+         (Primitive_VG(Pe_,-nCell:-1) - Primitive_VG(PePar_,-nCell:-1))
     if(iStage==1)then
        do iCell = -nCell, -1
-          !
-          ! Initial values for primitive variables
-          !
-          Primitive_VG(pRho_:pU_,iCell) = State_VC(sRho_:sU_,iCell)
-          Primitive_VG(pPpar_:pPperp_,iCell) = State_VC(sP_,iCell)
-          Primitive_VG(pPePar_:pPePerp_,iCell) = State_VC(sPe_,iCell)
-          Primitive_VG(pWmajor_,iCell) = State_VC(sWmajor_,iCell)
-          Primitive_VG(pWminor_,iCell) = State_VC(sWminor_,iCell)
           !
           ! Initial values for the conserved variables:
           !
           ConservativeOld_VC(:,iCell) = Primitive_VG(:,iCell)
           ! Except:
           ! 1. Momentum density
-          ConservativeOld_VC(cRhoU_,iCell) = &
-               Primitive_VG(pU_,iCell)*Primitive_VG(pRho_,iCell)
+          ConservativeOld_VC(RhoU_,iCell) = &
+               Primitive_VG(U_,iCell)*Primitive_VG(Rho_,iCell)
           ! 2. Energy density
-          ConservativeOld_VC(cEnergy_,iCell) = 0.50*Primitive_VG(pPpar_,iCell)&
-               + 0.50*Primitive_VG(pRho_,iCell)*Primitive_VG(pU_,iCell)**2
+          ConservativeOld_VC(Energy_,iCell) = 0.50*Primitive_VG(Ppar_,iCell)&
+               + 0.50*Primitive_VG(Rho_,iCell)*Primitive_VG(U_,iCell)**2
           ! 3. "Conserved" electron parallel energy density is a half of PePar)
-          ConservativeOld_VC(cPePar_,iCell) = 0.50*Primitive_VG(pPePar_,iCell)
+          ConservativeOld_VC(PePar_,iCell) = 0.50*Primitive_VG(PePar_,iCell)
        end do
     end if
     !
@@ -1142,18 +1122,18 @@ contains
             Ds_G(iCell)
        VaCell_C(iCell) = 0.50*(VaFace_F(iCell+1) + VaFace_F(iCell))
        DissMajor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
-            Primitive_VG(pWminor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
+            Primitive_VG(Wminor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
        DissMinor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
-            Primitive_VG(pWmajor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
+            Primitive_VG(Wmajor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
        Reflection_C(iCell) = sign(min(abs(DvaDs_C(iCell)),0.50*abs(&
             DissMajor_C(iCell) - DissMinor_C(iCell))),&
-            Primitive_VG(pWmajor_,iCell) - Primitive_VG(pWminor_,iCell))
+            Primitive_VG(Wmajor_,iCell) - Primitive_VG(Wminor_,iCell))
        Heating_C(iCell) = &
-            (DissMajor_C(iCell)*Primitive_VG(pWmajor_,iCell)&
-            + DissMinor_C(iCell)*Primitive_VG(pWminor_,iCell))*&
-            PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(pRho_,iCell))
+            (DissMajor_C(iCell)*Primitive_VG(Wmajor_,iCell)&
+            + DissMinor_C(iCell)*Primitive_VG(Wminor_,iCell))*&
+            PoyntingFluxPerBsi*sqrt(cMu*Primitive_VG(Rho_,iCell))
     end do
-    where(OpenThread1%Coord_DF(R_,-nCell:-1)<rMinReflectionTr)&
+    where(OpenThread1%R_F(-nCell:-1)<rMinReflectionTr)&
          Reflection_C = 0.0
     if(iStage==1)then
        do iCell = -nCell, -1
@@ -1169,8 +1149,8 @@ contains
                + &  ! CFL
                max(DissMajor_C(iCell),DissMinor_C(iCell))&
                ,& ! + diss rate
-               cooling_rate(RhoSi=Primitive_VG(pRho_,iCell),&  ! or cooling
-               PeSi=Primitive_VG(pPePar_,iCell)))              ! rate
+               cooling_rate(RhoSi=Primitive_VG(Rho_,iCell),&  ! or cooling
+               PeSi=Primitive_VG(PePar_,iCell)))              ! rate
        end do
        OpenThread1%Dt = minval(Dt_C(-nCell:-1))
        if(IsTimeAccurate)Dt_C(-nCell:-1) = OpenThread1%Dt
@@ -1184,38 +1164,38 @@ contains
 
        ! dU = dt / Volume * (F_{i-1/2}*FaceArea_{i-1/2} &
        !                        -F_{i+1/2}*FaceArea_{i+1/2} )
-       Conservative_VC(:,iCell) = ConservativeOld_VC(:,iCell) + &
+       State_VC(:,iCell) = ConservativeOld_VC(:,iCell) + &
             StageCoef*Dt_C(iCell)*vInv_C(iCell)* &
             (Flux_VF(:,iCell)*FaceArea_F(iCell) - &
             Flux_VF(:,iCell+1)*FaceArea_F(iCell+1) )
        ! Calculate source terms
        ! 1. Pperp source term
        PperpSource = &
-            Primitive_VG(pPperp_,iCell)*NablaHatB_C(iCell)
+            Primitive_VG(Pperp_,iCell)*NablaHatB_C(iCell)
        ! 2. Wave pressure, convert from the representative functions
        WavePress = 0.50*&
-            sum(Primitive_VG(pWmajor_:pWminor_,iCell))*PoyntingFluxPerBsi*&
-            sqrt(cMu*Primitive_VG(pRho_,iCell))
+            sum(Primitive_VG(Wmajor_:Wminor_,iCell))*PoyntingFluxPerBsi*&
+            sqrt(cMu*Primitive_VG(Rho_,iCell))
        ! 3. Wave pressure source terms
        WavePperpSource = WavePress*NablaHatB_C(iCell)
        WavePpar = WavePress
        ! 4. PePar source term
-       PePar = Primitive_VG(pPePar_,iCell)
+       PePar = Primitive_VG(PePar_,iCell)
        ! 5. PePerp source term
        PePerpSource = &
-            Primitive_VG(pPePerp_,iCell)*NablaHatB_C(iCell)
+            Primitive_VG(PePerp_,iCell)*NablaHatB_C(iCell)
        ! 6. Heating and partitioning
        if(UseStochasticHeating)then
           call apportion_heating(&
                ! Inputs, all in SI:
-               PparIn = Primitive_VG(pPpar_,iCell)      ,&
-               PperpIn= Primitive_VG(pPperp_,iCell)     ,&
-               PeIn   = cThird*Primitive_VG(pPePar_,iCell) + &
-               cTwoThird*Primitive_VG(pPePerp_,iCell)   ,&
-               RhoIn  = Primitive_VG(pRho_,iCell)       ,&
+               PparIn = Primitive_VG(Ppar_,iCell)      ,&
+               PperpIn= Primitive_VG(Pperp_,iCell)     ,&
+               PeIn   = cThird*Primitive_VG(PePar_,iCell) + &
+               cTwoThird*Primitive_VG(PePerp_,iCell)   ,&
+               RhoIn  = Primitive_VG(Rho_,iCell)       ,&
                BIn    = 0.50*(B_F(iCell) + B_F(iCell+1)),&
-               WmajorIn = Primitive_VG(pWmajor_,iCell)  ,&
-               WminorIn = Primitive_VG(pWminor_,iCell)  ,&
+               WmajorIn = Primitive_VG(Wmajor_,iCell)  ,&
+               WminorIn = Primitive_VG(Wminor_,iCell)  ,&
                DissRateMajorIn = DissMajor_C(iCell)     ,&
                DissRateMinorIn = DissMinor_C(iCell)     ,&
                ! Outputs:
@@ -1227,7 +1207,7 @@ contains
        PperpHeating = QperpPerQtotal*Heating_C(iCell)
        PeHeating    = QePerQtotal   *Heating_C(iCell)
        ! 7. Gravity force density, rho*g:
-       GravitySource = Primitive_VG(pRho_,iCell)*GravityAcc_C(iCell)
+       GravitySource = Primitive_VG(Rho_,iCell)*GravityAcc_C(iCell)
        !
        ! Get full source vector
        !
@@ -1235,20 +1215,20 @@ contains
             PperpSource + PePerpSource + WavePperpSource +&
             GravitySource,                                & ! Momentum
             (PperpSource + PePerpSource + WavePperpSource + GravitySource)&
-            *Primitive_VG(pU_,iCell) + &
+            *Primitive_VG(U_,iCell) + &
             (PePar + WavePpar)*DuDs_C(iCell) + &
             PparHeating,                  & ! Energy
-            - PperpSource*Primitive_VG(pU_,iCell) + PperpHeating, & ! Pperp
-            - PePar*DuDs_C(iCell) + cThird*PeHeating, & ! PePar,PePerp
-            - PePerpSource*Primitive_VG(pU_,iCell)+ cTwoThird*PeHeating, &
-            -DissMajor_C(iCell)*Primitive_VG(pWmajor_,iCell) - &
-            Reflection_C(iCell)*sqrt(Primitive_VG(pWmajor_,iCell)*&
-            Primitive_VG(pWminor_,iCell)),               & ! Wmajor
-            -DissMinor_C(iCell)*Primitive_VG(pWminor_,iCell) + &
-            Reflection_C(iCell)*sqrt(Primitive_VG(pWmajor_,iCell)*&
-            Primitive_VG(pWminor_,iCell))                 ] ! Wminor
+            - PperpSource*Primitive_VG(U_,iCell) + PperpHeating, & ! Pperp
+            - PePar*DuDs_C(iCell) + cThird*PeHeating, & ! <-PePar / PePerp
+            - PePerpSource*Primitive_VG(U_,iCell)+ cTwoThird*PeHeating, &
+            -DissMajor_C(iCell)*Primitive_VG(Wmajor_,iCell) - &
+            Reflection_C(iCell)*sqrt(Primitive_VG(Wmajor_,iCell)*&
+            Primitive_VG(Wminor_,iCell)),               & ! Wmajor
+            -DissMinor_C(iCell)*Primitive_VG(Wminor_,iCell) + &
+            Reflection_C(iCell)*sqrt(Primitive_VG(Wmajor_,iCell)*&
+            Primitive_VG(Wminor_,iCell))                 ] ! Wminor
        ! Apply source
-       Conservative_VC(:,iCell) = Conservative_VC(:,iCell) +&
+       State_VC(:,iCell) = State_VC(:,iCell) +&
             StageCoef*Dt_C(iCell)*Source_V
     end do
     !
@@ -1256,69 +1236,47 @@ contains
     !
     ! Transform to primitives, set minimum pressure and density
     do iCell = -nCell, -1
-       Primitive_VG(pRho_,iCell) = max(MinRho,                 &
-            Conservative_VC(cRho_,iCell) )
-       Primitive_VG(pU_,iCell)   = Conservative_VC(cRhoU_,iCell) / &
-            Primitive_VG(pRho_,iCell)
+       State_VC(Rho_,iCell) = max(MinRho, State_VC(Rho_,iCell) )
+       State_VC(U_,iCell)   = State_VC(RhoU_,iCell)/State_VC(Rho_,iCell)
 
        ! Ppar = 2*Energy - Rho U**2
-       Primitive_VG(pPpar_,iCell)   = max(MinPress, &
-            2*Conservative_VC(cEnergy_,iCell)  - &
-            Primitive_VG(pRho_,iCell)  * &
-            Primitive_VG(pU_,iCell)**2 )
+       State_VC(Ppar_,iCell)   = max(MinPress, 2*State_VC(Energy_,iCell) - &
+            State_VC(Rho_,iCell)*State_VC(U_,iCell)**2 )
 
-       Primitive_VG(pPperp_,iCell)   = max(MinPress,&
-            Conservative_VC(cPperp_,iCell))
-
-       Primitive_VG(pPePar_,iCell)   = max(MinPress, &
-            2*Conservative_VC(cPePar_,iCell) )
-
-       Primitive_VG(pPePerp_,iCell)  = max(MinPress,&
-            Conservative_VC(cPePerp_,iCell))
-
-       Primitive_VG(pWmajor_:pWminor_,iCell)  = &
-            Conservative_VC(cWmajor_:cWminor_,iCell)
-
-       State_VC(sRho_:sU_,iCell) = &
-            Primitive_VG(pRho_:pU_,iCell)
        ! Pressure = 2/3 Pperp +1/3 Ppar
-       State_VC(sP_,iCell) = cThird*Primitive_VG(pPpar_,iCell) &
-            + cTwoThird*Primitive_VG(pPperp_,iCell)
-       State_VC(sPe_,iCell) = cThird*Primitive_VG(pPePar_,iCell) &
-            + cTwoThird*Primitive_VG(pPePerp_,iCell)
+       State_VC(P_,iCell)   = max(MinPress, cThird*State_VC(Ppar_,iCell)&
+            + cTwoThird*State_VC(Pperp_,iCell))
+
+       State_VC(PePar_,iCell)   = max(MinPress, 2*State_VC(PePar_,iCell) )
+
+       State_VC(Pe_,iCell)  = max(MinPress, cThird*State_VC(PePar_,iCell)&
+            + cTwoThird*State_VC(PePerp_,iCell))
     end do
-    if(iStage==1)then
-       ! Put the calculated wave dimensionless amplitudes
-       do iCell = -nCell, -1
-          State_VC(sWmajor_:sWMinor_,iCell) = &
-               Primitive_VG(pWmajor_:pWminor_,iCell)
-       end do
-       RETURN
-    end if
+    if(iStage==1)RETURN
     ! Semi-implicit stage
     ! First, solve implicit equation
     ! Wmajor_i^{n+1} -Wmajor_i^n +(Va*Dt/Ds)*(-W^{n+1}_{i-1} + W^{n+1)_i)
+    Primitive_VG(Wmajor_:Wminor_,-nCell:-1) = &
+         State_VC(Wmajor_:Wminor_,-nCell:-1)
     do iCell = -nCell, -1
        VaDtOverDs_C(iCell) = VaCell_C(iCell)*Dt_C(iCell)/Ds_G(iCell)
-       Primitive_VG(pWmajor_,iCell) = ( Primitive_VG(pWmajor_,iCell) +&
-            Primitive_VG(pWmajor_,iCell-1)*VaDtOverDs_C(iCell)) / &
+       Primitive_VG(Wmajor_,iCell) = ( Primitive_VG(Wmajor_,iCell) +&
+            Primitive_VG(Wmajor_,iCell-1)*VaDtOverDs_C(iCell)) / &
             (1 + VaDtOverDs_C(iCell))
     end do
     ! Second, solve implicit equation
     ! Wminor_i^{n+1} -Wminor_i^n -(Va*Dt/Ds)*(+W^{n+1}_{i+1} - W^{n+1)_i) = 0
     do iCell = -1, -nCell, -1
-       Primitive_VG(pWminor_,iCell) = ( Primitive_VG(pWminor_,iCell) +&
-            Primitive_VG(pWminor_,iCell+1)*VaDtOverDs_C(iCell)) / &
+       Primitive_VG(Wminor_,iCell) = ( Primitive_VG(Wminor_,iCell) +&
+            Primitive_VG(Wminor_,iCell+1)*VaDtOverDs_C(iCell)) / &
             (1 + VaDtOverDs_C(iCell))
     end do
     ! Put the calculated wave dimensionless amplitudes
-    do iCell = -nCell, -1
-       State_VC(sWmajor_:sWminor_,iCell) = &
-            Primitive_VG(pWmajor_:pWminor_,iCell)
-    end do
+    State_VC(Wmajor_:Wminor_,-nCell:-1) = &
+         Primitive_VG(Wmajor_:Wminor_,-nCell:-1)
     ! Electron heat conduction and losses
-    N_C(-nCell:-1) = State_VC(sRho_,-nCell:-1)/cProtonMass
-    Te_G(-nCell:-1) = State_VC(sPe_,-nCell:-1)/(cBoltzmann*N_C)
+    N_C(-nCell:-1) = State_VC(Rho_,-nCell:-1)/cProtonMass
+    Te_G(-nCell:-1) = State_VC(Pe_,-nCell:-1)/(cBoltzmann*N_C)
     ! Float BC for Te:
     ! Assume the radially decaying solution according to power laws
     ! beyond the external boundary
@@ -1329,7 +1287,7 @@ contains
     rRatio = 0.5*(1 + OpenThread1%R_F(-1)&
          /OpenThread1%R_F(0))
     Te_G(0) = Te_G(-1)*rRatio
-    Ti_C(-nCell:-1) = State_VC(sP_,-nCell:-1)/(cBoltzmann*N_C)
+    Ti_C(-nCell:-1) = State_VC(P_,-nCell:-1)/(cBoltzmann*N_C)
     call advance_heat_conduction(&
          nPoint = nCell, &
          Dt_I = Dt_C,    &
@@ -1341,14 +1299,17 @@ contains
          B_I  = OpenThread1%BSi_F(-nCell:0), &
          PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
          TeFaceOut = OpenThread1%TeTr)
-    State_VC(sP_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
-    State_VC(sPe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
+    State_VC(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
+    State_VC(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
+    ! If no anysotropic pressure is used
+    State_VC(Ppar_ ,-nCell:-1) = State_VC(P_ ,-nCell:-1)
+    State_VC(PePar_ ,-nCell:-1) = State_VC(Pe_ ,-nCell:-1)
   contains
     !==========================================================================
     subroutine set_thread_inner_bc(TeIn, uIn, pIn, Primitive_V)
 
       real, intent(in) :: TeIn, uIn, pIn
-      real, intent(out):: Primitive_V(pRho_:pWminor_)
+      real, intent(out):: Primitive_V(Rho_:Wminor_)
       !------------------------------------------------------------------------
       Primitive_V = [&
            cProtonMass*pIn/(cBoltzmann*TeIn), &
@@ -1364,25 +1325,25 @@ contains
     subroutine get_thread_flux(pLeft_V, pRight_V, &
          Flux_V, Cleft, Cright, UnFace, RhoFace)
 
-      real,   intent(in) :: pLeft_V(pRho_:pWminor_), pRight_V(pRho_:pWminor_)
-      real,  intent(out) :: Flux_V(cRho_:cWminor_)
+      real,   intent(in) :: pLeft_V(Rho_:Wminor_), pRight_V(Rho_:Wminor_)
+      real,  intent(out) :: Flux_V(Rho_:Wminor_)
       real,  intent(out) :: Cleft, Cright, UnFace, RhoFace
 
-      real    :: UpwindState_V(pRho_:pWminor_), &
+      real    :: UpwindState_V(Rho_:Wminor_), &
            TotalP, DensityRatio, PparFace, ExtraP, ExtraPright, ExtraPleft
 
       !------------------------------------------------------------------------
-      RhoL = pLeft_V(pRho_ )
-      ExtraPleft = pLeft_V(pPePar_) + sum(pLeft_V(pWmajor_:pWminor_))*0.5*&
+      RhoL = pLeft_V(Rho_ )
+      ExtraPleft = pLeft_V(PePar_) + sum(pLeft_V(Wmajor_:Wminor_))*0.5*&
            sqrt(cMu*RhoL)*PoyntingFluxPerBsi
-      pL   = pLeft_V(pPpar_) + ExtraPleft
-      UnL  = pLeft_V(pU_)
+      pL   = pLeft_V(Ppar_) + ExtraPleft
+      UnL  = pLeft_V(U_)
 
-      RhoR = pRight_V(pRho_ )
-      ExtraPright = pRight_V(pPePar_) + sum(pRight_V(pWmajor_:pWminor_))*0.5*&
+      RhoR = pRight_V(Rho_ )
+      ExtraPright = pRight_V(PePar_) + sum(pRight_V(Wmajor_:Wminor_))*0.5*&
            sqrt(cMu*RhoR)*PoyntingFluxPerBsi
-      pR   = pRight_V(pPpar_) + ExtraPright
-      UnR  = pRight_V(pU_)
+      pR   = pRight_V(Ppar_) + ExtraPright
+      UnR  = pRight_V(U_)
 
       ! exact solver
 
@@ -1398,31 +1359,31 @@ contains
 
       if (UnStar  >  0) then
          ! Factor for variables linearly scaling with density
-         DensityRatio = RhoFace / pLeft_V(pRho_)
+         DensityRatio = RhoFace / pLeft_V(Rho_)
          UpwindState_V = pLeft_V
          ExtraP = ExtraPleft
       else
-         DensityRatio = RhoFace / pRight_V(pRho_)
+         DensityRatio = RhoFace / pRight_V(Rho_)
          UpwindState_V = pRight_V
          ExtraP = ExtraPright
       end if
 
       ! get the flux
 
-      Flux_V(cRho_) = RhoFace * UnFace
-      Flux_V(cRhoU_) = RhoFace*UnFace**2 + TotalP
+      Flux_V(Rho_) = RhoFace * UnFace
+      Flux_V(RhoU_) = RhoFace*UnFace**2 + TotalP
       ! All contributions to pressure except for ion one are assumed
       ! to scale adiabatically with density:
       PparFace = TotalP - ExtraP*DensityRatio**3
-      Flux_V(cEnergy_) = (0.50*(RhoFace*UnFace**2 + PparFace) + TotalP)*UnFace
+      Flux_V(Energy_) = (0.50*(RhoFace*UnFace**2 + PparFace) + TotalP)*UnFace
       ! All passive scalars should be upwinded, scaled proportional to density
       ! and multiplied by Uface, to get their flux:
-      Flux_V(cPperp_:cWminor_) = DensityRatio*UpwindState_V(pPperp_:pWminor_)&
+      Flux_V(Pperp_:Wminor_) = DensityRatio*UpwindState_V(Pperp_:Wminor_)&
            *UnFace
       ! Exception: both the conservative variable is 1/2 PePar and its flux
       ! while the left and right state vertors include just PePar, so that
       ! this flux should be multiplied by 1/2
-      Flux_V(cPePar_) = 0.50*Flux_V(cPePar_)
+      Flux_V(PePar_) = 0.50*Flux_V(PePar_)
     end subroutine get_thread_flux
     !==========================================================================
   end subroutine advance_thread
@@ -1987,30 +1948,31 @@ contains
 
     type(OpenThread),intent(inout) :: OpenThread1
     character(LEN=*), intent(in) :: NameFile
-    integer, parameter :: sWPlus_ = 5, sWminus_ = 6,sTi_=7,  sTe_=8
-    real :: Value_VI(sRho_:sTe_+1,-nPointMax:-1)
+    integer, parameter :: sWPlus_ = 5, sWminus_ = 6,sTi_=7,  sTe_=8, &
+         iPlotVar_V(Rho_:sWminus_) = [Rho_, U_, P_, Pe_, Wmajor_, Wminor_]
+    real :: Value_VI(Rho_:sTe_+1,-nPointMax:-1)
     real, pointer :: State_VC(:,:)
     integer :: nCell
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
     State_VC => OpenThread1%State_VC
-    Value_VI(sRho_:sWminus_,-nCell:-1) = State_VC(sRho_:sWminus_,-nCell:-1)
+    Value_VI(Rho_:sWminus_,-nCell:-1) = State_VC(iPlotVar_V,-nCell:-1)
     if(sign(1.0, OpenThread1%OpenFlux) > 0)then
        Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(sRho_,-nCell:-1))*State_VC(sWmajor_,-nCell:-1)
+            State_VC(Rho_,-nCell:-1))*State_VC(Wmajor_,-nCell:-1)
        Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(sRho_,-nCell:-1))*State_VC(sWminor_,-nCell:-1)
+            State_VC(Rho_,-nCell:-1))*State_VC(Wminor_,-nCell:-1)
 
     else
        Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(sRho_,-nCell:-1))*State_VC(sWminor_,-nCell:-1)
+            State_VC(Rho_,-nCell:-1))*State_VC(Wminor_,-nCell:-1)
        Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(sRho_,-nCell:-1))*State_VC(sWmajor_,-nCell:-1)
+            State_VC(Rho_,-nCell:-1))*State_VC(Wmajor_,-nCell:-1)
     end if
-    Value_VI(sTi_,-nCell:-1) = State_VC(sP_,-nCell:-1)*cProtonMass/&
-         (cBoltzmann*State_VC(sRho_,-nCell:-1))
-    Value_VI(sTe_,-nCell:-1) = State_VC(sPe_,-nCell:-1)*cProtonMass/&
-         (cBoltzmann*State_VC(sRho_,-nCell:-1))
+    Value_VI(sTi_,-nCell:-1) = State_VC(P_,-nCell:-1)*cProtonMass/&
+         (cBoltzmann*State_VC(Rho_,-nCell:-1))
+    Value_VI(sTe_,-nCell:-1) = State_VC(Pe_,-nCell:-1)*cProtonMass/&
+         (cBoltzmann*State_VC(Rho_,-nCell:-1))
     Value_VI(sTe_+1,-nCell:-1) = &
          OpenThread1%BSi_F(-nCell:-1)*Si2Gs
     call save_plot_file(NameFile = NameFile,  &
