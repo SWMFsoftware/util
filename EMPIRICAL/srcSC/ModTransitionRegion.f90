@@ -57,8 +57,18 @@ module ModTransitionRegion
   ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
-  public :: init_tr, check_tr_table, get_trtable_value, integrate_emission, &
-       plot_tr, read_tr_param, check_tr_param, init_thread, test
+  ! Public members
+  public :: init_tr      ! Initialize module, check analytical TR model table
+  public :: get_trtable_value     ! Access the TR model table
+  public :: integrate_emission    ! Emission from the analytic TR model
+  public :: plot_tr               ! Plot emission from the analytic TR model
+  public :: read_tr_param         ! Read TR model parameters
+  public :: check_tr_param        ! Synchtonize TR and SC model parameters
+  public :: allocate_thread_arr   ! Threads originating from face centers
+  public :: deallocate_thread_arr ! Deallocate threads
+  public :: set_thread            ! Trace a thread from the face center
+  public :: advance_thread        ! Advance numerical solution on thread 
+  public :: save_plot_thread      ! Plot state vector distribution on thread
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
@@ -95,8 +105,6 @@ module ModTransitionRegion
      module procedure advance_heat_conduction_ta
      module procedure advance_heat_conduction_ss
   end interface advance_heat_conduction
-  public :: advance_heat_conduction, cooling_rate, advance_thread, &
-       deallocate_thread
   ! Inner boundary
   ! To be read from the parameter file
   real :: TempInner = 2.0e6, PressInner = 4.0e-3
@@ -141,7 +149,7 @@ module ModTransitionRegion
      integer :: nCell = -1
      real    :: OpenFlux = 0.0 ! [T Rsun**2]
   end type OpenThread
-  public :: OpenThread, set_thread, save_plot_thread
+  public :: OpenThread
   ! Named indexes for state variables
   integer, public, parameter :: Rho_ = 1, U_ = 2, RhoU_ = 2, Ppar_ = 3, &
        Energy_ = 3, P_ = 4, Pperp_= 4, PePar_ = 5, PePerp_ = 6, Pe_ = 6,&
@@ -500,6 +508,33 @@ contains
     Value_V(:) = Value_VII(:, iTe, iU)
   end subroutine calc_tr_table
   !============================================================================
+  subroutine get_trtable_value(Te, uFace)
+
+    ! For two entries, Te and u on top of the transition region,
+    ! the routine calculates TrTable_V array of the tabulated values
+    ! If uIn is not provided, it is taken to be 0.
+    ! If optional uOut is requested, the limited value of u is provided
+    ! calculated with the value uMin < uTr < uMax at the bottom of
+    ! transition region.
+    ! All inputs and outputs are in SI units
+    use ModLookupTable,  ONLY: interpolate_lookup_table
+    real, intent(in) :: Te  ! Temperature on top of the transition region
+    ! Speed on top of the transition region
+    real, OPTIONAL, intent(inout) :: uFace
+    ! Misc:
+    ! Actual table entry, speed at the bottom of TR:
+    real :: uTr
+    !--------------------------------------------------------------------------
+    if(present(uFace))then
+       uTr = min(uMax, max(ChromoEvapCoef*uFace/Te, uMin))
+       uFace = uTr*Te/TeTrMin
+    else
+       uTr = 0.0
+    end if
+    call interpolate_lookup_table(iTableTr, Te, uTr, TrTable_V, &
+         DoExtrapolate=.false.)
+  end subroutine get_trtable_value
+  !============================================================================
   subroutine set_thread(XyzIn_D, FaceArea, OpenThread1, &
        xyz_to_coord, get_field, iBeginOut)
     ! Origin point coordinates (Xyz)
@@ -708,6 +743,18 @@ contains
 
   end subroutine init_thread_variables
   !============================================================================
+  subroutine allocate_thread_arr(Threads_II, nI, nJ)
+    type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
+    integer, intent(in) :: nI, nJ
+    integer :: i, j
+    character(LEN=*), parameter :: NameSub='allocate_thread_arr'
+    !--------------------------------------------------------------------------
+    allocate(Threads_II(nI,nJ))
+    do j = 1, nJ; do i = 1, nI
+       call init_thread(Threads_II(i,j))
+    end do; end do
+  end subroutine allocate_thread_arr
+  !============================================================================
   subroutine init_thread(OpenThread1)
 
     ! Thread to set
@@ -726,8 +773,21 @@ contains
     OpenThread1%uTr  = -1.0
     OpenThread1%PeTr = -1.0
     OpenThread1%Dt   = -1.0
+    OpenThread1%OpenFlux = 0.0
     OpenThread1%nCell = -1
   end subroutine init_thread
+  !============================================================================
+  subroutine deallocate_thread_arr(Threads_II, nI, nJ)
+    type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
+    integer, intent(in) :: nI, nJ
+    integer :: i, j
+    character(LEN=*), parameter :: NameSub='allocate_thread_arr'
+    !--------------------------------------------------------------------------
+    do j = 1, nJ; do i = 1, nI
+       call deallocate_thread(Threads_II(i,j))
+    end do; end do
+    deallocate(Threads_II)
+  end subroutine deallocate_thread_arr
   !============================================================================
   subroutine deallocate_thread(OpenThread1)
 
@@ -739,42 +799,17 @@ contains
     OpenThread1%PeTr = -1.0
     OpenThread1%Dt   = -1.0
     OpenThread1%nCell = -1
+    OpenThread1%OpenFlux = 0.0
     if(.not.associated(OpenThread1%Coord_DF))RETURN
     deallocate(OpenThread1%ConservativeOld_VC)
     deallocate(OpenThread1%Dt_C)
     deallocate(OpenThread1%State_VG)
+    deallocate(OpenThread1%Te_G)
     deallocate(OpenThread1%R_F)
     deallocate(OpenThread1%Coord_DF)
     deallocate(OpenThread1%BSi_F)
     deallocate(OpenThread1%LengthSi_G)
   end subroutine deallocate_thread
-  !============================================================================
-  subroutine get_trtable_value(Te, uFace)
-
-    ! For two entries, Te and u on top of the transition region,
-    ! the routine calculates TrTable_V array of the tabulated values
-    ! If uIn is not provided, it is taken to be 0.
-    ! If optional uOut is requested, the limited value of u is provided
-    ! calculated with the value uMin < uTr < uMax at the bottom of
-    ! transition region.
-    ! All inputs and outputs are in SI units
-    use ModLookupTable,  ONLY: interpolate_lookup_table
-    real, intent(in) :: Te  ! Temperature on top of the transition region
-    ! Speed on top of the transition region
-    real, OPTIONAL, intent(inout) :: uFace
-    ! Misc:
-    ! Actual table entry, speed at the bottom of TR:
-    real :: uTr
-    !--------------------------------------------------------------------------
-    if(present(uFace))then
-       uTr = min(uMax, max(ChromoEvapCoef*uFace/Te, uMin))
-       uFace = uTr*Te/TeTrMin
-    else
-       uTr = 0.0
-    end if
-    call interpolate_lookup_table(iTableTr, Te, uTr, TrTable_V, &
-         DoExtrapolate=.false.)
-  end subroutine get_trtable_value
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
     use ModLookupTable,  ONLY: interpolate_lookup_table
