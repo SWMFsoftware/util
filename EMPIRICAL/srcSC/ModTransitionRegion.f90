@@ -144,7 +144,7 @@ module ModTransitionRegion
   ! Named indexes for state variables
   integer, public, parameter :: Rho_ = 1, U_ = 2, RhoU_ = 2, Ppar_ = 3, &
        Energy_ = 3, P_ = 4, Pperp_= 4, PePar_ = 5, PePerp_ = 6, Pe_ = 6,&
-       Wmajor_ = 7, Wminor_ = 8!, Wdiff_ = 9
+       Wmajor_ = 7, Wminor_ = 8, TeImpl_ = 1!, Wdiff_ = 9
   ! Threads are traced from rMax toward rMin
   real,    public :: rMin = rChromo, rMax = 2.5
   integer, public, parameter :: nPointMax = 10000
@@ -634,7 +634,7 @@ contains
          R_F(-nCell:0)
     if(.not.associated(OpenThread1%State_VC))then
        ! Allocate state variables,
-       allocate(OpenThread1%State_VC(Rho_:Wminor_,-nCell:-1))
+       allocate(OpenThread1%State_VC(Rho_:Wminor_,-nCell:0))
        ! Set nPoint
        OpenThread1%nCell = nCell
        ! Then initiate their values
@@ -670,32 +670,34 @@ contains
     type(OpenThread),intent(inout) :: OpenThread1
 
     real :: RInvCenter_I(-OpenThread1%nCell:-1)
+    integer :: nCell
 
     !--------------------------------------------------------------------------
-    RInvCenter_I(-OpenThread1%nCell:-1) = &
-         (1/OpenThread1%R_F(-OpenThread1%nCell  :-1) + &
-         1/OpenThread1%R_F(-OpenThread1%nCell+1: 0))*0.50
+    nCell = OpenThread1%nCell
+    RInvCenter_I(-nCell:-1) = &
+         (1/OpenThread1%R_F(-nCell:-1) + &
+         1/OpenThread1%R_F(-nCell+1: 0))*0.50
 
     ! initial velocity is zero
 
-    OpenThread1%State_VC(U_,:) = 0.0
+    OpenThread1%State_VC(U_,-nCell:-1) = 0.0
 
     ! exponential pressure
 
-    OpenThread1%State_VC(P_,:) = PressInner * 0.5 * exp( &
+    OpenThread1%State_VC(P_,-nCell:-1) = PressInner * 0.5 * exp( &
          cProtonMass * mSun * cGravitation / cBoltzmann / &
          TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
-    OpenThread1%State_VC(Ppar_,:) = OpenThread1%State_VC(P_,:)
-    OpenThread1%State_VC(Pe_,:) = OpenThread1%State_VC(P_,:)
-    OpenThread1%State_VC(PePar_,:) = OpenThread1%State_VC(Pe_,:)
+    OpenThread1%State_VC(Ppar_,-nCell:-1) = OpenThread1%State_VC(P_,-nCell:-1)
+    OpenThread1%State_VC(Pe_,-nCell:-1) = OpenThread1%State_VC(P_,-nCell:-1)
+    OpenThread1%State_VC(PePar_,-nCell:-1) = OpenThread1%State_VC(Pe_,-nCell:-1)
 
     ! Pi = n * kB * T, n = Rho / Mp
     ! -> Rho = Mp * Pi / (kB * T)
-    OpenThread1%State_VC(Rho_,:) = cProtonMass * &
-         OpenThread1%State_VC(P_,:) / (cBoltzmann*TempInner)
+    OpenThread1%State_VC(Rho_,-nCell:-1) = cProtonMass * &
+         OpenThread1%State_VC(P_,-nCell:-1) / (cBoltzmann*TempInner)
 
-    OpenThread1%State_VC(Wmajor_,:) = 1.0
-    OpenThread1%State_VC(Wminor_,:) = 1.0e-8
+    OpenThread1%State_VC(Wmajor_,-nCell:-1) = 1.0
+    OpenThread1%State_VC(Wminor_,-nCell:-1) = 1.0e-8
     
     OpenThread1%TeTr = TempInner
     OpenThread1%uTr  = 0.0
