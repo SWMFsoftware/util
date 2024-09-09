@@ -126,25 +126,26 @@ module ModTransitionRegion
      real, pointer :: R_F(:)
      ! CELL (nor face!) centered array of the physical quantities
      ! to be solved for the given thread
-     real, pointer :: State_VC(:,:)
+     real, pointer :: State_VG(:,:)
      real, pointer :: ConservativeOld_VC(:,:)
+     real, pointer :: Te_G(:)
      ! Since the arrays are further updated with different routines,
      ! we store the intermediate results of simulation:
      ! 1. Local time step (set be the hydro update procedure)
      real, pointer :: Dt_C(:)
      ! 2. The transition region parameters, solved in
      ! the heat conduction routine, and the global time step
-     real :: TeTr = -1, uTr = -1, PeTr = -1, Dt = -1
+     real :: TeTr = -1.0, uTr = -1.0, PeTr = -1.0, Dt = -1.0
      ! number of cells, the _C arrays has the index range
      ! from -nCell to -1
      integer :: nCell = -1
-     real    :: OpenFlux ! [Gs Rsun**2]
+     real    :: OpenFlux = 0.0 ! [T Rsun**2]
   end type OpenThread
   public :: OpenThread, set_thread, save_plot_thread
   ! Named indexes for state variables
   integer, public, parameter :: Rho_ = 1, U_ = 2, RhoU_ = 2, Ppar_ = 3, &
        Energy_ = 3, P_ = 4, Pperp_= 4, PePar_ = 5, PePerp_ = 6, Pe_ = 6,&
-       Wmajor_ = 7, Wminor_ = 8, TeImpl_ = 1!, Wdiff_ = 9
+       Wmajor_ = 7, Wminor_ = 8 !, Wdiff_ = 9
   ! Threads are traced from rMax toward rMin
   real,    public :: rMin = rChromo, rMax = 2.5
   integer, public, parameter :: nPointMax = 10000
@@ -547,7 +548,7 @@ contains
     iBegin = 0
     call get_field(XyzStart_D, B0_D)
     BrSS = sum(XyzStart_D*B0_D)/R
-    OpenThread1%OpenFlux = FaceArea*BrSS*Si2Gs
+    OpenThread1%OpenFlux = FaceArea*BrSS
     IBEGINLOOP: do
        B0 = norm2(B0_D)
        call xyz_to_coord(XyzStart_D,Coord_DI(:,-iBegin))
@@ -632,9 +633,9 @@ contains
     allocate(OpenThread1%R_F(-nCell:0))
     OpenThread1%R_F(-nCell:0) = &
          R_F(-nCell:0)
-    if(.not.associated(OpenThread1%State_VC))then
+    if(.not.associated(OpenThread1%State_VG))then
        ! Allocate state variables,
-       allocate(OpenThread1%State_VC(Rho_:Wminor_,-nCell:0))
+       allocate(OpenThread1%State_VG(Rho_:Wminor_,-nCell:0))
        ! Set nPoint
        OpenThread1%nCell = nCell
        ! Then initiate their values
@@ -649,6 +650,7 @@ contains
       allocate(OpenThread1%Coord_DF(3,-iPoint:0))
       allocate(OpenThread1%Dt_C(-nCell:-1))
       allocate(OpenThread1%R_F(-nCell:0))
+      allocate(OpenThread1%Te_G(-nCell:0))
       allocate(OpenThread1%ConservativeOld_VC(Rho_:Wminor_,-nCell:-1))
     end subroutine allocate_pointer
     !==========================================================================
@@ -658,6 +660,7 @@ contains
       deallocate(OpenThread1%Coord_DF)
       deallocate(OpenThread1%Dt_C)
       deallocate(OpenThread1%R_F)
+      deallocate(OpenThread1%Te_G)
       deallocate(OpenThread1%ConservativeOld_VC)
     end subroutine deallocate_pointer
     !==========================================================================
@@ -680,25 +683,25 @@ contains
 
     ! initial velocity is zero
 
-    OpenThread1%State_VC(U_,-nCell:-1) = 0.0
+    OpenThread1%State_VG(U_,-nCell:-1) = 0.0
 
     ! exponential pressure
 
-    OpenThread1%State_VC(P_,-nCell:-1) = PressInner * 0.5 * exp( &
+    OpenThread1%State_VG(P_,-nCell:-1) = PressInner * 0.5 * exp( &
          cProtonMass * mSun * cGravitation / cBoltzmann / &
          TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
-    OpenThread1%State_VC(Ppar_,-nCell:-1) = OpenThread1%State_VC(P_,-nCell:-1)
-    OpenThread1%State_VC(Pe_,-nCell:-1) = OpenThread1%State_VC(P_,-nCell:-1)
-    OpenThread1%State_VC(PePar_,-nCell:-1) = OpenThread1%State_VC(Pe_,-nCell:-1)
+    OpenThread1%State_VG(Ppar_,-nCell:-1) = OpenThread1%State_VG(P_,-nCell:-1)
+    OpenThread1%State_VG(Pe_,-nCell:-1) = OpenThread1%State_VG(P_,-nCell:-1)
+    OpenThread1%State_VG(PePar_,-nCell:-1) = OpenThread1%State_VG(Pe_,-nCell:-1)
 
     ! Pi = n * kB * T, n = Rho / Mp
     ! -> Rho = Mp * Pi / (kB * T)
-    OpenThread1%State_VC(Rho_,-nCell:-1) = cProtonMass * &
-         OpenThread1%State_VC(P_,-nCell:-1) / (cBoltzmann*TempInner)
+    OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass * &
+         OpenThread1%State_VG(P_,-nCell:-1) / (cBoltzmann*TempInner)
 
-    OpenThread1%State_VC(Wmajor_,-nCell:-1) = 1.0
-    OpenThread1%State_VC(Wminor_,-nCell:-1) = 1.0e-8
-    
+    OpenThread1%State_VG(Wmajor_,-nCell:-1) = 1.0
+    OpenThread1%State_VG(Wminor_,-nCell:-1) = 1.0e-8
+    OpenThread1%Te_G(-nCell:0) = TempInner
     OpenThread1%TeTr = TempInner
     OpenThread1%uTr  = 0.0
     OpenThread1%PeTr = 0.50*PressInner
@@ -713,7 +716,8 @@ contains
 
     nullify(OpenThread1%ConservativeOld_VC)
     nullify(OpenThread1%Dt_C)
-    nullify(OpenThread1%State_VC)
+    nullify(OpenThread1%State_VG)
+    nullify(OpenThread1%Te_G)
     nullify(OpenThread1%R_F)
     nullify(OpenThread1%Coord_DF)
     nullify(OpenThread1%BSi_F)
@@ -738,7 +742,7 @@ contains
     if(.not.associated(OpenThread1%Coord_DF))RETURN
     deallocate(OpenThread1%ConservativeOld_VC)
     deallocate(OpenThread1%Dt_C)
-    deallocate(OpenThread1%State_VC)
+    deallocate(OpenThread1%State_VG)
     deallocate(OpenThread1%R_F)
     deallocate(OpenThread1%Coord_DF)
     deallocate(OpenThread1%BSi_F)
@@ -958,16 +962,17 @@ contains
     ! Loop variables:
     integer :: iCell, iFace
     ! Solver for electron heat conduction
-    real :: Te_G(-OpenThread1%nCell:0)
+    real, pointer :: Te_G(:)
     real :: Ti_C(-OpenThread1%nCell:-1)
     real :: N_C(-OpenThread1%nCell:-1)
-    real, pointer :: State_VC(:,:)
+    real, pointer :: State_VG(:,:)
     real :: rRatio
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
     Dt_C=>OpenThread1%Dt_C
-    State_VC => OpenThread1%State_VC
+    State_VG => OpenThread1%State_VG
     ConservativeOld_VC => OpenThread1%ConservativeOld_VC
+    Te_G => OpenThread1%Te_G
     ! Face centered field, in Si
     B_F = OpenThread1%BSi_F(-nCell:0)
     ! Face area
@@ -991,7 +996,7 @@ contains
             1/OpenThread1%R_F(iCell+1)) /  &
             OpenThread1%LengthSi_G(iCell)  ! Divide by \delta s
     end do
-    Primitive_VG(:,-nCell:-1) = State_VC(:,-nCell:-1)
+    Primitive_VG(:,-nCell:-1) = State_VG(:,-nCell:-1)
     Primitive_VG(Pperp_,-nCell:-1) = Primitive_VG(P_,-nCell:-1) + 0.5* &
          (Primitive_VG(P_,-nCell:-1) - Primitive_VG(Ppar_,-nCell:-1))
     Primitive_VG(PePerp_,-nCell:-1) = Primitive_VG(Pe_,-nCell:-1) + 0.5* &
@@ -1166,7 +1171,7 @@ contains
 
        ! dU = dt / Volume * (F_{i-1/2}*FaceArea_{i-1/2} &
        !                        -F_{i+1/2}*FaceArea_{i+1/2} )
-       State_VC(:,iCell) = ConservativeOld_VC(:,iCell) + &
+       State_VG(:,iCell) = ConservativeOld_VC(:,iCell) + &
             StageCoef*Dt_C(iCell)*vInv_C(iCell)* &
             (Flux_VF(:,iCell)*FaceArea_F(iCell) - &
             Flux_VF(:,iCell+1)*FaceArea_F(iCell+1) )
@@ -1230,7 +1235,7 @@ contains
             Reflection_C(iCell)*sqrt(Primitive_VG(Wmajor_,iCell)*&
             Primitive_VG(Wminor_,iCell))                 ] ! Wminor
        ! Apply source
-       State_VC(:,iCell) = State_VC(:,iCell) +&
+       State_VG(:,iCell) = State_VG(:,iCell) +&
             StageCoef*Dt_C(iCell)*Source_V
     end do
     !
@@ -1238,28 +1243,28 @@ contains
     !
     ! Transform to primitives, set minimum pressure and density
     do iCell = -nCell, -1
-       State_VC(Rho_,iCell) = max(MinRho, State_VC(Rho_,iCell) )
-       State_VC(U_,iCell)   = State_VC(RhoU_,iCell)/State_VC(Rho_,iCell)
+       State_VG(Rho_,iCell) = max(MinRho, State_VG(Rho_,iCell) )
+       State_VG(U_,iCell)   = State_VG(RhoU_,iCell)/State_VG(Rho_,iCell)
 
        ! Ppar = 2*Energy - Rho U**2
-       State_VC(Ppar_,iCell)   = max(MinPress, 2*State_VC(Energy_,iCell) - &
-            State_VC(Rho_,iCell)*State_VC(U_,iCell)**2 )
+       State_VG(Ppar_,iCell)   = max(MinPress, 2*State_VG(Energy_,iCell) - &
+            State_VG(Rho_,iCell)*State_VG(U_,iCell)**2 )
 
        ! Pressure = 2/3 Pperp +1/3 Ppar
-       State_VC(P_,iCell)   = max(MinPress, cThird*State_VC(Ppar_,iCell)&
-            + cTwoThird*State_VC(Pperp_,iCell))
+       State_VG(P_,iCell)   = max(MinPress, cThird*State_VG(Ppar_,iCell)&
+            + cTwoThird*State_VG(Pperp_,iCell))
 
-       State_VC(PePar_,iCell)   = max(MinPress, 2*State_VC(PePar_,iCell) )
+       State_VG(PePar_,iCell)   = max(MinPress, 2*State_VG(PePar_,iCell) )
 
-       State_VC(Pe_,iCell)  = max(MinPress, cThird*State_VC(PePar_,iCell)&
-            + cTwoThird*State_VC(PePerp_,iCell))
+       State_VG(Pe_,iCell)  = max(MinPress, cThird*State_VG(PePar_,iCell)&
+            + cTwoThird*State_VG(PePerp_,iCell))
     end do
     if(iStage==1)RETURN
     ! Semi-implicit stage
     ! First, solve implicit equation
     ! Wmajor_i^{n+1} -Wmajor_i^n +(Va*Dt/Ds)*(-W^{n+1}_{i-1} + W^{n+1)_i)
     Primitive_VG(Wmajor_:Wminor_,-nCell:-1) = &
-         State_VC(Wmajor_:Wminor_,-nCell:-1)
+         State_VG(Wmajor_:Wminor_,-nCell:-1)
     do iCell = -nCell, -1
        VaDtOverDs_C(iCell) = VaCell_C(iCell)*Dt_C(iCell)/Ds_G(iCell)
        Primitive_VG(Wmajor_,iCell) = ( Primitive_VG(Wmajor_,iCell) +&
@@ -1274,11 +1279,11 @@ contains
             (1 + VaDtOverDs_C(iCell))
     end do
     ! Put the calculated wave dimensionless amplitudes
-    State_VC(Wmajor_:Wminor_,-nCell:-1) = &
+    State_VG(Wmajor_:Wminor_,-nCell:-1) = &
          Primitive_VG(Wmajor_:Wminor_,-nCell:-1)
     ! Electron heat conduction and losses
-    N_C(-nCell:-1) = State_VC(Rho_,-nCell:-1)/cProtonMass
-    Te_G(-nCell:-1) = State_VC(Pe_,-nCell:-1)/(cBoltzmann*N_C)
+    N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
+    Te_G(-nCell:-1) = State_VG(Pe_,-nCell:-1)/(cBoltzmann*N_C)
     ! Float BC for Te:
     ! Assume the radially decaying solution according to power laws
     ! beyond the external boundary
@@ -1289,7 +1294,7 @@ contains
     rRatio = 0.5*(1 + OpenThread1%R_F(-1)&
          /OpenThread1%R_F(0))
     Te_G(0) = Te_G(-1)*rRatio
-    Ti_C(-nCell:-1) = State_VC(P_,-nCell:-1)/(cBoltzmann*N_C)
+    Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
     call advance_heat_conduction(&
          nPoint = nCell, &
          Dt_I = Dt_C,    &
@@ -1301,11 +1306,11 @@ contains
          B_I  = OpenThread1%BSi_F(-nCell:0), &
          PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
          TeFaceOut = OpenThread1%TeTr)
-    State_VC(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
-    State_VC(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
+    State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
+    State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
     ! If no anysotropic pressure is used
-    State_VC(Ppar_ ,-nCell:-1) = State_VC(P_ ,-nCell:-1)
-    State_VC(PePar_ ,-nCell:-1) = State_VC(Pe_ ,-nCell:-1)
+    State_VG(Ppar_ ,-nCell:-1) = State_VG(P_ ,-nCell:-1)
+    State_VG(PePar_ ,-nCell:-1) = State_VG(Pe_ ,-nCell:-1)
   contains
     !==========================================================================
     subroutine set_thread_inner_bc(TeIn, uIn, pIn, Primitive_V)
@@ -1953,28 +1958,27 @@ contains
     integer, parameter :: sWPlus_ = 5, sWminus_ = 6,sTi_=7,  sTe_=8, &
          iPlotVar_V(Rho_:sWminus_) = [Rho_, U_, P_, Pe_, Wmajor_, Wminor_]
     real :: Value_VI(Rho_:sTe_+1,-nPointMax:-1)
-    real, pointer :: State_VC(:,:)
+    real, pointer :: State_VG(:,:)
     integer :: nCell
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
-    State_VC => OpenThread1%State_VC
-    Value_VI(Rho_:sWminus_,-nCell:-1) = State_VC(iPlotVar_V,-nCell:-1)
+    State_VG => OpenThread1%State_VG
+    Value_VI(Rho_:sWminus_,-nCell:-1) = State_VG(iPlotVar_V,-nCell:-1)
     if(sign(1.0, OpenThread1%OpenFlux) > 0)then
        Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(Rho_,-nCell:-1))*State_VC(Wmajor_,-nCell:-1)
+            State_VG(Rho_,-nCell:-1))*State_VG(Wmajor_,-nCell:-1)
        Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(Rho_,-nCell:-1))*State_VC(Wminor_,-nCell:-1)
+            State_VG(Rho_,-nCell:-1))*State_VG(Wminor_,-nCell:-1)
 
     else
        Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(Rho_,-nCell:-1))*State_VC(Wminor_,-nCell:-1)
+            State_VG(Rho_,-nCell:-1))*State_VG(Wminor_,-nCell:-1)
        Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VC(Rho_,-nCell:-1))*State_VC(Wmajor_,-nCell:-1)
+            State_VG(Rho_,-nCell:-1))*State_VG(Wmajor_,-nCell:-1)
     end if
-    Value_VI(sTi_,-nCell:-1) = State_VC(P_,-nCell:-1)*cProtonMass/&
-         (cBoltzmann*State_VC(Rho_,-nCell:-1))
-    Value_VI(sTe_,-nCell:-1) = State_VC(Pe_,-nCell:-1)*cProtonMass/&
-         (cBoltzmann*State_VC(Rho_,-nCell:-1))
+    Value_VI(sTi_,-nCell:-1) = State_VG(P_,-nCell:-1)*cProtonMass/&
+         (cBoltzmann*State_VG(Rho_,-nCell:-1))
+    Value_VI(sTe_,-nCell:-1) = OpenThread1%Te_G(-nCell:-1)
     Value_VI(sTe_+1,-nCell:-1) = &
          OpenThread1%BSi_F(-nCell:-1)*Si2Gs
     call save_plot_file(NameFile = NameFile,  &
