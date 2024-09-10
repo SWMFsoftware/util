@@ -877,22 +877,14 @@ contains
   end subroutine integrate_emission
   !============================================================================
   subroutine advance_thread(iStage, OpenThread1, IsTimeAccurate, &
-       set_thread_outer_bc)
+       RightFace0_V, LeftFace0_V, DtIn)
 
     integer, intent(in) :: iStage
     type(OpenThread),intent(inout) :: OpenThread1
     logical, intent(in) :: IsTimeAccurate
-    external set_thread_outer_bc
-    ! interface
-    !   subroutine set_thread_outer_bc(&
-    !        OpenThread1, CellValue_V, RightFaceValue_V)
-    !     use ModTransitionRegion
-    !     implicit none
-    !     type(OpenThread),intent(inout) :: OpenThread1
-    !     real, intent(out) :: CellValue_V(pRho_:pWminor_)
-    !     real, intent(out) :: RightFaceValue_V(pRho_:pWminor_)
-    !   end subroutine set_thread_outer_bc
-    ! end interface
+    real,    intent(in) :: RightFace0_V(Rho_:Wminor_)
+    real, OPTIONAL, intent(out) :: LeftFace0_V(Rho_:Wminor_)
+    real, OPTIONAL, intent(in)  :: DtIn
 
     integer :: nCell ! # of cells = OpenThread1%nCell
     ! _C(ell) - are cell-centered values
@@ -1002,7 +994,10 @@ contains
     real :: N_C(-OpenThread1%nCell:-1)
     real, pointer :: State_VG(:,:)
     real :: rRatio
+    character(LEN=*), parameter :: NameSub = 'advance_thread'
     !--------------------------------------------------------------------------
+    if(present(DtIn).and.(.not.IsTimeAccurate))call CON_stop(&
+         NameSub//':DtIn input is only allowed in time accurate mode')
     nCell = OpenThread1%nCell
     Dt_C=>OpenThread1%Dt_C
     State_VG => OpenThread1%State_VG
@@ -1031,11 +1026,11 @@ contains
             1/OpenThread1%R_F(iCell+1)) /  &
             OpenThread1%LengthSi_G(iCell)  ! Divide by \delta s
     end do
-    Primitive_VG(:,-nCell:-1) = State_VG(:,-nCell:-1)
-    Primitive_VG(Pperp_,-nCell:-1) = Primitive_VG(P_,-nCell:-1) + 0.5* &
-         (Primitive_VG(P_,-nCell:-1) - Primitive_VG(Ppar_,-nCell:-1))
-    Primitive_VG(PePerp_,-nCell:-1) = Primitive_VG(Pe_,-nCell:-1) + 0.5* &
-         (Primitive_VG(Pe_,-nCell:-1) - Primitive_VG(PePar_,-nCell:-1))
+    Primitive_VG(:,-nCell:0) = State_VG(:,-nCell:0)
+    Primitive_VG(Pperp_,-nCell:0) = Primitive_VG(P_,-nCell:0) + 0.5* &
+         (Primitive_VG(P_,-nCell:0) - Primitive_VG(Ppar_,-nCell:0))
+    Primitive_VG(PePerp_,-nCell:0) = Primitive_VG(Pe_,-nCell:0) + 0.5* &
+         (Primitive_VG(Pe_,-nCell:0) - Primitive_VG(PePar_,-nCell:0))
     if(iStage==1)then
        do iCell = -nCell, -1
           !
@@ -1070,9 +1065,8 @@ contains
          pIn  = OpenThread1%PeTr, &
          Primitive_V= Primitive_VG(:,-nCell-1))
     !
-    ! 2. Apply right BC in the ghostcell #=0
-    call set_thread_outer_bc(OpenThread1, Primitive_VG(:,0),&
-         pRight_VF(:,0))
+    ! 2. Apply right BC on the external boundary (# = 0)
+    pRight_VF(:,0) = RightFace0_V
     !
     ! limited interpolation procedure:
     ! 1. logarithm of density/pressure is better to be limited
@@ -1142,6 +1136,8 @@ contains
        pLeft_VF(iLogVar_V,-nCell:0) = exp(&
             pLeft_VF(iLogVar_V,-nCell:0))
     end if
+    ! 2. Save left BC on the external boundary (# = 0)
+    if(present(LeftFace0_V))LeftFace0_V =  pLeft_VF(:,0)
     ! Get fluxes
     ! Loop over faces:
     do iFace = -nCell, 0
@@ -1194,8 +1190,13 @@ contains
                cooling_rate(RhoSi=Primitive_VG(Rho_,iCell),&  ! or cooling
                PeSi=Primitive_VG(PePar_,iCell)))              ! rate
        end do
-       OpenThread1%Dt = minval(Dt_C(-nCell:-1))
-       if(IsTimeAccurate)Dt_C(-nCell:-1) = OpenThread1%Dt
+       if(present(DtIn))then
+          Dt_C(-nCell:-1) = min(Dt_C(-nCell:-1), DtIn)
+          OpenThread1%Dt = DtIn
+       else
+          OpenThread1%Dt = minval(Dt_C(-nCell:-1))
+          if(IsTimeAccurate)Dt_C(-nCell:-1) = OpenThread1%Dt
+       end if
     end if
     !
     ! Advance the conserved variables to the half or full time step,
