@@ -11,11 +11,96 @@ module ModTransitionRegion
   SAVE
   PRIVATE ! except for a random set of 100 things below
 
+  ! Public members
+  public :: init_tr      ! Initialize module, check analytical TR model table
+  public :: get_trtable_value     ! Access the TR model table
+  public :: integrate_emission    ! Emission from the analytic TR model
+  public :: plot_tr               ! Plot emission from the analytic TR model
+  public :: read_tr_param         ! Read TR model parameters
+  public :: check_tr_param        ! Synchtonize TR and SC model parameters
+  public :: allocate_thread_arr   ! Threads originating from face centers
+  public :: deallocate_thread_arr ! Deallocate threads
+  public :: set_thread            ! Trace a thread from the face center
+  public :: advance_thread_expl   ! Advance hd motion on thread
+  public :: advance_thread_semi_impl   ! Advance heat conduction on thread
+  public :: save_plot_thread      ! Plot state vector distribution on thread
+
+  type OpenThread
+     ! The Length along the thread, from the face i to the face i+1
+     ! Exceptions: LengthSi_G(-nCell-1) is the length from
+     ! the chromosphere to the face with the index -nCell
+     ! LengthSi_G(0) is the distance from the center of interface
+     ! between the threaded gap and the computational domain to
+     ! simulate SC, and the point used to interpolate the state variables
+     ! at the said interface. In meters
+     real, pointer :: LengthSi_G(:)
+     ! Magnetic field intensity (SI) in the points further associated to
+     ! being the faces of the control volume scheme
+     real, pointer :: BSi_F(:)
+     ! (Dimensionless) spherical coordinates (of the faces)
+     real, pointer :: Coord_DF(:,:)
+     ! Gravity potential at the face center (m^2 s^-2), negative.
+     ! real, pointer :: GravityPot_F(:)
+     ! Heliocentric distance at the face center.
+     real, pointer :: R_F(:)
+     ! CELL (nor face!) centered array of the physical quantities
+     ! to be solved for the given thread
+     real, pointer :: State_VG(:,:)
+     real, pointer :: ConservativeOld_VC(:,:)
+     real, pointer :: Te_G(:)
+     ! Since the arrays are further updated with different routines,
+     ! we store the intermediate results of simulation:
+     ! 1. Local time step (set be the hydro update procedure)
+     real, pointer :: Dt_C(:)
+     ! 2. The transition region parameters, solved in
+     ! the heat conduction routine, and the global time step
+     real :: TeTr = -1.0, uTr = -1.0, PeTr = -1.0, Dt = -1.0
+     ! number of cells, the _C arrays has the index range
+     ! from -nCell to -1
+     integer :: nCell = -1
+     real    :: OpenFlux = 0.0 ! [T Rsun**2]
+  end type OpenThread
+  public :: OpenThread
+
+  ! Named indexes for state variables
+  !
+  ! State variables:
+  ! in the state VG array:+++++++++++++++
+  ! 1 - density
+  ! 2 - velocity
+  ! 3 - ion par pressure
+  ! 4 - ion pressure = 2/3 PerpPressure + 1/3 ParPressure
+  ! 5 - electron par pressure
+  ! 6 - electron pressure = 2/3 Perp pressure + 1/3 ParPressure
+  ! 7 - "Major wave" - propagating from the Sun outward/representative
+  ! 8 - "Minor wave" - propagating toward the Sun/representative
+  ! Primitive variables:+++++++++++++++++
+  ! 1 - density
+  ! 2 - velocity
+  ! 3 - PparIon
+  ! 4 - PperpIon
+  ! 5 - PparElectron
+  ! 6 - PperpElectron
+  ! 7 - "Major wave" - propagating from the Sun outward/representative
+  ! 8 - "Minor wave" - propagating toward the Sun/representative
+  ! Conservative variables:++++++++++++++
+  ! 1 - mass density
+  ! 2 - momentum density
+  ! 3 - ion energy density (kinetic+parallel internal)
+  ! 4 - PperpIon
+  ! 5 - Half of PparElectron (internal energy in parallel component)
+  ! 6 - PperpElectron
+  ! 7 - "Major wave" - propagating from the Sun outward/representative
+  ! 8 - "Minor wave" - propagating toward the Sun/representative
+  integer, public, parameter :: Rho_ = 1, U_ = 2, RhoU_ = 2, Ppar_ = 3, &
+       Energy_ = 3, P_ = 4, Pperp_= 4, PePar_ = 5, PePerp_ = 6, Pe_ = 6,&
+       Wmajor_ = 7, Wminor_ = 8 !, Wdiff_ = 9
+
   ! The Poynting flux to magnetic field ratio (one of the input parameters
   ! in SI unins)
   real, public :: PoyntingFluxPerBSi = 1.0e6 ! W/(m^2 T)
   real, public :: LperpTimesSqrtBSi = 7.5e4  ! m T^(1/2)
-  real, public :: rMinReflectionTr = 0.0
+  real :: rMinReflectionTr = 0.0
 
   ! Normalization as used in the radcool table
   real, parameter :: RadNorm = 1.0E+22
@@ -50,25 +135,13 @@ module ModTransitionRegion
        DlogLambdaOverDlogT_ = 6
   ! Tabulated analytical solution:
   real, public :: TrTable_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
-  integer, parameter :: R_=1 ! to mark the radial coordinate, in R_sun
+  ! integer, parameter :: R_=1 ! to mark the radial coordinate, in R_sun
 
   ! Control parameter: below TeSiMin the observables are not calculated
   real, public :: TeSiMin = 5.0e4
   ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
-  ! Public members
-  public :: init_tr      ! Initialize module, check analytical TR model table
-  public :: get_trtable_value     ! Access the TR model table
-  public :: integrate_emission    ! Emission from the analytic TR model
-  public :: plot_tr               ! Plot emission from the analytic TR model
-  public :: read_tr_param         ! Read TR model parameters
-  public :: check_tr_param        ! Synchtonize TR and SC model parameters
-  public :: allocate_thread_arr   ! Threads originating from face centers
-  public :: deallocate_thread_arr ! Deallocate threads
-  public :: set_thread            ! Trace a thread from the face center
-  public :: advance_thread        ! Advance numerical solution on thread 
-  public :: save_plot_thread      ! Plot state vector distribution on thread
 
   ! Table numbers needed to use lookup table
   integer         :: iTableRadCool = -1
@@ -114,46 +187,6 @@ module ModTransitionRegion
   real :: StochasticAmplitude  = 0.18
   real :: StochasticExponent2  = 0.21
   real :: StochasticAmplitude2 = 0.0 ! 1.17
-  type OpenThread
-     ! The Length along the thread, from the face i to the face i+1
-     ! Exceptions: LengthSi_G(-nCell-1) is the length from
-     ! the chromosphere to the face with the index -nCell
-     ! LengthSi_G(0) is the distance from the center of interface
-     ! between the threaded gap and the computational domain to
-     ! simulate SC, and the point used to interpolate the state variables
-     ! at the said interface. In meters
-     real, pointer :: LengthSi_G(:)
-     ! Magnetic field intensity (SI) in the points further associated to
-     ! being the faces of the control volume scheme
-     real, pointer :: BSi_F(:)
-     ! (Dimensionless) spherical coordinates (of the faces)
-     real, pointer :: Coord_DF(:,:)
-     ! Gravity potential at the face center (m^2 s^-2), negative.
-     ! real, pointer :: GravityPot_F(:)
-     ! Heliocentric distance at the face center.
-     real, pointer :: R_F(:)
-     ! CELL (nor face!) centered array of the physical quantities
-     ! to be solved for the given thread
-     real, pointer :: State_VG(:,:)
-     real, pointer :: ConservativeOld_VC(:,:)
-     real, pointer :: Te_G(:)
-     ! Since the arrays are further updated with different routines,
-     ! we store the intermediate results of simulation:
-     ! 1. Local time step (set be the hydro update procedure)
-     real, pointer :: Dt_C(:)
-     ! 2. The transition region parameters, solved in
-     ! the heat conduction routine, and the global time step
-     real :: TeTr = -1.0, uTr = -1.0, PeTr = -1.0, Dt = -1.0
-     ! number of cells, the _C arrays has the index range
-     ! from -nCell to -1
-     integer :: nCell = -1
-     real    :: OpenFlux = 0.0 ! [T Rsun**2]
-  end type OpenThread
-  public :: OpenThread
-  ! Named indexes for state variables
-  integer, public, parameter :: Rho_ = 1, U_ = 2, RhoU_ = 2, Ppar_ = 3, &
-       Energy_ = 3, P_ = 4, Pperp_= 4, PePar_ = 5, PePerp_ = 6, Pe_ = 6,&
-       Wmajor_ = 7, Wminor_ = 8 !, Wdiff_ = 9
   ! Threads are traced from rMax toward rMin
   real,    public :: rMin = rChromo, rMax = 2.5
   integer, public, parameter :: nPointMax = 10000
@@ -876,7 +909,7 @@ contains
 
   end subroutine integrate_emission
   !============================================================================
-  subroutine advance_thread(iStage, OpenThread1, IsTimeAccurate, &
+  subroutine advance_thread_expl(iStage, OpenThread1, IsTimeAccurate, &
        RightFace0_V, LeftFace0_V, DtIn)
 
     integer, intent(in) :: iStage
@@ -897,34 +930,9 @@ contains
     ! _G arrays have indexes from -nCell-1 to 0
     ! _F arrays have indexes from -nCell to 0
     !
-    ! Elements of the control volume scheme:
-    !
-    ! Local time step for a given cell
-    real, pointer :: Dt_C(:)
-    ! Fluxes for all variables, thorough a given face
-    real :: Flux_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
-    ! Face area (divided by the flux)
-    real    :: FaceArea_F(-OpenThread1%nCell:0)
-    ! Control volume (the inverse of)
-    real    :: vInv_C(-OpenThread1%nCell:-1)
-    ! Cell size along the magnetic field line. In the leftmost ghost cell
-    ! there is the length of analytical transition
-    real    :: Ds_G(-OpenThread1%nCell-1:0)
-    !
-    ! What we need for the source calculation:
-    !
-    ! Face area difference divided per control volume, needed to calculate
-    ! the contributions from the perp pressures (Xianyu, why is it called like
-    ! this?)
-    real :: NablaHatB_C(-OpenThread1%nCell:-1)
-    ! Projection of the gravity acceleration, onto the field direction
-    real :: GravityAcc_C(-OpenThread1%nCell:-1)
-    ! Pseudo-divergence of velocity, needed to calculate contributions from
-    ! parallel pressures
-    real :: DuDs_C(-OpenThread1%nCell:-1)
     !
     ! State variables:
-    ! in the state VC array:
+    ! in the state VG array:
     ! 1 - density
     ! 2 - velocity
     ! 3 - ion par pressure
@@ -955,8 +963,39 @@ contains
     ! Primitive variables (inputs for the limited interpolation procedure)
     ! Include one layer of ghost cells
     real    :: Primitive_VG(Rho_:Wminor_,-OpenThread1%nCell-1:0)
-    ! Conservative variables, in the physical cells only
+    ! Conservative variables, in the physical cells only (old)
     real, pointer    :: ConservativeOld_VC(:,:)
+    ! State vector:
+    real, pointer :: State_VG(:,:)
+    ! Electron temperature for semi-implicit scheme
+    real, pointer :: Te_G(:)
+    ! Local time step for a given cell
+    real, pointer :: Dt_C(:)
+    ! Cell size along the magnetic field line. In the leftmost ghost cell
+    ! there is the length of analytical transition
+    real, pointer :: Ds_G(:)
+    !
+    ! Elements of the control volume scheme:
+    !
+
+    ! Fluxes for all variables, thorough a given face
+    real :: Flux_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
+    ! Face area (divided by the flux)
+    real    :: FaceArea_F(-OpenThread1%nCell:0)
+    ! Control volume (the inverse of)
+    real    :: vInv_C(-OpenThread1%nCell:-1)
+    !
+    ! What we need for the source calculation:
+    !
+    ! Face area difference divided per control volume, needed to calculate
+    ! the contributions from the perp pressures (Xianyu, why is it called like
+    ! this?)
+    real :: NablaHatB_C(-OpenThread1%nCell:-1)
+    ! Projection of the gravity acceleration, onto the field direction
+    real :: GravityAcc_C(-OpenThread1%nCell:-1)
+    ! Pseudo-divergence of velocity, needed to calculate contributions from
+    ! parallel pressures
+    real :: DuDs_C(-OpenThread1%nCell:-1)
     ! Interpolated left and right states at the face
     real    :: pLeft_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
     real    :: pRight_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
@@ -988,13 +1027,7 @@ contains
     real :: PparHeating, PperpHeating, PeHeating
     ! Loop variables:
     integer :: iCell, iFace
-    ! Solver for electron heat conduction
-    real, pointer :: Te_G(:)
-    real :: Ti_C(-OpenThread1%nCell:-1)
-    real :: N_C(-OpenThread1%nCell:-1)
-    real, pointer :: State_VG(:,:)
-    real :: rRatio
-    character(LEN=*), parameter :: NameSub = 'advance_thread'
+    character(LEN=*), parameter :: NameSub = 'advance_thread_expl'
     !--------------------------------------------------------------------------
     if(present(DtIn).and.(.not.IsTimeAccurate))call CON_stop(&
          NameSub//':DtIn input is only allowed in time accurate mode')
@@ -1003,14 +1036,12 @@ contains
     State_VG => OpenThread1%State_VG
     ConservativeOld_VC => OpenThread1%ConservativeOld_VC
     Te_G => OpenThread1%Te_G
+    ! Mesh size along the line
+    Ds_G => OpenThread1%LengthSi_G
     ! Face centered field, in Si
     B_F = OpenThread1%BSi_F(-nCell:0)
     ! Face area
     FaceArea_F(-nCell:0) = 1/B_F
-
-    ! Mesh size along the line
-    Ds_G(-nCell-1:0) = OpenThread1%LengthSi_G(-nCell-1:0)
-
     do iCell = -nCell, -1
        ! Control volume (the inverse of): 1/(dS*0.5*(FaceLeft + FaceRight))
        vInv_C(iCell) = 2/(Ds_G(iCell)*&
@@ -1294,6 +1325,8 @@ contains
 
        State_VG(Pe_,iCell)  = max(MinPress, cThird*State_VG(PePar_,iCell)&
             + cTwoThird*State_VG(PePerp_,iCell))
+       Te_G(iCell) = State_VG(Pe_,iCell)*cProtonMass/&
+         (cBoltzmann*State_VG(Rho_,iCell))
     end do
     if(iStage==1)RETURN
     ! Semi-implicit stage
@@ -1314,39 +1347,8 @@ contains
             Primitive_VG(Wminor_,iCell+1)*VaDtOverDs_C(iCell)) / &
             (1 + VaDtOverDs_C(iCell))
     end do
-    ! Put the calculated wave dimensionless amplitudes
     State_VG(Wmajor_:Wminor_,-nCell:-1) = &
          Primitive_VG(Wmajor_:Wminor_,-nCell:-1)
-    ! Electron heat conduction and losses
-    N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
-    Te_G(-nCell:-1) = State_VG(Pe_,-nCell:-1)/(cBoltzmann*N_C)
-    ! Float BC for Te:
-    ! Assume the radially decaying solution according to power laws
-    ! beyond the external boundary
-    ! rRatio is the ratio of the ratio of the cell centered radius
-    ! of the last physical cell, 0.5*(Rface_{-1} + Rface_0) to the
-    ! the last face center radius, Rface_0, which equals
-    ! 0.5*(1 + Rface_{-1}/Rface_{0}).
-    rRatio = 0.5*(1 + OpenThread1%R_F(-1)&
-         /OpenThread1%R_F(0))
-    Te_G(0) = Te_G(-1)*rRatio
-    Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
-    call advance_heat_conduction(&
-         nPoint = nCell, &
-         Dt_I = Dt_C,    &
-         Te_I = Te_G,    &
-         Ti_I = Ti_C,    &
-         Ni_I = N_C,     &
-         Ds_I = Ds_G,    &
-         uFace   = OpenThread1%uTr, &
-         B_I  = OpenThread1%BSi_F(-nCell:0), &
-         PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
-         TeFaceOut = OpenThread1%TeTr)
-    State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
-    State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
-    ! If no anysotropic pressure is used
-    State_VG(Ppar_ ,-nCell:-1) = State_VG(P_ ,-nCell:-1)
-    State_VG(PePar_ ,-nCell:-1) = State_VG(Pe_ ,-nCell:-1)
   contains
     !==========================================================================
     subroutine set_thread_inner_bc(TeIn, uIn, pIn, Primitive_V)
@@ -1429,7 +1431,53 @@ contains
       Flux_V(PePar_) = 0.50*Flux_V(PePar_)
     end subroutine get_thread_flux
     !==========================================================================
-  end subroutine advance_thread
+  end subroutine advance_thread_expl
+  !============================================================================
+  subroutine advance_thread_semi_impl(OpenThread1)
+
+    type(OpenThread),intent(inout) :: OpenThread1
+
+    ! Solver for electron heat conduction
+    real :: Ti_C(-OpenThread1%nCell:-1)
+    real :: N_C(-OpenThread1%nCell:-1)
+        ! State vector:
+    real, pointer :: State_VG(:,:)
+    ! Electron temperature for semi-implicit scheme
+    real, pointer :: Te_G(:)
+    ! Local time step for a given cell
+    real, pointer :: Dt_C(:)
+    ! Cell size along the magnetic field line. In the leftmost ghost cell
+    ! there is the length of analytical transition
+    real, pointer :: Ds_G(:)
+    integer :: nCell
+    character(LEN=*), parameter :: NameSub = 'advance_thread_semi_impl'
+    !--------------------------------------------------------------------------
+    nCell = OpenThread1%nCell
+    Dt_C=>OpenThread1%Dt_C
+    State_VG => OpenThread1%State_VG
+    Te_G => OpenThread1%Te_G
+    ! Mesh size along the line
+    Ds_G => OpenThread1%LengthSi_G 
+    ! Electron heat conduction and losses
+    N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
+    Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
+    call advance_heat_conduction(&
+         nPoint = nCell, &
+         Dt_I = Dt_C,    &
+         Te_I = Te_G,    &
+         Ti_I = Ti_C,    &
+         Ni_I = N_C,     &
+         Ds_I = Ds_G,    &
+         uFace   = OpenThread1%uTr, &
+         B_I  = OpenThread1%BSi_F(-nCell:0), &
+         PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
+         TeFaceOut = OpenThread1%TeTr)
+    State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
+    State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
+    ! If no anysotropic pressure is used
+    State_VG(Ppar_ ,-nCell:-1) = State_VG(P_ ,-nCell:-1)
+    State_VG(PePar_ ,-nCell:-1) = State_VG(Pe_ ,-nCell:-1)
+  end subroutine advance_thread_semi_impl
   !============================================================================
   subroutine solve_tr_face(TeCell, & ! cell-centered, in SI
        uFace,                      & ! face-centered
