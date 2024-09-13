@@ -684,7 +684,7 @@ contains
     ! Allocate thread and store results from tracing
     if(.not.associated(OpenThread1%LengthSi_G))then
        call allocate_pointer
-    elseif(nCell/=OpenThread1%nCell)then
+    else
        call deallocate_pointer
        call allocate_pointer
     end if
@@ -1114,7 +1114,8 @@ contains
          Primitive_VG(iLogVar_V,-nCell-1:0))
     ! 2. Left boundary:
     pLeft_VF(:,-nCell) = Primitive_VG(:,-nCell-1)
-    ! 3. Calculate leftmost unlimited slope
+    ! 3. Calculate leftmost unlimited slope. The half of this (as assumed in
+    ! the limiter function) approximates the face value
     dVarDown_V = 2*(Primitive_VG(:,-nCell) - Primitive_VG(:,-nCell-1))
     ! Calculate the up slope
     dVarUp_V = Primitive_VG(:,-nCell+1) - Primitive_VG(:,-nCell)
@@ -1147,8 +1148,10 @@ contains
     end do
     ! Propagate the old up slope to become the down slope
     dVarDown_V = dVarUp_V
-    ! Calculate the up slope
-    dVarUp_V = 2*(Primitive_VG(:,0) - Primitive_VG(:,-1))
+    ! Calculate the up slope. The half of this (as assumed in the
+    ! limiter function) approximates the face value
+    dVarUp_V = Ds_G(-1)/(0.50*Ds_G(-1) + Ds_G(0))*&
+         (Primitive_VG(:,0) - Primitive_VG(:,-1))
     ! Calculate and apply the limited slopes, to get the limited
     ! reconstructed values:
     pRight_VF(:,-1) = Primitive_VG(:,-1) - &
@@ -1433,10 +1436,10 @@ contains
     !==========================================================================
   end subroutine advance_thread_expl
   !============================================================================
-  subroutine advance_thread_semi_impl(OpenThread1)
+  subroutine advance_thread_semi_impl(OpenThread1, TimeRelax)
 
     type(OpenThread),intent(inout) :: OpenThread1
-
+    real, OPTIONAL, intent(in) :: TimeRelax
     ! Solver for electron heat conduction
     real :: Ti_C(-OpenThread1%nCell:-1)
     real :: N_C(-OpenThread1%nCell:-1)
@@ -1461,17 +1464,34 @@ contains
     ! Electron heat conduction and losses
     N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
     Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
-    call advance_heat_conduction(&
-         nPoint = nCell, &
-         Dt_I = Dt_C,    &
-         Te_I = Te_G,    &
-         Ti_I = Ti_C,    &
-         Ni_I = N_C,     &
-         Ds_I = Ds_G,    &
-         uFace   = OpenThread1%uTr, &
-         B_I  = OpenThread1%BSi_F(-nCell:0), &
-         PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
-         TeFaceOut = OpenThread1%TeTr)
+    if(present(TimeRelax))then
+       ! Relax temperature for a given boundary temperature
+       Te_G(0) = min(Te_G(0), TempInner)
+       call advance_heat_conduction(&
+            nPoint = nCell,    &
+            Dt     = TimeRelax,&
+            Te_I = Te_G,    &
+            Ti_I = Ti_C,    &
+            Ni_I = N_C,     &
+            Ds_I = Ds_G,    &
+            uFace   = OpenThread1%uTr, &
+            B_I  = OpenThread1%BSi_F(-nCell:0), &
+            PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
+            TeFaceOut = OpenThread1%TeTr, &
+            DoLimitTimestep = .true.)
+    else
+       call advance_heat_conduction(&
+            nPoint = nCell, &
+            Dt_I = Dt_C,    &
+            Te_I = Te_G,    &
+            Ti_I = Ti_C,    &
+            Ni_I = N_C,     &
+            Ds_I = Ds_G,    &
+            uFace   = OpenThread1%uTr, &
+            B_I  = OpenThread1%BSi_F(-nCell:0), &
+            PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
+            TeFaceOut = OpenThread1%TeTr)
+    end if
     State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
     State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
     ! If no anysotropic pressure is used
