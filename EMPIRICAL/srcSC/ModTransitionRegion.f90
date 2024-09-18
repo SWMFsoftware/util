@@ -161,6 +161,7 @@ module ModTransitionRegion
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
   integer, parameter :: nPointTe = 310, nPointU = 89
+  integer, public :: nPointThreadMax = 100
   ! Global array used in calculating the table
   ! To be allocated as Value_VII (DlogLambdaOverDlogT_,nPointTe,nPointU)
   real, allocatable :: Value_VII(:,:,:)
@@ -648,7 +649,7 @@ contains
           ! 3. New grid point:
           Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
           R = norm2(Xyz_D)
-          if(R >  rMax.or.iPoint==nPointMax)then
+          if(R >  rMax.or.iPoint==nPointThreadMax)then
              ! Displace the start point of the line by Ds0*R down
              iBegin = iBegin + 1
              XyzOld_D = XyzStart_D
