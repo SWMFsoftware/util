@@ -7,8 +7,7 @@ subroutine indices_set_inputs(StringInputLines)
 
   implicit none
 
-  character (len=100), dimension(*), intent(in) :: StringInputLines
-  character (len=100) :: StringLine
+  character (len=*), dimension(*), intent(in) :: StringInputLines
   logical :: IsDone
   integer :: iLine
 
@@ -18,23 +17,21 @@ subroutine indices_set_inputs(StringInputLines)
 
   do while (.not.IsDone)
 
-     StringLine = StringInputLines(iLine)
+     if (StringInputLines(iLine)(1:1) == "#") then
 
-     if (StringLine(1:1) == "#") then
-
-        if (index(StringLine,"#NGDC_INDICES") > 0) then
+        if (index(StringInputLines(iLine),"#NGDC_INDICES") > 0) then
            call read_in_string(NameOfIndexFile)
         endif
 
-        if (index(StringLine,"#NOAAHPI_INDICES") > 0) then
+        if (index(StringInputLines(iLine),"#NOAAHPI_INDICES") > 0) then
            call read_in_string(NameOfIndexFile)
         endif
 
-        if (index(StringLine,"#MHD_INDICES") > 0) then
+        if (index(StringInputLines(iLine),"#MHD_INDICES") > 0) then
            call read_in_string(NameOfIndexFile)
         endif
 
-        if (index(StringLine,"#END") > 0) then
+        if (index(StringInputLines(iLine),"#END") > 0) then
            IsDone = .true.
         endif
 
