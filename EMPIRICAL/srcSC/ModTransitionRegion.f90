@@ -39,13 +39,15 @@ module ModTransitionRegion
      real, pointer :: BSi_F(:)
      ! (Dimensionless) spherical coordinates (of the faces)
      real, pointer :: Coord_DF(:,:)
-     ! Gravity potential at the face center (m^2 s^-2), negative.
-     ! real, pointer :: GravityPot_F(:)
      ! Heliocentric distance at the face center.
      real, pointer :: R_F(:)
      ! CELL (nor face!) centered array of the physical quantities
      ! to be solved for the given thread
      real, pointer :: State_VG(:,:)
+     ! Cell-centered array of B1 (induction) field
+     real, pointer :: B1_DG(:,:)
+     ! Unit direction vector of the cell-centered magnetic field
+     real, pointer :: DirB_DG(:,:)
      real, pointer :: ConservativeOld_VC(:,:)
      real, pointer :: Te_G(:)
      ! Since the arrays are further updated with different routines,
@@ -127,7 +129,8 @@ module ModTransitionRegion
   real, public  :: CoulombLog = 20.0
 
   real, parameter :: cTwoSevenths = 2.0/7.0
-  real, parameter :: cTolerance   = 1.0e-6
+  real,   public  :: cTolerance   = 1.0e-6
+  integer, public :: nIterMax = 40
 
   ! Correspondent named indexes: meaning of the columns in the table
   integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
@@ -161,7 +164,6 @@ module ModTransitionRegion
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
   integer, parameter :: nPointTe = 310, nPointU = 89
-  integer, public :: nPointThreadMax = 100
   ! Global array used in calculating the table
   ! To be allocated as Value_VII (DlogLambdaOverDlogT_,nPointTe,nPointU)
   real, allocatable :: Value_VII(:,:,:)
@@ -190,7 +192,7 @@ module ModTransitionRegion
   real :: StochasticAmplitude2 = 0.0 ! 1.17
   ! Threads are traced from rMax toward rMin
   real,    public :: rMin = rChromo, rMax = 2.5
-  integer, public, parameter :: nPointMax = 10000
+  integer, public :: nPointMax = 10000
   ! integration step at R = 1, dS propto R for R > 1
   real, public :: dS0 = 0.001
   ! Field unit conversion:
@@ -583,10 +585,11 @@ contains
          real, intent(in) :: Xyz_D(3)
          real, intent(out):: Coord_D(3)
        end subroutine xyz_to_coord
-       subroutine get_field(Xyz_D, B0_D)
+       subroutine get_field(Xyz_D, B_D, B1Out_D)
          implicit none
          real, intent(in) :: Xyz_D(3)
-         real, intent(out):: B0_D(3)
+         real, intent(out):: B_D(3)
+         real, OPTIONAL, intent(out) :: B1Out_D(3)
        end subroutine get_field
     end interface
     integer, optional, intent(out) :: iBeginOut
@@ -595,18 +598,19 @@ contains
     ! Length interval, ! Heliocentric distance
     real :: Ds, R
     ! coordinates, field vector and modulus
-    real :: XyzStart_D(3), Xyz_D(3), B0_D(3), B0, BMax
+    real :: XyzStart_D(3), Xyz_D(3), B_D(3), B, BMax
     !  for ourward directed field, -1 otherwise
     real :: SignBr
     ! Radial field at the source surface
     real :: BrSS
     ! Coordinates and magnetic field in the midpoint
     ! within the framework of the Runge-Kutta scheme
-    real :: XyzAux_D(3), B0Aux_D(3)
+    real :: XyzAux_D(3)!, Baux_D(3)
     ! Aux
     real :: ROld, Aux
     real :: XyzOld_D(3), Dir1_D(3), Dir2_D(3), Dir3_D(3), Dir4_D(3)
-    real :: BSi_F(-nPointMax:0), Length_I(-nPointMax:0)
+    real :: BSi_F(-nPointMax:0), Length_I(-nPointMax:0), &
+         B1_DF(3,-nPointMax:0), DirB_DG(3,-nPointMax:0)
     real :: Coord_DI(3,-nPointMax:0), R_F(-nPointMax:0)
     ! R_F(-nPointMax:0)
     ! Trace the open thread with the given origin point
@@ -615,29 +619,31 @@ contains
     XyzStart_D = XyzIn_D
     R = norm2(XyzStart_D)
     iBegin = 0
-    call get_field(XyzStart_D, B0_D)
-    BrSS = sum(XyzStart_D*B0_D)/R
+    call get_field(XyzStart_D, B_D, B1_DF(:,0))
+    BrSS = sum(XyzStart_D*B_D)/R
     OpenThread1%OpenFlux = FaceArea*BrSS
+    ! Unit direction vector with positive radial component
+    DirB_DG(:,0) = B_D/sign(norm2(B_D),OpenThread1%OpenFlux)
     IBEGINLOOP: do
-       B0 = norm2(B0_D)
+       B = norm2(B_D)
        call xyz_to_coord(XyzStart_D,Coord_DI(:,-iBegin))
        iPoint = iBegin
-       BSi_F(-iBegin) = B0
+       BSi_F(-iBegin) = B
        BMax = max(maxval(BSi_F(-iBegin:0)), BssMinSi)
        Xyz_D = XyzStart_D
-       SignBr = sign(1.0, sum(XyzStart_D*B0_D) )
+       SignBr = sign(1.0, sum(XyzStart_D*B_D) )
        R_F(-iBegin) = R
        POINTS: do
           iPoint = iPoint + 1
-          ! For the previous point given are Xyz_D, B0_D, B0
+          ! For the previous point given are Xyz_D, B_D, B
           ! Store R
           ROld = R
           ! Store a point
           XyzOld_D = Xyz_D
           ! Four-stage Runge-Kutta
-          BMax = max(BMax, B0)
-          Ds = Ds0*R*SignBr/min(BMax, 10*B0)
-          Dir1_D = B0_D
+          BMax = max(BMax, B)
+          Ds = Ds0*R*SignBr/min(BMax, 10*B)
+          Dir1_D = B_D
           ! 1. Point at the half of length interval:
           XyzAux_D = Xyz_D - 0.50*Ds*Dir1_D
           ! 2. Magnetic field in this point:
@@ -649,24 +655,26 @@ contains
           ! 3. New grid point:
           Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
           R = norm2(Xyz_D)
-          if(R >  rMax.or.iPoint==nPointThreadMax)then
+          if(R >  rMax.or.iPoint==nPointMax)then
              ! Displace the start point of the line by Ds0*R down
              iBegin = iBegin + 1
              XyzOld_D = XyzStart_D
              XyzStart_D = XyzStart_D*(1 - Ds0)
              Length_I(-iBegin) = norm2(XyzStart_D - XyzOld_D)
              R = norm2(XyzStart_D)
-             call get_field(XyzStart_D, B0_D)
+             DirB_DG(:,-iBegin) = XyzStart_D/R
+             call get_field(XyzStart_D, B_D, B1Out_D=B1_DF(:,-iBegin))
              ! Trace the line from new starting point toward the Sun
              CYCLE IBEGINLOOP
           end if
           R_F(-iPoint) = R
           call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
-          call get_field(Xyz_D, B0_D)
-          B0 = norm2(B0_D)
-          BSi_F(-iPoint) = B0
-          Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
-          if(R <= rMin + Ds0*max(1 - abs(B0)/BMinSi,0.0))EXIT IBEGINLOOP
+          call get_field(Xyz_D, B_D, B1Out_D=B1_DF(:,-iPoint))
+          B = norm2(B_D)
+          BSi_F(-iPoint) = B
+          Length_I(-iPoint) = norm2(XyzOld_D - Xyz_D)
+          DirB_DG(:,-iPoint) = (XyzOld_D - Xyz_D)/Length_I(-iPoint)
+          if(R <= rMin + Ds0*max(1 - abs(B)/BminSi,0.0))EXIT IBEGINLOOP
        end do POINTS
     end do IBEGINLOOP
     ! Calculate more accurately the intersection point
@@ -675,9 +683,9 @@ contains
     Xyz_D = (1 - Aux)*XyzOld_D +  Aux*Xyz_D
     ! Store the last point
     call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
-    call get_field(Xyz_D, B0_D)
-    B0 = norm2(B0_D)
-    BSi_F(-iPoint) = B0
+    call get_field(Xyz_D, B_D)
+    B = norm2(B_D)
+    BSi_F(-iPoint) = B
     Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
     ! R_F(-iPoint) = norm2(Xyz_D)
     R_F(-iPoint) = norm2(Xyz_D)
@@ -700,8 +708,11 @@ contains
     OpenThread1%BSi_F(-iPoint:0) = BSi_F(-iPoint:0)
     OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
     allocate(OpenThread1%R_F(-nCell:0))
-    OpenThread1%R_F(-nCell:0) = &
-         R_F(-nCell:0)
+    OpenThread1%R_F(-nCell:0) = R_F(-nCell:0)
+    OpenThread1%B1_DG(:,-nCell:-1) = 0.50*(&
+         B1_DF(:,-nCell:-1) + B1_DF(:,1-nCell:0))
+    OpenThread1%B1_DG(:,0) = B1_DF(:,0)
+    OpenThread1%DirB_DG(:,-nCell:0) = DirB_DG(:,-nCell:0)
     if(.not.associated(OpenThread1%State_VG))then
        ! Allocate state variables,
        allocate(OpenThread1%State_VG(Rho_:Wminor_,-nCell:0))
@@ -720,6 +731,8 @@ contains
       allocate(OpenThread1%Dt_C(-nCell:-1))
       allocate(OpenThread1%R_F(-nCell:0))
       allocate(OpenThread1%Te_G(-nCell:0))
+      allocate(OpenThread1%B1_DG(3,-nCell:0))
+      allocate(OpenThread1%DirB_DG(3,-nCell:0))
       allocate(OpenThread1%ConservativeOld_VC(Rho_:Wminor_,-nCell:-1))
     end subroutine allocate_pointer
     !==========================================================================
@@ -730,6 +743,8 @@ contains
       deallocate(OpenThread1%Dt_C)
       deallocate(OpenThread1%R_F)
       deallocate(OpenThread1%Te_G)
+      deallocate(OpenThread1%B1_DG)
+      deallocate(OpenThread1%DirB_DG)
       deallocate(OpenThread1%ConservativeOld_VC)
     end subroutine deallocate_pointer
     !==========================================================================
@@ -798,6 +813,8 @@ contains
     nullify(OpenThread1%ConservativeOld_VC)
     nullify(OpenThread1%Dt_C)
     nullify(OpenThread1%State_VG)
+    nullify(OpenThread1%B1_DG)
+    nullify(OpenThread1%DirB_DG)
     nullify(OpenThread1%Te_G)
     nullify(OpenThread1%R_F)
     nullify(OpenThread1%Coord_DF)
@@ -838,6 +855,8 @@ contains
     deallocate(OpenThread1%ConservativeOld_VC)
     deallocate(OpenThread1%Dt_C)
     deallocate(OpenThread1%State_VG)
+    deallocate(OpenThread1%B1_DG)
+    deallocate(OpenThread1%DirB_DG)
     deallocate(OpenThread1%Te_G)
     deallocate(OpenThread1%R_F)
     deallocate(OpenThread1%Coord_DF)
@@ -1621,7 +1640,7 @@ contains
          DeltaIonEnergy_I(nPoint), dCons_VI(2,nPoint), DtInv_I(nPoint),     &
          HeatFlux2Tr, dFluxOverdCons, Cooling, BcellInv_I(nPoint)
     real, parameter :: QuasiCfl = 0.85
-    integer, parameter :: Cons_ = 1, Ti_=2, nIterMax = 40
+    integer, parameter :: Cons_ = 1, Ti_=2
     ! Misc:
     ! Loop variable
     integer :: iPoint, iIter
