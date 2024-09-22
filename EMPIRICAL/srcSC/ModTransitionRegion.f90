@@ -935,7 +935,7 @@ contains
     integer, intent(in) :: iStage
     type(OpenThread),intent(inout) :: OpenThread1
     logical, intent(in) :: IsTimeAccurate
-    real,    intent(in) :: RightFace0_V(Rho_:Wminor_)
+    real, OPTIONAL, intent(in) :: RightFace0_V(Rho_:Wminor_)
     real, OPTIONAL, intent(out) :: LeftFace0_V(Rho_:Wminor_)
     real, OPTIONAL, intent(in)  :: DtIn
 
@@ -1109,15 +1109,12 @@ contains
     !
     ! Boundary conditions:
     !
-    ! 1. Apply left BC in the ghostcell #=-nCell-1
+    ! Apply left BC in the ghostcell #=-nCell-1
     call set_thread_inner_bc(&
          TeIn = OpenThread1%TeTr, &
          uIn  = OpenThread1%uTr,  &
          pIn  = OpenThread1%PeTr, &
          Primitive_V= Primitive_VG(:,-nCell-1))
-    !
-    ! 2. Apply right BC on the external boundary (# = 0)
-    pRight_VF(:,0) = RightFace0_V
     !
     ! limited interpolation procedure:
     ! 1. logarithm of density/pressure is better to be limited
@@ -1189,6 +1186,13 @@ contains
             pRight_VF(iLogVar_V,-nCell:-1))
        pLeft_VF(iLogVar_V,-nCell:0) = exp(&
             pLeft_VF(iLogVar_V,-nCell:0))
+    end if
+    ! 2. Apply right BC on the external boundary (# = 0)
+    if(present(RightFace0_V))then
+       pRight_VF(:,0) = RightFace0_V
+    else
+       ! First order BC
+       pRight_VF(:,0) = Primitive_VG(:,0)
     end if
     ! 2. Save left BC on the external boundary (# = 0)
     if(present(LeftFace0_V))LeftFace0_V =  pLeft_VF(:,0)
