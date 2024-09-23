@@ -1460,10 +1460,9 @@ contains
     !==========================================================================
   end subroutine advance_thread_expl
   !============================================================================
-  subroutine advance_thread_semi_impl(OpenThread1, TimeRelax)
+  subroutine advance_thread_semi_impl(OpenThread1)
 
     type(OpenThread),intent(inout) :: OpenThread1
-    real, OPTIONAL, intent(in) :: TimeRelax
     ! Solver for electron heat conduction
     real :: Ti_C(-OpenThread1%nCell:-1)
     real :: N_C(-OpenThread1%nCell:-1)
@@ -1488,34 +1487,17 @@ contains
     ! Electron heat conduction and losses
     N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
     Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
-    if(present(TimeRelax))then
-       ! Relax temperature for a given boundary temperature
-       Te_G(0) = min(Te_G(0), TempInner)
-       call advance_heat_conduction(&
-            nPoint = nCell,    &
-            Dt     = TimeRelax,&
-            Te_I = Te_G,    &
-            Ti_I = Ti_C,    &
-            Ni_I = N_C,     &
-            Ds_I = Ds_G,    &
-            uFace   = OpenThread1%uTr, &
-            B_I  = OpenThread1%BSi_F(-nCell:0), &
-            PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
-            TeFaceOut = OpenThread1%TeTr, &
-            DoLimitTimestep = .true.)
-    else
-       call advance_heat_conduction(&
-            nPoint = nCell, &
-            Dt_I = Dt_C,    &
-            Te_I = Te_G,    &
-            Ti_I = Ti_C,    &
-            Ni_I = N_C,     &
-            Ds_I = Ds_G,    &
-            uFace   = OpenThread1%uTr, &
-            B_I  = OpenThread1%BSi_F(-nCell:0), &
-            PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
-            TeFaceOut = OpenThread1%TeTr)
-    end if
+    call advance_heat_conduction(&
+         nPoint = nCell, &
+         Dt_I = Dt_C,    &
+         Te_I = Te_G,    &
+         Ti_I = Ti_C,    &
+         Ni_I = N_C,     &
+         Ds_I = Ds_G,    &
+         uFace   = OpenThread1%uTr, &
+         B_I  = OpenThread1%BSi_F(-nCell:0), &
+         PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
+         TeFaceOut = OpenThread1%TeTr)
     State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
     State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
     ! If no anysotropic pressure is used
