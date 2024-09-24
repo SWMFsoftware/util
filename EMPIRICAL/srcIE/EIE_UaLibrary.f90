@@ -158,11 +158,11 @@ subroutine EIE_UaFindPoint(LocIn, LocOut, iError)
   endif
 
   iBLK = 1
-  do while (iBLK <= EIEi_HavenBLKs)
+  do while (iBLK < EIEi_HavenBLKs)
      j = 1
-     do while (j <= EIEi_HavenMLTs)
+     do while (j < EIEi_HavenMLTs)
         i = 1
-        do while (i <= EIEi_HavenLats)
+        do while (i < EIEi_HavenLats)
 
            if (j == EIEi_HavenMLTs) then
               !Stitching ends but not at 24 to 0 boundary
