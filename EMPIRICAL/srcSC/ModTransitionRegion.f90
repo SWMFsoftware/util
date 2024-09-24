@@ -27,16 +27,16 @@ module ModTransitionRegion
 
   type OpenThread
      ! The Length along the thread, from the face i to the face i+1
-     ! Exceptions: LengthSi_G(-nCell-1) is the length from
+     ! Exceptions: Ds_G(-nCell-1) is the length from
      ! the chromosphere to the face with the index -nCell
-     ! LengthSi_G(0) is the distance from the center of interface
+     ! Ds_G(0) is the distance from the center of interface
      ! between the threaded gap and the computational domain to
      ! simulate SC, and the point used to interpolate the state variables
      ! at the said interface. In meters
-     real, pointer :: LengthSi_G(:)
+     real, pointer :: Ds_G(:)
      ! Magnetic field intensity (SI) in the points further associated to
      ! being the faces of the control volume scheme
-     real, pointer :: BSi_F(:)
+     real, pointer :: B_F(:)
      ! (Dimensionless) spherical coordinates (of the faces)
      real, pointer :: Coord_DF(:,:)
      ! Heliocentric distance at the face center.
@@ -572,7 +572,7 @@ contains
   end subroutine get_trtable_value
   !============================================================================
   subroutine set_thread(XyzIn_D, FaceArea, OpenThread1, &
-       xyz_to_coord, get_field, iBeginOut)
+       xyz_to_coord, get_field)
     ! Origin point coordinates (Xyz)
     real, intent(in) :: XyzIn_D(3)
     ! Face area, to calculate flux
@@ -592,9 +592,8 @@ contains
          real, OPTIONAL, intent(out) :: B1Out_D(3)
        end subroutine get_field
     end interface
-    integer, optional, intent(out) :: iBeginOut
     ! loop variable
-    integer :: iPoint, nCell, iBegin
+    integer :: iPoint, nCell
     ! Length interval, ! Heliocentric distance
     real :: Ds, R
     ! coordinates, field vector and modulus
@@ -609,30 +608,32 @@ contains
     ! Aux
     real :: ROld, Aux
     real :: XyzOld_D(3), Dir1_D(3), Dir2_D(3), Dir3_D(3), Dir4_D(3)
-    real :: BSi_F(-nPointMax:0), Length_I(-nPointMax:0), &
+    real :: B_F(-nPointMax:0), Length_I(-nPointMax:0), &
          B1_DF(3,-nPointMax:0), DirB_DG(3,-nPointMax:0)
     real :: Coord_DI(3,-nPointMax:0), R_F(-nPointMax:0)
-    ! R_F(-nPointMax:0)
+    real :: CosBrMin = -1.0
+    integer :: iRefine ! Factor of step refinement near null point
     ! Trace the open thread with the given origin point
     character(len=*), parameter:: NameSub = 'set_thread'
     !--------------------------------------------------------------------------
     XyzStart_D = XyzIn_D
     R = norm2(XyzStart_D)
-    iBegin = 0
+    CosBrMin = -1.0   ! Arbitrary angle between magnetic field and radial dir
+    iRefine = 10      ! Step refinement by a factor of 1/10 is allowed
     call get_field(XyzStart_D, B_D, B1_DF(:,0))
     BrSS = sum(XyzStart_D*B_D)/R
     OpenThread1%OpenFlux = FaceArea*BrSS
     ! Unit direction vector with positive radial component
     DirB_DG(:,0) = B_D/sign(norm2(B_D),OpenThread1%OpenFlux)
+    SignBr = sign(1.0, BrSS)
     IBEGINLOOP: do
        B = norm2(B_D)
-       call xyz_to_coord(XyzStart_D,Coord_DI(:,-iBegin))
-       iPoint = iBegin
-       BSi_F(-iBegin) = B
-       BMax = max(maxval(BSi_F(-iBegin:0)), BssMinSi)
+       call xyz_to_coord(XyzStart_D,Coord_DI(:,0))
+       iPoint = 0
+       B_F(0) = B
+       BMax = max(B, BssMinSi)
        Xyz_D = XyzStart_D
-       SignBr = sign(1.0, sum(XyzStart_D*B_D) )
-       R_F(-iBegin) = R
+       R_F(0) = R
        POINTS: do
           iPoint = iPoint + 1
           ! For the previous point given are Xyz_D, B_D, B
@@ -642,36 +643,39 @@ contains
           XyzOld_D = Xyz_D
           ! Four-stage Runge-Kutta
           BMax = max(BMax, B)
-          Ds = Ds0*R*SignBr/min(BMax, 10*B)
+          Ds = Ds0*R*SignBr/min(BMax, iRefine*B)
           Dir1_D = B_D
+          if(CosBrMin /= -1.0)call limit_cosbr(Xyz_D, Dir1_D)
           ! 1. Point at the half of length interval:
           XyzAux_D = Xyz_D - 0.50*Ds*Dir1_D
           ! 2. Magnetic field in this point:
           call get_field(XyzAux_D, Dir2_D)
+          if(CosBrMin /= -1.0)call limit_cosbr(XyzAux_D, Dir2_D)
           XyzAux_D = Xyz_D - 0.50*Ds*Dir2_D
           call get_field(XyzAux_D, Dir3_D)
+          if(CosBrMin /= -1.0)call limit_cosbr(XyzAux_D, Dir3_D)
           XyzAux_D = Xyz_D - Ds*Dir3_D
           call get_field(XyzAux_D, Dir4_D)
+          if(CosBrMin /= -1.0)call limit_cosbr(XyzAux_D, Dir4_D)
           ! 3. New grid point:
           Xyz_D = Xyz_D - (Ds/6)*(Dir1_D + 2*Dir2_D + 2*Dir3_D + Dir4_D)
           R = norm2(Xyz_D)
           if(R >  rMax.or.iPoint==nPointMax)then
-             ! Displace the start point of the line by Ds0*R down
-             iBegin = iBegin + 1
-             XyzOld_D = XyzStart_D
-             XyzStart_D = XyzStart_D*(1 - Ds0)
-             Length_I(-iBegin) = norm2(XyzStart_D - XyzOld_D)
              R = norm2(XyzStart_D)
-             DirB_DG(:,-iBegin) = XyzStart_D/R
-             call get_field(XyzStart_D, B_D, B1Out_D=B1_DF(:,-iBegin))
-             ! Trace the line from new starting point toward the Sun
+             call get_field(XyzStart_D, B_D)
+             ! Don't allow magnetic field too much decline from radial dir
+             CosBRMin = ( (R**2-rChromo**2)/nPointMax +Ds0**2)/&
+                  (2*rChromo*Ds0)
+             if(CosBRMin>0.9)call CON_stop('Increase nPointThreadMax')
+             ! Prohibit step refinement
+             iRefine = 1
              CYCLE IBEGINLOOP
           end if
           R_F(-iPoint) = R
           call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
           call get_field(Xyz_D, B_D, B1Out_D=B1_DF(:,-iPoint))
           B = norm2(B_D)
-          BSi_F(-iPoint) = B
+          B_F(-iPoint) = B
           Length_I(-iPoint) = norm2(XyzOld_D - Xyz_D)
           DirB_DG(:,-iPoint) = (XyzOld_D - Xyz_D)/Length_I(-iPoint)
           if(R <= rMin + Ds0*max(1 - abs(B)/BminSi,0.0))EXIT IBEGINLOOP
@@ -685,27 +689,27 @@ contains
     call xyz_to_coord(Xyz_D, Coord_DI(:,-iPoint))
     call get_field(Xyz_D, B_D)
     B = norm2(B_D)
-    BSi_F(-iPoint) = B
+    B_F(-iPoint) = B
     Length_I(-iPoint) = norm2(Xyz_D - XyzOld_D)
     ! R_F(-iPoint) = norm2(Xyz_D)
     R_F(-iPoint) = norm2(Xyz_D)
     nCell = iPoint - 2
     ! Allocate thread and store results from tracing
-    if(.not.associated(OpenThread1%LengthSi_G))then
+    if(.not.associated(OpenThread1%Ds_G))then
        call allocate_pointer
     else
        call deallocate_pointer
        call allocate_pointer
     end if
-    OpenThread1%LengthSi_G(-nCell:-1) = &
+    OpenThread1%Ds_G(-nCell:-1) = &
          Length_I(-nCell:-1)*Rsun
     ! Length of the analytical transition region,
     ! combined from the last two intervals
-    OpenThread1%LengthSi_G(-nCell-1) = &
+    OpenThread1%Ds_G(-nCell-1) = &
          (Length_I(-iPoint) + Length_I(-iPoint+1))*Rsun
     ! Distance from the "ghost point" to the interface (0 index)
-    OpenThread1%LengthSi_G(0) = 0.0
-    OpenThread1%BSi_F(-iPoint:0) = BSi_F(-iPoint:0)
+    OpenThread1%Ds_G(0) = 0.0
+    OpenThread1%B_F(-iPoint:0) = B_F(-iPoint:0)
     OpenThread1%Coord_DF(:,-iPoint:0) = Coord_DI(:,-iPoint:0)
     allocate(OpenThread1%R_F(-nCell:0))
     OpenThread1%R_F(-nCell:0) = R_F(-nCell:0)
@@ -721,12 +725,11 @@ contains
        ! Then initiate their values
        call init_thread_variables(OpenThread1)
     end if
-    if(present(iBeginOut)) iBeginOut = iBegin
   contains
     !==========================================================================
     subroutine allocate_pointer
-      allocate(OpenThread1%BSi_F(-iPoint:0))
-      allocate(OpenThread1%LengthSi_G(-nCell-1:0))
+      allocate(OpenThread1%B_F(-iPoint:0))
+      allocate(OpenThread1%Ds_G(-nCell-1:0))
       allocate(OpenThread1%Coord_DF(3,-iPoint:0))
       allocate(OpenThread1%Dt_C(-nCell:-1))
       allocate(OpenThread1%R_F(-nCell:0))
@@ -737,8 +740,8 @@ contains
     end subroutine allocate_pointer
     !==========================================================================
     subroutine deallocate_pointer
-      deallocate(OpenThread1%BSi_F)
-      deallocate(OpenThread1%LengthSi_G)
+      deallocate(OpenThread1%B_F)
+      deallocate(OpenThread1%Ds_G)
       deallocate(OpenThread1%Coord_DF)
       deallocate(OpenThread1%Dt_C)
       deallocate(OpenThread1%R_F)
@@ -747,6 +750,23 @@ contains
       deallocate(OpenThread1%DirB_DG)
       deallocate(OpenThread1%ConservativeOld_VC)
     end subroutine deallocate_pointer
+    !==========================================================================
+    subroutine limit_cosbr(Xyz_D, B_D)
+
+      real, intent(in)    :: Xyz_D(3) ! Location
+      real, intent(inout) :: B_D(3)   ! Magnetic field to be corrected
+      real                :: CosBR, B, DirR_D(3), DirB_D(3)
+      !------------------------------------------------------------------------
+      DirR_D = Xyz_D/norm2(Xyz_D)
+      B = norm2(B_D)
+      DirB_D = SignBr*B_D/B
+      CosBR = sum(DirB_D*DirR_D)
+      if(CosBR>=CosBRMin)RETURN
+      DirB_D = (DirB_D - CosBR*DirR_D)*&      ! Tangential componenets
+           sqrt((1 - CosBRMin**2)/(1 - CosBR**2))+& ! Reduced in magnitude
+           DirR_D*CosBRMin          ! Plus increased radial comp
+      B_D = SignBr*B*DirB_D
+    end subroutine limit_cosbr
     !==========================================================================
   end subroutine set_thread
   !============================================================================
@@ -818,8 +838,8 @@ contains
     nullify(OpenThread1%Te_G)
     nullify(OpenThread1%R_F)
     nullify(OpenThread1%Coord_DF)
-    nullify(OpenThread1%BSi_F)
-    nullify(OpenThread1%LengthSi_G)
+    nullify(OpenThread1%B_F)
+    nullify(OpenThread1%Ds_G)
     OpenThread1%TeTr = -1.0
     OpenThread1%uTr  = -1.0
     OpenThread1%PeTr = -1.0
@@ -860,8 +880,8 @@ contains
     deallocate(OpenThread1%Te_G)
     deallocate(OpenThread1%R_F)
     deallocate(OpenThread1%Coord_DF)
-    deallocate(OpenThread1%BSi_F)
-    deallocate(OpenThread1%LengthSi_G)
+    deallocate(OpenThread1%B_F)
+    deallocate(OpenThread1%Ds_G)
   end subroutine deallocate_thread
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
@@ -1057,9 +1077,9 @@ contains
     ConservativeOld_VC => OpenThread1%ConservativeOld_VC
     Te_G => OpenThread1%Te_G
     ! Mesh size along the line
-    Ds_G => OpenThread1%LengthSi_G
+    Ds_G => OpenThread1%Ds_G
     ! Face centered field, in Si
-    B_F = OpenThread1%BSi_F(-nCell:0)
+    B_F = OpenThread1%B_F(-nCell:0)
     ! Face area
     FaceArea_F(-nCell:0) = 1/B_F
     do iCell = -nCell, -1
@@ -1075,7 +1095,7 @@ contains
        GravityAcc_C(iCell) =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
             (1/OpenThread1%R_F(iCell) -    &
             1/OpenThread1%R_F(iCell+1)) /  &
-            OpenThread1%LengthSi_G(iCell)  ! Divide by \delta s
+            OpenThread1%Ds_G(iCell)  ! Divide by \delta s
     end do
     Primitive_VG(:,-nCell:0) = State_VG(:,-nCell:0)
     Primitive_VG(Pperp_,-nCell:0) = Primitive_VG(P_,-nCell:0) + 0.5* &
@@ -1234,7 +1254,7 @@ contains
     if(iStage==1)then
        do iCell = -nCell, -1
           ! Get dt
-          ! Dt_C(iCell) = CflLocal * OpenThread1%LengthSi_G / Cmax_I
+          ! Dt_C(iCell) = CflLocal * OpenThread1%Ds_G / Cmax_I
           ! Cmax is the maximum of the right wave
           ! speed from the left face and the left wave speed
           ! from the right face
@@ -1483,7 +1503,7 @@ contains
     State_VG => OpenThread1%State_VG
     Te_G => OpenThread1%Te_G
     ! Mesh size along the line
-    Ds_G => OpenThread1%LengthSi_G 
+    Ds_G => OpenThread1%Ds_G 
     ! Electron heat conduction and losses
     N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
     Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
@@ -1495,7 +1515,7 @@ contains
          Ni_I = N_C,     &
          Ds_I = Ds_G,    &
          uFace   = OpenThread1%uTr, &
-         B_I  = OpenThread1%BSi_F(-nCell:0), &
+         B_I  = OpenThread1%B_F(-nCell:0), &
          PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
          TeFaceOut = OpenThread1%TeTr)
     State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
@@ -2051,7 +2071,7 @@ contains
          ParamIn_I = [TeSi, PeSi],&
          NameVarIn = NameVarPlot, &
          nDimIn=1,                &
-         Coord1In_I = LengthSi_i, &
+         Coord1In_I = LengthSi_I, &
          VarIn_VI = Value_VI,     &
          StringHeaderIn = 'Analytical model for transition region: ['//&
          trim(NameUnitPlot)//']')
@@ -2090,7 +2110,7 @@ contains
          (cBoltzmann*State_VG(Rho_,-nCell:-1))
     Value_VI(sTe_,-nCell:-1) = OpenThread1%Te_G(-nCell:-1)
     Value_VI(sTe_+1,-nCell:-1) = &
-         OpenThread1%BSi_F(-nCell:-1)*Si2Gs
+         OpenThread1%B_F(-nCell:-1)*Si2Gs
     call save_plot_file(NameFile = NameFile,  &
          nDimIn  = 1,                       &
          ParamIn_I= [OpenThread1%TeTr,&
