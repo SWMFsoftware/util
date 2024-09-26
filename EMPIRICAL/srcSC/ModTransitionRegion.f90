@@ -1845,7 +1845,7 @@ contains
   !============================================================================
   subroutine apportion_heating(&
        ! Inputs, all in SI:
-    !--------------------------------------------------------------------------
+       !-----------------------------------------------------------------------
        PparIn, PperpIn, PeIn, RhoIn, BIn, &
        WmajorIn, WminorIn,                &
        DissRateMajorIn, DissRateMinorIn,  &
@@ -1864,7 +1864,7 @@ contains
     ! Outputs
     real, intent(out) :: QparPerQtotal, QperpPerQtotal, QePerQtotal
 
-    real :: SqrtRho, Wmajor, Wminor, Qmajor, Qminor, Valfven, P
+    real :: SqrtRho, Wmajor, Wminor, Qmajor, Qminor, P
     real :: BetaProton, BetaElectron, TeByTp, Vperp, Qtotal
     real :: DampingElectron, DampingPar, DampingPerp, DampingProton
     real :: GyroRadiusTimesB, InvGyroRadius, LperpInvGyroRad
@@ -1886,7 +1886,6 @@ contains
     Qminor = Wminor*DissRateMinorIn
     Qtotal = Qmajor + Qminor
 
-    Valfven = Bin/sqrt(RhoIn)
     P = cTwoThird*PperpIn + cThird*PparIn
     BetaProton = 2.0*cMu*P/(Bin*Bin)
     TeByTp = PeIn/P
