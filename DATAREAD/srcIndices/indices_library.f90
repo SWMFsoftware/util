@@ -1,9 +1,42 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 ! ---------------------------------------------------
 
-subroutine indices_set_IMF_Bz_single(BzIn)
+subroutine check_all_indices(TimeIn, iOutputError)
+
+   use ModIndices
+   implicit none
+   real(Real8_), intent(in)  :: TimeIn
+   integer, intent(out) :: iOutputError
+ 
+   integer :: iIndex
+ 
+   iOutputError = 0
+ 
+   do iIndex = 1, nIndices
+     ! If there are 0 times, then no error, since there are no values
+     ! If there is 1 time, then it is a constant
+     ! If there are 2 or more times, check for boundaries
+     if (nIndices_V(iIndex) > 1) then
+       if ((IndexTimes_TV(1, iIndex) - TimeIn) > &
+           5.0*(IndexTimes_TV(2, iIndex) - IndexTimes_TV(1, iIndex))) then
+         iOutputError = 3
+       end if
+ 
+       if ((TimeIn - IndexTimes_TV(nIndices_V(iIndex), iIndex)) > &
+           5.0*(IndexTimes_TV(2, iIndex) - IndexTimes_TV(1, iIndex))) then
+            iOutputError = 3
+       end if
+     end if
+   end do
+ 
+   return
+ end subroutine check_all_indices
+ 
+ ! ---------------------------------------------------
+ 
+ subroutine indices_set_IMF_Bz_single(BzIn)
 
   use ModIndices
   implicit none
