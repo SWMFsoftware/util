@@ -5,7 +5,7 @@ module ModMagnetogram
 
   use ModNumConst,       ONLY: cTwoPi, cRadToDeg, cDegToRad, cPi
   use CON_axes,          ONLY: dLongitudeHgrDeg
-  use ModUtilities,      ONLY: CON_stop
+  use ModUtilities,      ONLY: CON_stop, CON_stop_simple
   use ModCoordTransform, ONLY: rot_xyz_sph, rot_xyz_rlonlat, rot_matrix_z,&
        xyz_to_rlonlat
   use ModLookupTable, ONLY: &
@@ -20,12 +20,16 @@ module ModMagnetogram
   integer, public:: iTableB0    = -1     ! index of B0 lookup table
   integer, public:: iTableB0New = -1     ! index of new B0 lookup table
   integer, public:: iTableB0local    = -1     ! index of B1 lookup table,
+  !$acc declare create(iTableB0, iTableB0New, iTableB0local)
   real:: rMinB0local ! radial limits of table
   real:: rMaxB0local
+  !$acc declare create(rMinB0local, rMaxB0local)
   real:: LonMinB0local ! longitude limits of table in degrees
   real:: LonMaxB0local
+  !$acc declare create(LonMinB0local, LonMaxB0local)
   real:: LatMinB0local ! latitude limits of table in degrees
   real:: LatMaxB0local
+  !$acc declare create(LatMinB0local, LatMaxB0local)
 
   ! if point inside B1 table B0 will be set as B0 + B1
   public:: read_magnetogram_param        ! read parameters
@@ -47,6 +51,7 @@ module ModMagnetogram
 
   ! Carrington rotation of the magnetogram(s) for temporal interpolation
   real:: CarringtonRot = -1.0, CarringtonRotNew = -1.0
+  !$acc declare create(CarringtonRot, CarringtonRotNew)
 
   ! radius of magnetogram and source surface for spatial extrapolation
   real   :: rMagnetogram=1.0, rSourceSurface=2.5
@@ -79,8 +84,11 @@ module ModMagnetogram
   real:: RotB0_DD(3,3)     ! rotation matrix due to longitude shift
   real:: dLonB0New   = 0.0 ! longitude shift
   real:: RotB0New_DD(3,3)  ! rotation matrix due to longitude shift
+  !$acc declare create(rMinB0, rMaxB0, LonMinB0, dLonB0)
+  !$acc declare create(RotB0_DD, dLonB0New, RotB0New_DD)
 
   real:: FactorB0 = 1.0 ! multiplier for the magnetic field
+  !$acc declare create(FactorB0)
 
   interface get_magnetogram_field
      module procedure get_magnetogram_field11, get_magnetogram_field31
@@ -340,6 +348,14 @@ contains
        end if
     end if
 
+    !$acc update device(iTableB0, iTableB0New, iTableB0local)
+    !$acc update device(rMinB0local, rMaxB0local)
+    !$acc update device(LonMinB0local, LonMaxB0local)
+    !$acc update device(LatMinB0local, LatMaxB0local)
+    !$acc update device(CarringtonRot, CarringtonRotNew)
+    !$acc update device(rMinB0, rMaxB0, LonMinB0, dLonB0)
+    !$acc update device(RotB0_DD, dLonB0New, RotB0New_DD)
+    
   end subroutine init_magnetogram_lookup_table
   !============================================================================
   subroutine calc_b0_table(iTable, r, Lon, Lat, b_D)
@@ -368,6 +384,7 @@ contains
   end subroutine calc_b0_table
   !============================================================================
   subroutine get_magnetogram_field31(x, y, z, B0_D, Carrington)
+    !$acc routine seq
 
     real, intent(in) ::  x, y, z
     real, intent(out):: B0_D(3)
@@ -379,7 +396,8 @@ contains
   end subroutine get_magnetogram_field31
   !============================================================================
   subroutine get_magnetogram_field11(Xyz_D, B0_D, Carrington)
-
+    !$acc routine seq
+    
     ! Return B0_D [Tesla] field at position Xyz_D [Rs]
     ! Interpolat to time Carrington if present and iTableB0New is defined
 
@@ -422,7 +440,8 @@ contains
 
     if(present(Carrington) .and. iTableB0New > 0)then
 
-       if(CarringtonRot < 0.0 .or. CarringtonRotNew < 0.0) call CON_stop( &
+       if(CarringtonRot < 0.0 .or. CarringtonRotNew < 0.0) &
+            call CON_stop_simple( &
             NameSub//': no Carrington time in at least one magnetogram')
        call xyz_to_rlonlat(Xyz_D, rLonLat_D)
 
@@ -491,6 +510,7 @@ contains
     select case(NameCommand)
     case("#FACTORB0")
        call read_var("FactorB0", FactorB0)
+       !$acc update device(FactorB0)
 
     case("#HARMONICSGRID")
        call read_var('rMagnetogram',   rMagnetogram)
