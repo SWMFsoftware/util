@@ -23,6 +23,7 @@ contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim, BodyTDim, Gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
+    use EEE_ModGL98, ONLY: gl98_init
 #ifdef _OPENACC
     use ModUtilities, ONLY: norm2
 #endif
@@ -112,6 +113,16 @@ contains
 
     DoInit = .true.
 
+    if(UseGL .or. UseSpheromak) then 
+      call gl98_init
+    end if
+
+   !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22)
+   !$acc update device(UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak)
+
+   !$acc update device(Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V)
+   !$acc update device(rCmeApexInvSi, tStartCme, tDecayCmeDim, tDecayCme)
+   !$acc update device(Gbody)
   end subroutine EEE_initialize
   !============================================================================
   subroutine EEE_set_parameters(NameCommand)
@@ -213,7 +224,7 @@ contains
   end subroutine EEE_set_parameters
   !============================================================================
   subroutine EEE_get_state_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
-
+    !$acc routine seq
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, tStartCme, tDecayCmeDim
     use EEE_ModTD99, ONLY: get_TD99_fluxrope
@@ -240,7 +251,7 @@ contains
     Coeff = 1.0
     if(tDecayCmeDim > 0.0) Coeff = max(0.0, &
          1 - (Time - tStartCme)/tDecayCmeDim)
-
+#ifndef _OPENACC
     if (UseTD) then
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
        Rho = Rho + Coeff*Rho1; B_D = B_D + Coeff*B1_D; p = p + Coeff*p1
@@ -251,18 +262,21 @@ contains
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time) !! send Time
        B_D = B_D + Coeff*B1_D
     end if
-   if(UseSpheromak)then
+#endif
+
+    if(UseSpheromak)then
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
        B_D = B_D + Coeff*B1_D; U_D = U_D + Coeff*U1_D
     endif
 
+#ifndef _OPENACC    
     if(UseShearFlow)then
        call get_shearflow(Xyz_D, Time, U1_D, nIter)
        U_D = U_D + Coeff*U1_D
     end if
 
     if(UseCms) call get_cms(Xyz_D, B_D)
-
+#endif
   end subroutine EEE_get_state_BC
   !============================================================================
   subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, nIter)

@@ -22,6 +22,7 @@ module EEE_ModCommonVariables
   ! Physics variables global to EEE
   real :: g = 5./3., inv_g = 3./5., gm1 = 2./3., inv_gm1 = 3./2.
   real :: Gbody = -cGravitation*mSun*cProtonMass/(cBoltzmann*1.5e6)
+  !$acc declare create(Gbody)
 
   ! Named indexes for I/O variable units
   integer, parameter :: nIoUnit = 15
@@ -46,18 +47,23 @@ module EEE_ModCommonVariables
   ! The following should always be true: No2Si_V*Si2Io_V = No2Io_V
   real, dimension(nIoUnit) :: &
        Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V
+  !$acc declare create(Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V)
 
   ! Switch on CME (boundary and/or initial conditions)
   logical:: UseCme = .false.
+  !$acc declare create(UseCme)
 
   ! Use Gibbson-Law, Titov-Demoulin, spheromak flux ropes
   logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false.
+  !$acc declare create(UseGL, UseTD, UseSpheromak)
 
   ! Use Titov-Demoulin 2014 or 2022
   logical:: UseTD14 = .false., UseTD22 = .false.
+  !$acc declare create(UseTD14, UseTD22)
 
   ! Logicals to add the CMEs
   logical:: DoAddGL = .false., DoAddTD = .false., DoAddSpheromak = .false.
+  !$acc declare create(DoAddGL, DoAddTD, DoAddSpheromak)
 
   ! Use shear-flow boundary condition, use arcade magnetic field
   logical:: UseShearFlow = .false., UseArch = .false.
@@ -78,15 +84,18 @@ module EEE_ModCommonVariables
   logical :: DoNormalizeXyz = .false.
   real :: XyzCmeCenterSi_D(3) = 0.0, XyzCmeApexSi_D(3) = 0.0
   real :: rCmeApexInvSi = 0.0
+  !$acc declare create(rCmeApexInvSi)
 
   ! The AMBIENT magnetic field at these points
   real :: bAmbientCenterSi_D(3) = 0.0, bAmbientApexSi_D(3) = 0.0
 
   ! Starting time of CME eruption
   real    :: tStartCme = -1.0
+  !$acc declare create(tStartCme)
 
   ! Decay time of CME boundary conditions
   real    :: tDecayCmeDim = -1.0, tDecayCme = -1.0
+  !$acc declare create(tDecayCmeDim, tDecayCme)
 
   logical :: DoInit = .true.
 

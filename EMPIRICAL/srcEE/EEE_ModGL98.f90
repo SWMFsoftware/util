@@ -19,6 +19,7 @@ module EEE_ModGL98
   public :: set_parameters_gl98
   public :: get_gl98_fluxrope
   public :: get_gl98_size
+  public :: gl98_init
 
   ! Local variables
 
@@ -26,12 +27,14 @@ module EEE_ModGL98
 
   ! contraction distance as in   r --> r -a
   real :: Stretch = 0.0
+  !$acc declare create(Stretch)
 
   ! distance from the magnetic configuration center to heliocenter
   real :: rDistance1 = 0.0
 
   ! Radius of the magnetic configuration (spheromac)
   real :: Radius = 0.0
+  !$acc declare create(Radius)
 
   ! This is the combination of the above parameters:
   !
@@ -44,17 +47,20 @@ module EEE_ModGL98
   ! The derivative of current over flux function
   !(\mu_0)dI/d\psi) has the dimentions of inverse length
   real :: Alpha0
+  !$acc declare create(Alpha0)
 
   ! Characteristic value of magnetic field of the spheromak
   ! configuration: the field in the center of configuration
   ! equals 2(1/3 -\beta_0)B_0 \approx 0.7 B_0:
   real :: B0      ! dimensionless
   real :: B0Dim   ! in Gauss
+  !$acc declare create(B0)
 
   ! Characteristic ratio of plasma pressure to B_0^2/\mu_0
   ! Exact definition in terms of the pressure derivative over
   ! the flux function: \beta_0=\mu_0/(B_0 Alpha_0^2) dp/d\psi
   real :: Beta0
+  !$acc declare create(Beta0)
 
   ! Dimensionless product of R0 by Alpha0. For any given \beta_0,
   ! this product is found from the equation,
@@ -76,14 +82,16 @@ module EEE_ModGL98
   ! configuration center and B0 multiplied by unit vector along
   ! the axis of symmetry
   real :: XyzCenterConf_D(3), bConf_D(3)
+  !$acc declare create(XyzCenterConf_D, bConf_D)
 
   ! Parameter to control self-similar solution
   real :: uCmeSi = 0.0
+  !$acc declare create(uCmeSi)
   real, parameter :: Delta = 0.1
 
 contains
   !============================================================================
-  subroutine init
+  subroutine gl98_init
 
     use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
 
@@ -169,7 +177,10 @@ contains
 
     XyzCenterConf_D = rDistance1*DirCme_D
 
-  end subroutine init
+    !$acc update device(Stretch, Alpha0, Beta0, XyzCenterConf_D, bConf_D)
+    !$acc update device(uCmeSi, B0, Radius)
+
+  end subroutine gl98_init
   !============================================================================
   subroutine set_parameters_gl98(NameCommand)
 
@@ -205,6 +216,7 @@ contains
   end subroutine set_parameters_gl98
   !============================================================================
   subroutine get_gl98_fluxrope(XyzIn_D, Rho, p, b_D, u_D, TimeNow)
+    !$acc routine seq
 
     ! Definition of Parameters used for the initial state
     !   Stretch    = contraction distance as in   r --> r -a
@@ -310,7 +322,6 @@ contains
     real :: Phi     ! 1 + Time*(U/r)
     real :: PhiInv  ! 1/Phi
     !--------------------------------------------------------------------------
-    if (DoInit) call init
 
     r = norm2(XyzIn_D)
     ! Unit vector of radial direction
