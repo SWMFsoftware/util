@@ -9,9 +9,11 @@ module ModExternalField
   integer, parameter  :: Axial_  = 1, Poloidal_ =  2, Toroidal_  = 3
   ! For Kappa2 below this value the field is calculated as external:
   real :: Kappa2ExtMax
+  !$acc declare create(Kappa2ExtMax)
 contains
   !============================================================================
   subroutine external_field(Kappa2In, Amplitude_I)
+    !$acc routine seq
     real, intent(in)    :: Kappa2In
     real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
     ! Eqs. 35
@@ -32,18 +34,21 @@ module ModFormFactors
 contains
   !============================================================================
   real function parabolic_current(CothU0, KappaPrime2In)
+    !$acc routine seq
     real, intent(in)     :: CothU0, KappaPrime2In
     !--------------------------------------------------------------------------
     parabolic_current = CothU0 - cothu(KappaPrime2In)
   end function parabolic_current
   !============================================================================
   real function parabolic_current_e(CothU0, KappaPrime2In)
+    !$acc routine seq
     real, intent(in)     :: CothU0, KappaPrime2In
     !--------------------------------------------------------------------------
     parabolic_current_e = cFourThirds*CothU0 + cFourFifths*cothu(KappaPrime2In)
   end function parabolic_current_e
   !============================================================================
   real function d_parabolic_current_e_du(KappaPrime2In)
+    !$acc routine seq
     real, intent(in)     :: KappaPrime2In
     !--------------------------------------------------------------------------
     ! 1/(E^{(1)}*\sinh^2u)
@@ -52,6 +57,7 @@ contains
   end function d_parabolic_current_e_du
   !============================================================================
   real function norm_uni(KappaPrime2In)
+    !$acc routine seq
     real, intent(in)     :: KappaPrime2In
     real :: DToroidQ0DuU0  ! dQ^{-1}_{-1/2}(u_0)/du_0
     ! Norm_uni = -(1/(E^{(0))dQ^{-1}_{-1/2)(u_0)/du_0,  where
@@ -63,6 +69,7 @@ contains
   end function norm_uni
   !============================================================================
   real function norm_par(CothU0, KappaPrime2In)
+    !$acc routine seq
     real, intent(in)     :: CothU0, KappaPrime2In
     real :: Kappa, Kappa2
     real :: ToroidQ0U0     ! Q^{-1}_{-1/2}(u_0)
@@ -80,10 +87,11 @@ contains
   end function norm_par
   !============================================================================
   real function q_0(KappaPrime2In)
+    !$acc routine seq
     real, intent(in)     :: KappaPrime2In
     !--------------------------------------------------------------------------
     q_0 = 0.125*toroid_p(0, KappaPrime2In=KappaPrime2In)/&
-       toroid_q(0,KappaPrime2In=KappaPrime2In)
+         toroid_q(0,KappaPrime2In=KappaPrime2In)
   end function q_0
   !============================================================================
 end module ModFormFactors
@@ -104,6 +112,7 @@ module  ModParabolicCurrent
   ! 1/(Q^{-1}_{-1/2}(u_0)*di_E(u_0)/du_0 - i_E(u_0)*dQ/du)
   real :: CurrentFactor
   real :: Q01               ! Field factor for parabolic current
+  !$acc declare create(CothU0,DPsiMinusJEOverDu0Minus,CurrentFactor,Q01)
 
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitudes
@@ -139,9 +148,13 @@ contains
     ! dQ^{-1}_{-1/2)(u_0)/du_0=3*KappaPrime0/Kappa0**2*Q^{-1}_{1/2}(u_0)
     DPsiMinusJEOverDu0Minus  = Q01*                                          &
          3*KappaPrime2Ext*KappaExtMax*toroid_q(1,KappaPrime2In=KappaPrime2Ext)
+
+    !$acc update device(CothU0,DPsiMinusJEOverDu0Minus,CurrentFactor,Q01)
+    !$acc update device(Kappa2ExtMax)    
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
+    !$acc routine seq
     real, intent(in)    :: KappaPrime2In
     real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
     !
@@ -166,6 +179,7 @@ contains
   end subroutine get_amplitude_int
   !============================================================================
   real function current(KappaPrime2In)
+    !$acc routine seq
     real, intent(in)    :: KappaPrime2In
     !--------------------------------------------------------------------------
     current = CurrentFactor*parabolic_current(CothU0,KappaPrime2In)
@@ -204,6 +218,10 @@ module  ModUniformCurrent
   real :: DPsiMinusJEOverDu0Minus   ! For parabolic current
   real :: PsiMinusJEUOPlus          ! For uniform current
   real :: Toroidal2                 ! b^2(u^+_0)
+
+  !$acc declare create(Eps, KappaPrime2Uniform, CothU0, DeltaInv, NormMinus)
+  !$acc declare create(NormPlus, CurrentFactor, CurrentE, Q01, Q1)
+  !$acc declare create(DPsiMinusJEOverDu0Minus, PsiMinusJEUOPlus, Toroidal2)
 
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitudes
@@ -282,9 +300,16 @@ contains
        PsiMinusJEUOPlus = Q1*ToroidQ0U0Plus
        Toroidal2 = 0.0
     end if
+
+  !$acc update device(Eps, KappaPrime2Uniform, CothU0, DeltaInv, NormMinus)
+  !$acc update device(NormPlus, CurrentFactor, CurrentE, Q01, Q1)
+  !$acc update device(DPsiMinusJEOverDu0Minus, PsiMinusJEUOPlus, Toroidal2)
+  !$acc update device(Kappa2ExtMax)    
+
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
+    !$acc routine seq
     real, intent(in)    :: KappaPrime2In
     real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
     !
@@ -318,6 +343,7 @@ contains
   end subroutine get_amplitude_int
   !============================================================================
   real function current(KappaPrime2In)
+    !$acc routine seq
     real, intent(in)    :: KappaPrime2In
     !--------------------------------------------------------------------------
     if(KappaPrime2In > KappaPrime2Uniform)then
@@ -341,6 +367,8 @@ module  ModSurfaceCurrent
   ! Constant  factor  to calculate the internal field
   !
   real :: Q0        ! Eq. 31, constant field factor for surface current
+  !$acc declare create(KappaPrime0, Q0)
+
   public:: set_kappaprime0  ! Set constant coefficients for given KappaPrime0
   public:: get_amplitude_int! Internal field amplitudes
 contains
@@ -354,9 +382,11 @@ contains
     Kappa2ExtMax      = 1 - KappaPrime02
     ! Eq. 31, constant field factor for surface current
     Q0 = q_0(KappaPrime2In=KappaPrime02)
+    !$acc update device(KappaPrime0, Q0)
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
+    !$acc routine seq
     real, intent(in)    :: KappaPrime2In
     real, intent(out)   :: Amplitude_I(Axial_:Toroidal_)
     !
@@ -403,6 +433,8 @@ module ModCurrentFilament
   ! Inductunce  coefficient; the ratio of the total inductance of the filament
   ! in the SI units ormalized by \mu_0 R_\infty
   real :: Inductance
+
+  !$acc declare create(rInfty, rInfty2, KappaPrime0, Inductance)
 contains
   !============================================================================
   subroutine set_filament_geometry(rMinor, rMajor, EpsIn)
@@ -444,6 +476,7 @@ contains
        ! Set \kappa^\prime = a/(2R_0)
        KappaPrime0 = 0.5* rMinor / rMajor
     end if
+    !$acc update device(rInfty, rInfty2, KappaPrime0, Inductance, Kappa2ExtMax)
   end subroutine set_filament_geometry
   !============================================================================
 end module ModCurrentFilament
@@ -464,6 +497,8 @@ module ModFieldGS
   ! the toridal magnetic field, which may be either positive or negative
   ! everywhere
   integer, private :: iHelicity
+
+  !$acc declare create(Bc, Bc_D, iHelicity)
 contains
   !============================================================================
   subroutine set_filament_field(iHelicityIn, BcIn_D)
@@ -479,9 +514,12 @@ contains
     iHelicity = iHelicityIn
     Bc_D = BcIn_D
     Bc = norm2(Bc_D)
+    !$acc update device(Bc, Bc_D, iHelicity)
   end subroutine set_filament_field
   !============================================================================
   subroutine get_filament_field(R_D, B_D, BetaIn, BPhiOut)
+    !$acc routine seq
+
     ! Caalculates:
     ! 1. With preset
     !      UseUniformCurrent = .true.
@@ -598,7 +636,7 @@ contains
           ! Internal field from the uniform current
           !
           call uniform_current_field(KappaPrime2In = KappaPrime**2, &
-            Amplitude_I=Amplitude_I)
+               Amplitude_I=Amplitude_I)
           ! Eqs. 35
           Var_VI(AxialU_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalU_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
@@ -625,7 +663,7 @@ contains
           ! Internal field from the uniform current
           !
           call surface_current_field(KappaPrime2In = KappaPrime**2, &
-            Amplitude_I=Amplitude_I)
+               Amplitude_I=Amplitude_I)
           ! Eqs. 35
           Var_VI(AxialS_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalS_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
@@ -657,7 +695,7 @@ contains
           ! Internal field from the parabolic current
           !
           call parabolic_current_field(KappaPrime2In = KappaPrime**2, &
-            Amplitude_I=Amplitude_I)
+               Amplitude_I=Amplitude_I)
           ! Eqs. 35
           Var_VI(AxialP_,iLoop)    = Amplitude_I(Axial_)
           Var_VI(PoloidalP_,iLoop) = KappaPrime*Amplitude_I(Poloidal_)
@@ -696,7 +734,7 @@ contains
          StringFormatIn = '(4es18.10)'          ,&
          Coord1In_I = Coord_I                   ,&
          VarIn_VI = Current_VI)
-       call save_plot_file(NameFile='test_toroidal.out', &
+    call save_plot_file(NameFile='test_toroidal.out', &
          TypeFileIn='ascii'                     ,&
          NameVarIn=&
          'kappa_prime Uniform Parabolic Merged', &
@@ -775,6 +813,7 @@ module EEE_ModTD99
 #ifdef _OPENACC
   use ModUtilities, ONLY: norm2
 #endif
+  use ModCoordTransform,      ONLY: cross_product
   use ModUtilities, ONLY: CON_stop
   use EEE_ModCommonVariables, ONLY: UseTD, UseTD14, UseTD22, DirCme_D, &
        No2Si_V, Si2No_V, Io2No_V, Io2Si_V, No2Io_V,                    &
@@ -812,9 +851,11 @@ module EEE_ModTD99
 
   ! Magnetic configuration center
   real :: XyzCenter_D(3)
+  !$acc declare create(RTube, aTube, Depth, XyzCenter_D, UnitX_D)
 
   ! magnetic field of the current tube at the center of configuration
   real :: BcTube, BcTubeDim, ITube
+  !$acc declare create(BcTube, BcTubeDim, ITube)
 
   ! Magnetic field at the center of configuration is always parallel,
   ! while starpping field is antiparallel, to the x-axis. Phi-conponent
@@ -822,6 +863,7 @@ module EEE_ModTD99
   ! field component may be both positive and negative. To account for
   ! this, we introduce the variable to store the helicity sign.
   integer :: iHelicity = +1
+  !$acc declare create(iHelicity)
 
   ! To set the negative helicity, the input parameter, BcTube, should be
   ! negative. This choice affects only the sign of helicity, but not the
@@ -841,6 +883,8 @@ module EEE_ModTD99
   ! set as the initial condition.
   real :: MassSi
   real :: Rho0=0.0
+  !$acc declare create(UsePlasmaBeta, PlasmaBeta, EjectaTemperature)
+  !$acc declare create(EjectaTemperatureDim, MassSi, Rho0)
 
   ! There is an alternative way to parameterize the current in the loop:
   ! namely, via the strength of the overarching (strapping) field. With
@@ -865,18 +909,22 @@ module EEE_ModTD99
 
   ! magnetic charge and its distance from the current ring
   real :: q = 0.0,  qDistance = 0.0, bQStrappingDim, bQStrapFraction
+  !$acc declare create(q, qDistance, bQStrappingDim, bQStrapFraction)
 
   ! coordinate vectors of the charge location
   real    :: RPlus_D(3), RMinus_D(3)
   real    :: UChargeX = 0.0
+  !$acc declare create(RPlus_D, RMinus_D, UChargeX)
 
   ! If .true. in the initial distribution of the magnetic field the
   ! strapping field from two magnetic charges
   logical :: UseStaticCharge = .false.
+  !$acc declare create(UseStaticCharge)
 
   ! If .true., the magnetic field from two magnetic charges is varied
   ! dynamically, via varied B0Field
   logical :: UseDynamicStrapping = .false.
+  !$acc declare create(UseDynamicStrapping)
 
 contains
   !============================================================================
@@ -956,12 +1004,12 @@ contains
        ! The rest is only read if TypeCharge is not "none"
        if(TypeCharge /= "none")then
           !  if(UseEquilibriumCurrent)then
-             ! In this case we read, which fraction of the above
-             ! equilibrium strapping field is due to magnetic charges
+          ! In this case we read, which fraction of the above
+          ! equilibrium strapping field is due to magnetic charges
           call read_var('bQStrapFraction', bQStrapFraction)
           ! else
-             ! The magnetude of magnetic charges is characterized in terms
-             ! of the strapping field they produce at the apex of flux rope
+          ! The magnetude of magnetic charges is characterized in terms
+          ! of the strapping field they produce at the apex of flux rope
           !   call read_var('bQStrappingDim', bQStrappingDim)
           ! end if
           call read_var('qDistance',  qDistance)
@@ -1218,11 +1266,19 @@ contains
        endif  ! UseDynamicStrapping
     end if  ! UseCharge
 
+    !$acc update device(RTube, aTube, Depth, XyzCenter_D, UnitX_D)
+    !$acc update device(UsePlasmaBeta, PlasmaBeta, EjectaTemperature)
+    !$acc update device(EjectaTemperatureDim, MassSi, Rho0)
+    !$acc update device(UseStaticCharge, iHelicity, UseDynamicStrapping)
+    !$acc update device(BcTube, BcTubeDim, ITube)
+
+    !$acc update device(q, qDistance, bQStrappingDim, bQStrapFraction)
+    !$acc update device(RPlus_D, RMinus_D, UChargeX)
+
   end subroutine init_TD99_parameters
   !============================================================================
   subroutine get_TD99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
-
-    use ModCoordTransform,      ONLY: cross_product
+    !$acc routine seq
 
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
     !                                                                   !
@@ -1287,9 +1343,11 @@ contains
 
        Kappa2 = 4.0*Rperp*Rtube/RPlus2; Kappa = sqrt(Kappa2)
        if(.not.UseTD14)then
-          call td99
+          call td99(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, &
+          Kappa, Kappa2, BFRope_D, RhoFRope, pFluxRope)
        else
-          call tdm
+          call tdm(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, &
+          Kappa, Kappa2, BFRope_D, RhoFRope, pFluxRope)
        end if
     end if
     !
@@ -1303,277 +1361,290 @@ contains
     BFRope_D  = BFRope_D *No2Si_V(UnitB_)
     RhoFRope  = RhoFRope *No2Si_V(UnitRho_)
     pFluxRope = pFluxRope*No2Si_V(UnitP_)
-
-  contains
-    !==========================================================================
-    subroutine td99
-
-      real:: DKappaDx, DKappaDr
-      real:: KappaA, KappaA2, DKappaAdr
-
-      ! Vector potential related variables::
-      real:: Ak, dAkdk, D2Akdk2A
-      real:: AI, dAIdx, dAIdr
-      ! Flux-rope related variables::
-      real:: BIPhi_D(3)
-      !------------------------------------------------------------------------
-      if (RMinus >= aTube) then
-         !
-         ! No pressure and density outside flux rope
-         RhoFRope = 0.0; pFluxRope = 0.0
-         ! Compute the field outside the current torus
-         !
-         call get_filament_field(XyzRel_D, BFRope_D)
-         BIPhi_D = 0.0
-      else
-         !
-         ! Compute the field and density inside the current torus
-         !
-         ! 1.
-         ! Define the model input, KappaA. A given point is characterized by
-         ! two coordinates, say, RPepr and RMinus. In this case,
-         ! if we denote
-         ! Kappa = function(RPerp,RMinus): i.e. Kappa**2 = 4*RPerp*RTube *R_+**2
-         ! then
-         ! KappaA = function(RPepr,ATube), or
-         KappaA2 = 4.0*Rperp*Rtube/(4.0*Rperp*Rtube + aTube**2)
-         KappaA  = sqrt(KappaA2)
-         !
-         ! 2.
-         ! The vector potential of the externap field, Ak and its derivative,
-         ! dAk/dk, are both prolonged to the tube interior using the following
-         ! sewing function (below we use A_k by a factor of Kappa**3 different
-         ! from what we used above:
-         ! A_i = A_k(KappaA) + dA_k/dKappaA*(Kappa - Kappa_A) (*)
-         !
-         Ak      = toroid_P(0, Kappa2In=KappaA2)*KappaA**3
-         dAkdk   = 3*toroid_p(1,Kappa2In=KappaA2)*KappaA2
-         AI = Ak + dAkdk*(Kappa - KappaA)
-         !
-         ! 3.
-         ! Now, we derive the field components in terms of x and rPerp
-         ! derivatives. Function A_i depends on x only via Kappa, so that:
-         ! dA_i/dx = dA_k/dKappaA*dKappa/dx:
-         !
-         dKappadx  = 2.0*xRel*Kappa/RPlus2
-         dAIdx   = dAkdk*dKappadx
-         !
-         ! 4.
-         ! Analogously we account for the dependence of Kappa on the radial
-         ! coordinate:
-         ! dA_i/dr = dA_k/dKappaA*dKappaA/dr:
-         !
-         dKappadr  = Kappa*(Rtube**2 - R2Rel)/RPlus2
-         dAIdr   = dAkdk*dKappadr
-         !
-         ! 5.
-         ! Now, we account for the dependence of KappaA on rPerp. From (*), the
-         ! contributions from the first derivative dA_k(KappaA)/dKappaA cancel
-         ! each other, so that only the second derivative matters, which is
-         ! equal to  d^2A_k(KappaA)/dKappaA^2:
-         !
-         d2Akdk2A = &
-              KappaA/(1 - KappaA**2)*(3*toroid_P(0, Kappa2In=KappaA**2) +&
-              3*toroid_p(1,Kappa2In=KappaA**2)*(1 + KappaA**2))
-         dKappaAdr = KappaA*aTube**2/&
-              (4.0*Rperp*Rtube + aTube**2)
-         dAIdr = dAIdr + d2Akdk2A*dKappaAdr*(Kappa - KappaA)
-
-         BFRope_D =  BcTube/(Kappa**3)*(Rtube/sqrt(RPlus2))**3*&
-              (dAIdx*XyzRel_D + (dAIdr + AI)*UnitX_D)
-         ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
-         ! produced by the azimuthal current Iphi. This is needed to ensure
-         ! that the flux rope configuration is force free.
-         BIPhi_D = iHelicity*BcTube*RTube/(cPi*RPerp*aTube**2) &
-              *sqrt(2.0*(aTube**2 - RMinus**2))*&
-              cross_product(UnitX_D,XyzRel_D)
-         ! Add the prominence material inside the flux rope, assuming that the
-         ! given total amount of mass
-
-         if (.not.UsePlasmaBeta)then
-            ! Cold plasma density is applied with density estimated from
-            ! the total mass of eject
-            RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
-            pFluxRope = 0
-         else
-            !
-            ! Rescale BIPhi, which is not only a part of total pressure:
-            !
-            BIPhi_D = BIPhi_D/sqrt(1 + PlasmaBeta)
-            pFluxRope = 0.50*sum(BIPhi_D**2)*PlasmaBeta
-            RhoFRope = pFluxRope/EjectaTemperature
-         end if
-      end if
-      ! Add the field of the azimuthal current, Iphi::
-      ! Compute the field produced by the ring current, Itube, both
-      ! inside and outside the torus, BI = BFRope_D(x_:z_)::
-      BFRope_D = BFRope_D + BIPhi_D
-
-    end subroutine td99
-    !==========================================================================
-    subroutine tdm
-
-      use ModConst, ONLY: cTwoPi, cPi
-      use ModHyperGeometric, ONLY: calc_elliptic_int_1kind, &
-           calc_elliptic_int_2kind
-
-      real, parameter :: Delta = 0.1
-      real :: bTheta_D(3),  bI_D(3)
-      real :: RhoStarF, RhoStarG
-      real :: RPerpHat_D(3), ThetaHat_D(3)
-      real :: AxialFlux, Xi
-      real :: DKappaDx, DKappaDRperp, kStarF, dKSFdX, dKSFdR, &
-           kStarG, dKSGdX, dKSGdR
-      real :: EllipticKf, EllipticEf, FuncAf, dFuncAf, d2FuncAf, d3FuncAf
-      real :: EllipticKg, EllipticEg
-      real :: FuncAg, dFuncAg, d2FuncAg, d3FuncAg
-      real :: SewingH, dSewingH, SewingF, dSewingF, SewingG, dSewingG
-      real :: Ai, dAIdX, dAIdR
-      real :: TmpG, dGdX, dGdR, TmpH, dHdR, Afx, dAFRdX, dAFXdR
-      !------------------------------------------------------------------------
-      ! In spherical case the straping field magnitude bVert
-      ! should be provided
-
-      ! Coordinate unit vectors
-      RPerpHat_D = (XyzRel_D - xRel*UnitX_D)/RPerp
-      ThetaHat_D = cross_product(UnitX_D, RPerpHat_D)
-      !
-      ! Toroidal coordinate, usual argument of special functions
-      ! describing solution in the totoidal coordinates
-      !
-      ! Derivatives over x and over RPerp
-      DKappaDx = - (xRel*Kappa**3) / (4*RPerp*RTube)
-      DKappaDRperp = &
-           Kappa**3/(8*RPerp**2*RTube) * (RMinus**2-2*RPerp*(RPerp-RTube))
-
-      AxialFlux = 3./(5*sqrt(2.)) * ITube * aTube
-
-      ! Sewing functions
-      Xi = (RMinus - aTube)/(Delta*aTube)
-      SewingH = 0.5*(Xi+log(2*cosh(Xi)))
-      dSewingH = 0.5*(1+tanh(Xi))
-      ! BigTheta = cPi/4*(1+tanh(Xi))
-      SewingF = SewingH    ! approximation for parabolic current case
-      ! SewingF = SewingH + cF0*exp(cF1*SewingH+cF2*SewingH**2)
-      dSewingF = dSewingH
-      ! dSewingF = sin(BigTheta)
-      ! dSewingF = dSewingH + cF0*exp(cF1*SewingH+cF2*SewingH**2) &
-      !     *(cF1*dSewingH+2*cF2*SewingH*dSewingH)
-      SewingG = SewingH
-      ! SewingG = SewingH - cF0*exp(cG1*SewingH)
-      dSewingG = dSewingH
-      ! dSewingG = 1-cos(BigTheta)
-      ! dSewingG = dSewingH - cF0*exp(cG1*SewingH)*cG1*dSewingH
-
-      ! curly-A function and its derivatives for k_(six-edged-star)
-      RhoStarF = aTube*(1 + Delta*SewingF)
-      kStarF = sqrt((RPerp*RTube)/(RPerp*RTube + RhoStarF**2/4.))
-      dKSFdX = - (xRel*kStarF**3) / (4*RPerp*RTube)*dSewingF*RhoStarF/RMinus
-      dKSFdR = kStarF**3/(8*RPerp**2*RTube) &
-           * (RhoStarF**2 - 2*RPerp*(RPerp-RTube)*dSewingF*RhoStarF/RMinus)
-
-      call calc_elliptic_int_1kind(kStarF,EllipticKf)
-      call calc_elliptic_int_2kind(kStarF,EllipticEf)
-
-      FuncAf = ((2-kStarF**2)*EllipticKf - 2*EllipticEf) / kStarF
-      dFuncAf = (2-kStarF**2)/(kStarF**2*(1-kStarF**2)) * EllipticEf &
-           - 2/(kStarF**2) * EllipticKf
-      d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) &
-           *EllipticEf - (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2))*EllipticKf
-      d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12) &
-           /(kStarF**4*(1-kStarF**2)**3) * EllipticEf &
-           - (19*kStarF**4-27*kStarF**2+12) &
-           /(kStarF**4*(1-kStarF**2)**2) * EllipticKf
-
-      ! curly-A function for k_(five-sided-star)
-      RhoStarG = aTube*(1 + Delta*SewingG)
-      kStarG = sqrt((RPerp*RTube)/(RPerp*RTube+RhoStarG**2/4.))
-      dKSGdX = - (xRel*kStarG**3) / (4*RPerp*RTube) * dSewingG*RhoStarG/RMinus
-      dKSGdR = kStarG**3/(8*RPerp**2*RTube) &
-           * (RhoStarG**2 - 2*RPerp*(RPerp-RTube)*dSewingG*RhoStarG/RMinus)
-
-      call calc_elliptic_int_1kind(kStarG,EllipticKg)
-      call calc_elliptic_int_2kind(kStarG,EllipticEg)
-
-      FuncAg = ((2-kStarG**2)*EllipticKg - 2*EllipticEg) / kStarG
-      dFuncAg = (2-kStarG**2)/(kStarG**2*(1-kStarG**2)) * EllipticEg - &
-           2/(kStarG**2) * EllipticKg
-      d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) &
-           *EllipticEg - (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2))*EllipticKg
-      d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12) &
-           /(kStarG**4*(1-kStarG**2)**3)*EllipticEg &
-           - (19*kStarG**4-27*kStarG**2+12) &
-           /(kStarG**4*(1-kStarG**2)**2)*EllipticKg
-
-      ! ---- ring current field B_I ----
-      !
-      ! A phi-component of vector potential
-      Ai = ITube/cTwoPi*sqrt(RTube/RPerp)* &
-           (FuncAf + dFuncAf*(Kappa - kStarF)+0.5*d2FuncAf*(Kappa - kStarF)**2)
-      !
-      ! Its partial derivatives
-      !
-      dAIdX = ITube/cTwoPi*sqrt(RTube/RPerp)*&
-           (dFuncAf*DKappaDx + d2FuncAf*DKappaDx*(Kappa - kStarF) &
-           + 0.5*d3FuncAf*dKSFdX*(Kappa - kStarF)**2)
-      dAIdR = ITube/cTwoPi*sqrt(RTube/RPerp) &
-           *(dFuncAf*DKappaDRperp + d2FuncAf*DKappaDRperp*(Kappa-kStarF) &
-           + 0.5*d3FuncAf*dKSFdR*(Kappa-kStarF)**2) - Ai/(2*RPerp)
-      !
-      ! Poloidal magnetic field
-      bI_D = - dAIdX*RPerpHat_D + (dAIdR + Ai/RPerp)*UnitX_D
-
-      ! ---- toroidal field B_theta ----
-
-      ! just a temporary variable, same for tmpH below
-      TmpG = 3 + 4*dFuncAf*(Kappa-kStarF)
-
-      dGdX = 4*(d2FuncAf*dKSFdX*(Kappa-kStarF)+dFuncAf*(DKappaDx-dKSFdX))
-      dGdR = 4*(d2FuncAf*dKSFdR*(Kappa-kStarF)+dFuncAf*(DKappaDRperp-dKSFdR))
-
-      TmpH = (Kappa**3*(xRel**2 + RTube**2 - RPerp**2) - &
-           aTube**2*kStarG**3)*dFuncAg + &
-           aTube**2*kStarG**3*d2FuncAg*(Kappa-kStarG)
-      dHdR = (3*Kappa**2*DKappaDRperp*(xRel**2 + RTube**2 -RPerp**2) - &
-           2*Kappa**3*RPerp-&
-           3*aTube**2*kStarG**2*dKSGdR)*dFuncAg + &
-           (Kappa**3*(xRel**2 + RTube**2 - RPerp**2) - &
-           aTube**2*kStarG**3)*d2FuncAg*dKSGdR + &
-           aTube**2*( (3*kStarG**2*dKSGdR*(Kappa - kStarG) &
-           + kStarG**3*(DKappaDRperp - dKSGdR))*d2FuncAg &
-           + kStarG**3*(Kappa - kStarG)*d3FuncAg*dKSGdR )
-
-      Afx = AxialFlux/(4*cPi*RPerp)*sqrt(RTube/RPerp) * &
-           ( FuncAg + (aTube**2*kStarG**3)/(4*RPerp*RTube)*dFuncAg &
-           + TmpG**(5./2.)/(30*sqrt(3.)) &
-           - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*RPerp*RTube)*TmpH )
-
-      dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*RPerp)/sqrt(RPerp*RTube) * &
-           (1.5*sqrt(TmpG)*dGdX*xRel*Kappa**3*dFuncAf + &
-           sqrt(TmpG)**3*(xRel*Kappa**3*d2FuncAf*dKSFdX &
-           + (Kappa**3+3*xRel*Kappa**2*DKappaDx)*dFuncAf))
-      dAFXdR = (AxialFlux*sqrt(RTube))/(4*cPi)*RPerp**(-3./2.) &
-           * ( dFuncAg*dKSGdR + &
-           aTube**2/(4*RTube)*((3*kStarG**2*RPerp*dKSGdR-kStarG**3) &
-           /(RPerp**2)*dFuncAg + &
-           kStarG**3/RPerp*d2FuncAg*dKSGdR) &
-           + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
-           1./(12*sqrt(3.)*RTube)*((1.5*sqrt(TmpG)*dGdR*RPerp-TmpG**(3./2.)) &
-           /(RPerp**2)*TmpH + &
-           TmpG**(3./2.)/RPerp*dHdR) ) - 3./(2*RPerp)*Afx
-
-      bTheta_D = (dAFRdX-dAFXdR) * ThetaHat_D
-
-      ! ---- combine three parts ----
-      BFRope_D = bI_D + bTheta_D
-      RhoFRope  = 0.0
-      pFluxRope = 0.0
-
-    end subroutine tdm
-    !==========================================================================
   end subroutine get_TD99_fluxrope
+  !==========================================================================
+  subroutine td99(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, &
+     Kappa, Kappa2, BFRope_D, RhoFRope, pFluxRope)
+    !$acc routine seq
+
+    real, intent(in) :: XyzRel_D(3)
+    real, intent(in) :: R2Rel, xRel, RMinus, RPlus2, Rperp, Kappa, Kappa2
+    real, intent(out) :: BFRope_D(3)
+    real, intent(out) :: RhoFRope, pFluxRope
+
+    real:: DKappaDx, DKappaDr
+    real:: KappaA, KappaA2, DKappaAdr
+
+    ! Vector potential related variables::
+    real:: Ak, dAkdk, D2Akdk2A
+    real:: AI, dAIdx, dAIdr
+    ! Flux-rope related variables::
+    real:: BIPhi_D(3)
+    !------------------------------------------------------------------------
+    if (RMinus >= aTube) then
+       !
+       ! No pressure and density outside flux rope
+       RhoFRope = 0.0; pFluxRope = 0.0
+       ! Compute the field outside the current torus
+       !
+       call get_filament_field(XyzRel_D, BFRope_D)
+       BIPhi_D = 0.0
+    else
+       !
+       ! Compute the field and density inside the current torus
+       !
+       ! 1.
+       ! Define the model input, KappaA. A given point is characterized by
+       ! two coordinates, say, RPepr and RMinus. In this case,
+       ! if we denote
+       ! Kappa = function(RPerp,RMinus): i.e. Kappa**2 = 4*RPerp*RTube *R_+**2
+       ! then
+       ! KappaA = function(RPepr,ATube), or
+       KappaA2 = 4.0*Rperp*Rtube/(4.0*Rperp*Rtube + aTube**2)
+       KappaA  = sqrt(KappaA2)
+       !
+       ! 2.
+       ! The vector potential of the externap field, Ak and its derivative,
+       ! dAk/dk, are both prolonged to the tube interior using the following
+       ! sewing function (below we use A_k by a factor of Kappa**3 different
+       ! from what we used above:
+       ! A_i = A_k(KappaA) + dA_k/dKappaA*(Kappa - Kappa_A) (*)
+       !
+       Ak      = toroid_P(0, Kappa2In=KappaA2)*KappaA**3
+       dAkdk   = 3*toroid_p(1,Kappa2In=KappaA2)*KappaA2
+       AI = Ak + dAkdk*(Kappa - KappaA)
+       !
+       ! 3.
+       ! Now, we derive the field components in terms of x and rPerp
+       ! derivatives. Function A_i depends on x only via Kappa, so that:
+       ! dA_i/dx = dA_k/dKappaA*dKappa/dx:
+       !
+       dKappadx  = 2.0*xRel*Kappa/RPlus2
+       dAIdx   = dAkdk*dKappadx
+       !
+       ! 4.
+       ! Analogously we account for the dependence of Kappa on the radial
+       ! coordinate:
+       ! dA_i/dr = dA_k/dKappaA*dKappaA/dr:
+       !
+       dKappadr  = Kappa*(Rtube**2 - R2Rel)/RPlus2
+       dAIdr   = dAkdk*dKappadr
+       !
+       ! 5.
+       ! Now, we account for the dependence of KappaA on rPerp. From (*), the
+       ! contributions from the first derivative dA_k(KappaA)/dKappaA cancel
+       ! each other, so that only the second derivative matters, which is
+       ! equal to  d^2A_k(KappaA)/dKappaA^2:
+       !
+       d2Akdk2A = &
+            KappaA/(1 - KappaA**2)*(3*toroid_P(0, Kappa2In=KappaA**2) +&
+            3*toroid_p(1,Kappa2In=KappaA**2)*(1 + KappaA**2))
+       dKappaAdr = KappaA*aTube**2/&
+            (4.0*Rperp*Rtube + aTube**2)
+       dAIdr = dAIdr + d2Akdk2A*dKappaAdr*(Kappa - KappaA)
+
+       BFRope_D =  BcTube/(Kappa**3)*(Rtube/sqrt(RPlus2))**3*&
+            (dAIdx*XyzRel_D + (dAIdr + AI)*UnitX_D)
+       ! Compute the toroidal field (BIphix, BIphiy, BIphiz)
+       ! produced by the azimuthal current Iphi. This is needed to ensure
+       ! that the flux rope configuration is force free.
+       BIPhi_D = iHelicity*BcTube*RTube/(cPi*RPerp*aTube**2) &
+            *sqrt(2.0*(aTube**2 - RMinus**2))*&
+            cross_product(UnitX_D,XyzRel_D)
+       ! Add the prominence material inside the flux rope, assuming that the
+       ! given total amount of mass
+
+       if (.not.UsePlasmaBeta)then
+          ! Cold plasma density is applied with density estimated from
+          ! the total mass of eject
+          RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
+          pFluxRope = 0
+       else
+          !
+          ! Rescale BIPhi, which is not only a part of total pressure:
+          !
+          BIPhi_D = BIPhi_D/sqrt(1 + PlasmaBeta)
+          pFluxRope = 0.50*sum(BIPhi_D**2)*PlasmaBeta
+          RhoFRope = pFluxRope/EjectaTemperature
+       end if
+    end if
+    ! Add the field of the azimuthal current, Iphi::
+    ! Compute the field produced by the ring current, Itube, both
+    ! inside and outside the torus, BI = BFRope_D(x_:z_)::
+    BFRope_D = BFRope_D + BIPhi_D
+
+  end subroutine td99
+  !==========================================================================
+  subroutine tdm(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, Kappa, Kappa2, &
+     BFRope_D, RhoFRope, pFluxRope)
+    !$acc routine seq
+
+    use ModConst, ONLY: cTwoPi, cPi
+    use ModHyperGeometric, ONLY: calc_elliptic_int_1kind, &
+         calc_elliptic_int_2kind
+
+    real, intent(in) :: XyzRel_D(3)
+    real, intent(in) :: R2Rel, xRel, RMinus, RPlus2, Rperp, Kappa, Kappa2       
+    real, intent(out) :: BFRope_D(3)
+    real, intent(out) :: RhoFRope, pFluxRope  
+
+    real, parameter :: Delta = 0.1
+    real :: bTheta_D(3),  bI_D(3)
+    real :: RhoStarF, RhoStarG
+    real :: RPerpHat_D(3), ThetaHat_D(3)
+    real :: AxialFlux, Xi
+    real :: DKappaDx, DKappaDRperp, kStarF, dKSFdX, dKSFdR, &
+         kStarG, dKSGdX, dKSGdR
+    real :: EllipticKf, EllipticEf, FuncAf, dFuncAf, d2FuncAf, d3FuncAf
+    real :: EllipticKg, EllipticEg
+    real :: FuncAg, dFuncAg, d2FuncAg, d3FuncAg
+    real :: SewingH, dSewingH, SewingF, dSewingF, SewingG, dSewingG
+    real :: Ai, dAIdX, dAIdR
+    real :: TmpG, dGdX, dGdR, TmpH, dHdR, Afx, dAFRdX, dAFXdR
+    !------------------------------------------------------------------------
+    ! In spherical case the straping field magnitude bVert
+    ! should be provided
+
+    ! Coordinate unit vectors
+    RPerpHat_D = (XyzRel_D - xRel*UnitX_D)/RPerp
+    ThetaHat_D = cross_product(UnitX_D, RPerpHat_D)
+    !
+    ! Toroidal coordinate, usual argument of special functions
+    ! describing solution in the totoidal coordinates
+    !
+    ! Derivatives over x and over RPerp
+    DKappaDx = - (xRel*Kappa**3) / (4*RPerp*RTube)
+    DKappaDRperp = &
+         Kappa**3/(8*RPerp**2*RTube) * (RMinus**2-2*RPerp*(RPerp-RTube))
+
+    AxialFlux = 3./(5*sqrt(2.)) * ITube * aTube
+
+    ! Sewing functions
+    Xi = (RMinus - aTube)/(Delta*aTube)
+    SewingH = 0.5*(Xi+log(2*cosh(Xi)))
+    dSewingH = 0.5*(1+tanh(Xi))
+    ! BigTheta = cPi/4*(1+tanh(Xi))
+    SewingF = SewingH    ! approximation for parabolic current case
+    ! SewingF = SewingH + cF0*exp(cF1*SewingH+cF2*SewingH**2)
+    dSewingF = dSewingH
+    ! dSewingF = sin(BigTheta)
+    ! dSewingF = dSewingH + cF0*exp(cF1*SewingH+cF2*SewingH**2) &
+    !     *(cF1*dSewingH+2*cF2*SewingH*dSewingH)
+    SewingG = SewingH
+    ! SewingG = SewingH - cF0*exp(cG1*SewingH)
+    dSewingG = dSewingH
+    ! dSewingG = 1-cos(BigTheta)
+    ! dSewingG = dSewingH - cF0*exp(cG1*SewingH)*cG1*dSewingH
+
+    ! curly-A function and its derivatives for k_(six-edged-star)
+    RhoStarF = aTube*(1 + Delta*SewingF)
+    kStarF = sqrt((RPerp*RTube)/(RPerp*RTube + RhoStarF**2/4.))
+    dKSFdX = - (xRel*kStarF**3) / (4*RPerp*RTube)*dSewingF*RhoStarF/RMinus
+    dKSFdR = kStarF**3/(8*RPerp**2*RTube) &
+         * (RhoStarF**2 - 2*RPerp*(RPerp-RTube)*dSewingF*RhoStarF/RMinus)
+
+    call calc_elliptic_int_1kind(kStarF,EllipticKf)
+    call calc_elliptic_int_2kind(kStarF,EllipticEf)
+
+    FuncAf = ((2-kStarF**2)*EllipticKf - 2*EllipticEf) / kStarF
+    dFuncAf = (2-kStarF**2)/(kStarF**2*(1-kStarF**2)) * EllipticEf &
+         - 2/(kStarF**2) * EllipticKf
+    d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) &
+         *EllipticEf - (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2))*EllipticKf
+    d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12) &
+         /(kStarF**4*(1-kStarF**2)**3) * EllipticEf &
+         - (19*kStarF**4-27*kStarF**2+12) &
+         /(kStarF**4*(1-kStarF**2)**2) * EllipticKf
+
+    ! curly-A function for k_(five-sided-star)
+    RhoStarG = aTube*(1 + Delta*SewingG)
+    kStarG = sqrt((RPerp*RTube)/(RPerp*RTube+RhoStarG**2/4.))
+    dKSGdX = - (xRel*kStarG**3) / (4*RPerp*RTube) * dSewingG*RhoStarG/RMinus
+    dKSGdR = kStarG**3/(8*RPerp**2*RTube) &
+         * (RhoStarG**2 - 2*RPerp*(RPerp-RTube)*dSewingG*RhoStarG/RMinus)
+
+    call calc_elliptic_int_1kind(kStarG,EllipticKg)
+    call calc_elliptic_int_2kind(kStarG,EllipticEg)
+
+    FuncAg = ((2-kStarG**2)*EllipticKg - 2*EllipticEg) / kStarG
+    dFuncAg = (2-kStarG**2)/(kStarG**2*(1-kStarG**2)) * EllipticEg - &
+         2/(kStarG**2) * EllipticKg
+    d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) &
+         *EllipticEg - (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2))*EllipticKg
+    d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12) &
+         /(kStarG**4*(1-kStarG**2)**3)*EllipticEg &
+         - (19*kStarG**4-27*kStarG**2+12) &
+         /(kStarG**4*(1-kStarG**2)**2)*EllipticKg
+
+    ! ---- ring current field B_I ----
+    !
+    ! A phi-component of vector potential
+    Ai = ITube/cTwoPi*sqrt(RTube/RPerp)* &
+         (FuncAf + dFuncAf*(Kappa - kStarF)+0.5*d2FuncAf*(Kappa - kStarF)**2)
+    !
+    ! Its partial derivatives
+    !
+    dAIdX = ITube/cTwoPi*sqrt(RTube/RPerp)*&
+         (dFuncAf*DKappaDx + d2FuncAf*DKappaDx*(Kappa - kStarF) &
+         + 0.5*d3FuncAf*dKSFdX*(Kappa - kStarF)**2)
+    dAIdR = ITube/cTwoPi*sqrt(RTube/RPerp) &
+         *(dFuncAf*DKappaDRperp + d2FuncAf*DKappaDRperp*(Kappa-kStarF) &
+         + 0.5*d3FuncAf*dKSFdR*(Kappa-kStarF)**2) - Ai/(2*RPerp)
+    !
+    ! Poloidal magnetic field
+    bI_D = - dAIdX*RPerpHat_D + (dAIdR + Ai/RPerp)*UnitX_D
+
+    ! ---- toroidal field B_theta ----
+
+    ! just a temporary variable, same for tmpH below
+    TmpG = 3 + 4*dFuncAf*(Kappa-kStarF)
+
+    dGdX = 4*(d2FuncAf*dKSFdX*(Kappa-kStarF)+dFuncAf*(DKappaDx-dKSFdX))
+    dGdR = 4*(d2FuncAf*dKSFdR*(Kappa-kStarF)+dFuncAf*(DKappaDRperp-dKSFdR))
+
+    TmpH = (Kappa**3*(xRel**2 + RTube**2 - RPerp**2) - &
+         aTube**2*kStarG**3)*dFuncAg + &
+         aTube**2*kStarG**3*d2FuncAg*(Kappa-kStarG)
+    dHdR = (3*Kappa**2*DKappaDRperp*(xRel**2 + RTube**2 -RPerp**2) - &
+         2*Kappa**3*RPerp-&
+         3*aTube**2*kStarG**2*dKSGdR)*dFuncAg + &
+         (Kappa**3*(xRel**2 + RTube**2 - RPerp**2) - &
+         aTube**2*kStarG**3)*d2FuncAg*dKSGdR + &
+         aTube**2*( (3*kStarG**2*dKSGdR*(Kappa - kStarG) &
+         + kStarG**3*(DKappaDRperp - dKSGdR))*d2FuncAg &
+         + kStarG**3*(Kappa - kStarG)*d3FuncAg*dKSGdR )
+
+    Afx = AxialFlux/(4*cPi*RPerp)*sqrt(RTube/RPerp) * &
+         ( FuncAg + (aTube**2*kStarG**3)/(4*RPerp*RTube)*dFuncAg &
+         + TmpG**(5./2.)/(30*sqrt(3.)) &
+         - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*RPerp*RTube)*TmpH )
+
+    dAFRdX = AxialFlux/(24*sqrt(3.)*cPi*RPerp)/sqrt(RPerp*RTube) * &
+         (1.5*sqrt(TmpG)*dGdX*xRel*Kappa**3*dFuncAf + &
+         sqrt(TmpG)**3*(xRel*Kappa**3*d2FuncAf*dKSFdX &
+         + (Kappa**3+3*xRel*Kappa**2*DKappaDx)*dFuncAf))
+    dAFXdR = (AxialFlux*sqrt(RTube))/(4*cPi)*RPerp**(-3./2.) &
+         * ( dFuncAg*dKSGdR + &
+         aTube**2/(4*RTube)*((3*kStarG**2*RPerp*dKSGdR-kStarG**3) &
+         /(RPerp**2)*dFuncAg + &
+         kStarG**3/RPerp*d2FuncAg*dKSGdR) &
+         + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
+         1./(12*sqrt(3.)*RTube)*((1.5*sqrt(TmpG)*dGdR*RPerp-TmpG**(3./2.)) &
+         /(RPerp**2)*TmpH + &
+         TmpG**(3./2.)/RPerp*dHdR) ) - 3./(2*RPerp)*Afx
+
+    bTheta_D = (dAFRdX-dAFXdR) * ThetaHat_D
+
+    ! ---- combine three parts ----
+    BFRope_D = bI_D + bTheta_D
+    RhoFRope  = 0.0
+    pFluxRope = 0.0
+
+  end subroutine tdm
+  !==========================================================================
   !============================================================================
   subroutine compute_TD99_BqField(Xyz_D, BqField_D, TimeNow)
+    !$acc routine seq
 
     real, intent(in)  :: Xyz_D(3)
     real, intent(out) :: BqField_D(3)

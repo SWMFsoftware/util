@@ -260,7 +260,7 @@ contains
     Coeff = 1.0
     if(tDecayCmeDim > 0.0) Coeff = max(0.0, &
          1 - (Time - tStartCme)/tDecayCmeDim)
-#ifndef _OPENACC
+
     if (UseTD) then
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
        Rho = Rho + Coeff*Rho1; B_D = B_D + Coeff*B1_D; p = p + Coeff*p1
@@ -271,7 +271,6 @@ contains
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time) !! send Time
        B_D = B_D + Coeff*B1_D
     end if
-#endif
 
     if(UseSpheromak)then
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
