@@ -97,8 +97,6 @@ module EEE_ModCommonVariables
   real    :: tDecayCmeDim = -1.0, tDecayCme = -1.0
   !$acc declare create(tDecayCmeDim, tDecayCme)
 
-  logical :: DoInit = .true.
-
   ! Plotting options:
   ! Lineaar resolution, in terms of the unit of length.  For solar
   ! applications, the magnetogram resolution of 1 degree, corresponds

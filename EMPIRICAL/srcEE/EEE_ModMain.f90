@@ -24,6 +24,7 @@ contains
   subroutine EEE_initialize(BodyNDim, BodyTDim, Gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
     use EEE_ModGL98, ONLY: gl98_init
+    use EEE_ModTD99, ONLY: init_TD99_parameters
 #ifdef _OPENACC
     use ModUtilities, ONLY: norm2
 #endif
@@ -111,10 +112,12 @@ contains
        DoNormalizeXyz = .false.
     end if
 
-    DoInit = .true.
-
     if(UseGL .or. UseSpheromak) then 
       call gl98_init
+    end if
+
+    if(UseTD) then
+      call init_TD99_parameters
     end if
 
    !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22)

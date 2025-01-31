@@ -97,7 +97,6 @@ contains
 
     real :: Rotate_DD(3,3)
     !--------------------------------------------------------------------------
-    DoInit=.false.
 
     alpha0 = Alpha0R0/Radius
     Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3

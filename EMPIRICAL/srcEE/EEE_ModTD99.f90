@@ -788,6 +788,7 @@ module EEE_ModTD99
   save
   private
 
+  public :: init_TD99_parameters
   public :: set_parameters_TD99
   public :: get_TD99_fluxrope
   public :: compute_TD99_BqField
@@ -1221,7 +1222,6 @@ contains
   !============================================================================
   subroutine get_TD99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
 
-    use EEE_ModCommonVariables, ONLY: DoInit
     use ModCoordTransform,      ONLY: cross_product
 
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
@@ -1251,10 +1251,6 @@ contains
     ! Initialize the TD99 model parameters once::
 
     !--------------------------------------------------------------------------
-    if (DoInit) then
-       call init_TD99_parameters
-       DoInit=.false.
-    endif
 
     !
     ! Calculate the field of thin toroidal current filament
