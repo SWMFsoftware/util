@@ -33,6 +33,8 @@ contains
     integer, optional, intent(in):: iCommIn
     real, optional, intent(in)   :: TimeNow
 
+    logical :: DoInit
+
     integer :: iComm, iError
     !--------------------------------------------------------------------------
     if(present(iCommIn))then
@@ -112,12 +114,16 @@ contains
        DoNormalizeXyz = .false.
     end if
 
-    if(UseGL .or. UseSpheromak) then 
-      call gl98_init
+    DoInit = .true. 
+
+    if(DoInit .and. UseTD) then
+      call init_TD99_parameters
+      DoInit = .false.
     end if
 
-    if(UseTD) then
-      call init_TD99_parameters
+    if(DoInit .and. (UseGL .or. UseSpheromak)) then 
+      call gl98_init
+      DoInit = .false.
     end if
 
    !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22)
