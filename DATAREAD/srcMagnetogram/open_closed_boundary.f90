@@ -3,7 +3,8 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 program open_closed_boundary
 
-  ! Transform spherical harmonics file into 3D lookup table  for B0  field
+  ! Calculate open/closed area/flux
+
   use ModOpenClosedBoundary
   use ModMpi, ONLY: MPI_init, MPI_Finalize, MPI_COMM_WORLD
   use ModReadParam
