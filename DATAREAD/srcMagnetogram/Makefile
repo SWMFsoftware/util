@@ -18,6 +18,8 @@ help:
 	@echo 'FDIPS_HYPRE            - ${BINDIR}/FDIPS.exe (parallel FDIPS using HYPRE library)'
 	@echo 'HYPRE                  - HYPRE.exe (test program for HYPRE library)'
 	@echo 'DIPOLE11               - DIPOLE11.exe (creates a magnetogram with a rotated dipole for tests)'
+	@echo 'CONVERTHARMONICS       - CONVERTHARMONICS.exe (convert harmonics to lookup table)'
+	@echo 'OPENCLOSEDBOUNDARY     - OPENCLOSEDBOUNDARY.exe (calculate open/closed area/flux)'
 	@echo 'test                   - run all tests'
 	@echo 'test_harmonics         - run test for HARMONICS.exe'
 	@echo 'test_harmonics_check   - check test_harmonics results'
@@ -30,7 +32,7 @@ help:
 	@echo 'test_fdips_wedge       - run wedge test for FDIPS.exe'
 	@echo 'test_fdips_wedge_check - check test_fdips_wedge results'
 
-${LIBDIR}/libSHARE.a:
+libSHARE:
 	cd ${SHAREDIR}; $(MAKE) LIB
 
 MY_LIB = ${LIBDIR}/libMAGNETOGRAM.a
@@ -50,7 +52,7 @@ ${MY_LIB}: ${OBJECTS}
 
 ##########################################################
 
-POTENTIAL: ${LIBDIR}/libSHARE.a potential_field.o 
+POTENTIAL: libSHARE potential_field.o
 	${LINK.f90} -o POTENTIAL.exe potential_field.o \
 		-L${LIBDIR} -lSHARE ${Lflag}
 
@@ -58,7 +60,7 @@ POTENTIAL: ${LIBDIR}/libSHARE.a potential_field.o
 
 FDIPSEXE = ${BINDIR}/FDIPS.exe
 
-FDIPS: ${LIBDIR}/libSHARE.a ${OBJECTS_FDIPS} 
+FDIPS: libSHARE ${OBJECTS_FDIPS} 
 	make ${FDIPSEXE}
 	@echo "${FDIPSEXE} has been compiled."
 	ln -sf ${FDIPSEXE} .
@@ -86,7 +88,7 @@ ${FDIPSEXE}: ${OBJECTS_FDIPS}
 
 ############## FDIPS_HYPRE #############
 
-FDIPS_HYPRE: ${LIBDIR}/libSHARE.a
+FDIPS_HYPRE: libSHARE
 	make ${FDIPS_HYPREEXE}
 	@echo ${FDIPS_HYPREEXE} has been compiled.
 	ln -sf ${FDIPS_HYPREEXE} .
@@ -105,13 +107,13 @@ ${FDIPS_HYPREEXE}: ${OBJECTS_FDIPS_HYPRE}
 
 ############## HYPRE ONLY #############
 
-HYPRE: ${LIBDIR}/libSHARE.a ${HYPRELIB}/libHYPRE.a hypre.o
+HYPRE: libSHARE ${HYPRELIB}/libHYPRE.a hypre.o
 	${LINK.f90} -o HYPRE.exe hypre.o \
 		-L${LIBDIR} -lSHARE ${LflagMpi} ${HYPRELIB}
 
 ############## HARMONICS #############
 
-HARMONICS: ${LIBDIR}/libSHARE.a
+HARMONICS: libSHARE
 	make ${HARMONICSEXE}
 	@echo ${HARMONICSEXE} has been compiled.
 	ln -sf ${HARMONICSEXE} .
@@ -133,7 +135,7 @@ ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 
 ############## CONVERTHARMONICS #############
 
-CONVERTHARMONICS: ${LIBDIR}/libSHARE.a
+CONVERTHARMONICS: libSHARE
 	make ${CONVERTHARMONICSEXE}
 	@echo ${CONVERTHARMONICSEXE} has been compiled.
 	ln -sf ${CONVERTHARMONICSEXE} .
@@ -152,7 +154,7 @@ ${CONVERTHARMONICSEXE}: ${OBJECTS_CONVERTHARMONICS}
 
 ############## OPENCLOSEDBOUNDARY #############
 
-OPENCLOSEDBOUNDARY: ${LIBDIR}/libSHARE.a
+OPENCLOSEDBOUNDARY: libSHARE
 	make ${OPENCLOSEDBOUNDARYEXE}
 	@echo ${OPENCLOSEDBOUNDARYEXE} has been compiled.
 	ln -sf ${OPENCLOSEDBOUNDARYEXE} .
