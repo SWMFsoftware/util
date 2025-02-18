@@ -5,6 +5,7 @@ import os
 import fnmatch
 import math
 import subprocess
+
 BMax = 1900.0
 cPi  = np.pi
 Rad2Deg = 180/cPi
@@ -274,15 +275,16 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
          Stretch1 = 1 + Stretch                    #Radius of the stretched Sun
          GLRadius = np.sqrt( Stretch1**2 + Distance**2 -
                              2 * Stretch1 * Distance * np.cos(AngularWidth))
-   elif UseARArea:  #Default option
-      # area is already calculated from occupancy matrix
+   elif UseARArea:  ## Default option
+      ## area is already calculated from occupancy matrix
       ARArea = AreaPos + AreaNeg # in radian^2
       #ARSize=np.count_nonzero(PSizeMap_C) + np.count_nonzero(NSizeMap_C)
       #GLRadiusOLD= 0.8/280.* ARSize
-      # Based on AR for March 2011 event(Meng Jin's paper),
-      # GLRadius = 0.8, therefore, we use (area ~ 0.55) as the factor 
+      ## Based on AR for 7 March 2011 event
+      ##         (Jin+2016, DOI: 10.3847/1538-4357/834/2/172),
+      ## GLRadius = 0.8, therefore, we use (area ~ 0.55) as the factor 
       GLRadius = (0.8/0.055) * ARArea
-   # Radius is limited by the range
+   ## Radius is limited by the range
    GLRadius= max([min([GLRadius,GLRadiusRange_I[1]]),GLRadiusRange_I[0]])
    print('GLRadius =',GLRadius)
    
@@ -303,9 +305,9 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       print('Scaled Distance,GLRadius,Stretch =',
             Distance,GLRadius,Stretch)
 
-   # GL_Orientation calculation
-   # Calculate the GL flux rope orientation from the two weighted points.
-   #r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex] - incorrect
+   ## GL_Orientation calculation
+   ## Calculate the GL flux rope orientation from the two weighted points.
+   ## r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex] - incorrect
    r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
    r1[0] *= np.cos(LonAR)
    r1 /= np.sqrt(r1[0]**2+r1[1]**2)
@@ -327,30 +329,59 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    # Flux is calculated using average of the radial field around the 
    # weighted center spots.
    # The second option of taking avg of field along PIL is currently removed.
-   #These relationships are based on the GONG magnetogram with nsmooth = 5
+   # These relationships are based on the GONG magnetogram with nsmooth = 5
    RegionSize_ARMag=round_my((4.0*nLong)/360)
    br_ar=np.mean(
       abs(Br_C[(iLatAR-RegionSize_ARMag//2):
-                  (iLatAR+RegionSize_ARMag//2)+1,
+               (iLatAR+RegionSize_ARMag//2)+1,
                (iLonAR-RegionSize_ARMag//2):
-                  (iLonAR+RegionSize_ARMag//2)+1]))
-   
-   GL_poloidal=(CMESpeed*br_ar**0.43989278-3043.9307)/565.05018
-   # Removed the ARMag =2 part
+               (iLonAR+RegionSize_ARMag//2)+1]))
+
+   # Equation 1 from Jin+2017 (DOI: 10.3847/1538-4357/834/2/173)
+   alpha = 0.440
+   beta  = 3043.93
+   gamma = 565.05
+   GL_poloidal=(CMESpeed * br_ar**alpha - beta) / gamma
+
+   # Removed the ARMag = 2 part
    # Print WARNING information is GL_Bstrength is negative
    if GL_poloidal <= 0 :
-      print ('*********************************************')
-      print ('WARNING: CALCULATION FAILED!USE WITH CAUTION!')
-      print ('Either the active region is too weak or the')
-      print ('CME speed is too small!')
-      print ('GL Poloidal Flux is set to 0!')
-      print ('*********************************************')
+      print('*********************************************')
+      print('WARNING: CALCULATION FAILED!USE WITH CAUTION!')
+      print('Either the active region is too weak or the')
+      print('CME speed is too small!')
+      print('GL Poloidal Flux is set to 0!')
+      print('*********************************************')
       GL_poloidal = 0.0
-   #Relationship between the PIL length and the GL flux rope Radius.   
-   #This factor is now based on the 2011 March 7 CME. More tests  
-   #are needed in order to get a more precise value.  
-   GL_Bstrength=13.1687517342067082*GL_poloidal/(21.457435*GLRadius**2)   
+   # Relationship between the PIL length and the GL flux rope Radius.   
+   # This factor is now based on the 2011 March 7 CME. More tests  
+   # are needed in order to get a more precise value.
+   #  From Borovikov+2017 (DOI:10.1002/2017JA024304), in text after Eqn. 3
+   a = 13.169 # 4pi / ((a0r0)^2)*beta0)
+   b = 21.457
+   GL_Bstrength = a * GL_poloidal / (b * GLRadius**2)
 
+   ## Limit BStrength to avoid non-physical values.
+   max_GL_Bstrength = 20 # Gs
+   if GL_Bstrength > max_GL_Bstrength:
+      print('******************************************************')
+      print("WARNING: BStrength > {:.1f} Gs.".format(max_GL_Bstrength))
+      print("  Modifying GL parameters to restrict BStrength.")
+
+      ## Keep GL_poloidal constant
+      ## Increase GLRadius to allow GL_Bstrength to decrease to
+      ##   realistic value.
+      GLRadius_old = GLRadius
+      GLRadius = GLRadius * np.sqrt(GL_Bstrength / max_GL_Bstrength)
+      GL_Bstrength_old = GL_Bstrength
+      GL_Bstrength = max_GL_Bstrength
+
+      print("  Radius changed from {:.2f} to {:.2f}" \
+            .format(GLRadius_old, GLRadius))
+      print("  BStrength changed from {:.2f} to {:.2f}" \
+            .format(GL_Bstrength_old, GL_Bstrength))
+      print('******************************************************')
+   
    if(Br_C[iLatAR,iLonAR]>0):
       iYPIL_I,iXPIL_I=np.where(PILMap_C>0)
    else:
