@@ -29,11 +29,14 @@ if __name__ == '__main__':
    parser.add_argument('nlon', nargs='?', type=int, default=360, help= 
                        'Number of longitude points in output. Default is 360.')
    parser.add_argument('-outgrid',choices=['uniform','sinlat'],help=
-                       'type of latitude grid in the output. Default is same as input.')
+                       'type of latitude grid in the output. ' + \
+                       'Default is same as input.')
    parser.add_argument('-index', type=int, default=1, help=
                        'Initial map index. Default is the first map.')
    parser.add_argument('-nSmooth',type=int, default=5, help=
-                       'If nSmooth is ODD integer larger than 1, apply boxcar smoothing on the magnetic field. This can help finding the PIL')
+                       'If nSmooth is ODD integer larger than 1, ' + \
+                       'apply boxcar smoothing on the magnetic field. ' + \
+                       'This can help finding the PIL')
    parser.add_argument('-CMESpeed',type=float, default=-1.0, help=
                        'CME speed in km/s, recovered from observations')
    parser.add_argument('--CMEGrid',action='store_true', help=
@@ -56,10 +59,14 @@ if __name__ == '__main__':
                        'Stretching parameter of the flux-rope.')
    parser.add_argument('-Distance',type=float, default=-1., help=
                        'Distance parameter of the flux-rope.')
-   parser.add_argument('-MaxBStrength',type=float, default=20.0, help=
+   parser.add_argument('-MinBStrength',type=float, default=5.0, help=
+                       'Limit BStrength of flux rope to minimum value.' + \
+                       'Weak events may produce unphysically low magnetic ' + \
+                       'field strength. Default MinBStrength is 5.0 Gs.')
+   parser.add_argument('-MaxBStrength',type=float, default=40.0, help=
                        'Limit BStrength of flux rope to maximum value.' + \
                        'Adjusts flux rope radius to maintain realistic' + \
-                       'magnetic field. Default MaxBStrength is 20.0 Gs.')
+                       'magnetic field. Default MaxBStrength is 40.0 Gs.')
    parser.add_argument('--UsePNDist',action='store_true', help=
                        'Use the angular distance between positive and negative spot centers to calculate AR size and GL Radius')
    parser.add_argument('--UseARArea',action='store_true',help=
@@ -93,6 +100,7 @@ if __name__ == '__main__':
    Stretch     = args.Stretch
    Distance    = args.Distance
    MaxBStrength= args.MaxBStrength
+   MinBStrength= args.MinBStrength
    DoHMI       = args.DoHMI # default is False
    LonPosIn   = args.LonPosIn
    LatPosIn   = args.LatPosIn
@@ -258,7 +266,8 @@ if __name__ == '__main__':
              CMESpeed,GLRadius,SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI,
-             UsePNDist, UseARArea, DoScaling, Time, MaxBStrength)
+             UsePNDist, UseARArea, DoScaling, Time,
+             MinBStrength, MaxBStrength)
 
    FileId=open('runidl','w')
    FileId.write('.r GLSETUP2\n')

@@ -114,7 +114,8 @@ def calculate_index(Y, Y_I, n):
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
         Stretch, Distance, Helicity, DoHMI, UsePNDist, 
-        UseARArea, DoScaling, Time, max_GL_Bstrength = 20):
+        UseARArea, DoScaling, Time,
+        min_GL_Bstrength = 5, max_GL_Bstrength = 40):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    # Pass the x, y indices of the clicks to calculate weighted center
@@ -344,15 +345,6 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    GL_poloidal=(CMESpeed * br_ar**alpha - beta) / gamma
 
    # Removed the ARMag = 2 part
-   # Print WARNING information is GL_Bstrength is negative
-   if GL_poloidal <= 0 :
-      print('*********************************************')
-      print('WARNING: CALCULATION FAILED!USE WITH CAUTION!')
-      print('Either the active region is too weak or the')
-      print('CME speed is too small!')
-      print('GL Poloidal Flux is set to 0!')
-      print('*********************************************')
-      GL_poloidal = 0.0
    # Relationship between the PIL length and the GL flux rope Radius.   
    # This factor is now based on the 2011 March 7 CME. More tests  
    # are needed in order to get a more precise value.
@@ -361,6 +353,17 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    b = 21.457
    GL_Bstrength = a * GL_poloidal / (b * GLRadius**2)
 
+   # Print WARNING information is GL_Bstrength is negative
+   if GL_Bstrength <= 0 :
+      print('**********************************************')
+      print('WARNING: CALCULATION FAILED! USE WITH CAUTION!')
+      print('Either the active region is too weak or the')
+      print('CME speed is too small!')
+      print('GL Poloidal Flux is set to minimum!')
+      print('**********************************************')
+      GL_Bstrength = min_GL_Bstrength
+      GL_poloidal = GL_Bstrength * b * GLRadius**2 / a
+   
    ## Limit BStrength to avoid non-physical values.
    ##   Default value is 20 Gs.
    if GL_Bstrength > max_GL_Bstrength:
