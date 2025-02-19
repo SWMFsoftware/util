@@ -56,6 +56,10 @@ if __name__ == '__main__':
                        'Stretching parameter of the flux-rope.')
    parser.add_argument('-Distance',type=float, default=-1., help=
                        'Distance parameter of the flux-rope.')
+   parser.add_argument('-MaxBStrength',type=float, default=20.0, help=
+                       'Limit BStrength of flux rope to maximum value.' + \
+                       'Adjusts flux rope radius to maintain realistic' + \
+                       'magnetic field. Default MaxBStrength is 20.0 Gs.')
    parser.add_argument('--UsePNDist',action='store_true', help=
                        'Use the angular distance between positive and negative spot centers to calculate AR size and GL Radius')
    parser.add_argument('--UseARArea',action='store_true',help=
@@ -71,6 +75,7 @@ if __name__ == '__main__':
                        'Use HMI map for helicity determination')
    parser.add_argument('--UseBATS',action='store_true', help=
                        'Reading magnetogram in the ModPlotFile format')
+
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
    NameFile    = args.NameFile
@@ -87,6 +92,7 @@ if __name__ == '__main__':
    Helicity    = args.Helicity
    Stretch     = args.Stretch
    Distance    = args.Distance
+   MaxBStrength= args.MaxBStrength
    DoHMI       = args.DoHMI # default is False
    LonPosIn   = args.LonPosIn
    LatPosIn   = args.LatPosIn
@@ -252,7 +258,7 @@ if __name__ == '__main__':
              CMESpeed,GLRadius,SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI,
-             UsePNDist, UseARArea, DoScaling, Time)
+             UsePNDist, UseARArea, DoScaling, Time, MaxBStrength)
 
    FileId=open('runidl','w')
    FileId.write('.r GLSETUP2\n')
