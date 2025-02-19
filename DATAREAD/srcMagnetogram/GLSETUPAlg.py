@@ -114,7 +114,7 @@ def calculate_index(Y, Y_I, n):
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
         Stretch, Distance, Helicity, DoHMI, UsePNDist, 
-        UseARArea, DoScaling, Time):
+        UseARArea, DoScaling, Time, max_GL_Bstrength = 20):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    # Pass the x, y indices of the clicks to calculate weighted center
@@ -362,7 +362,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    GL_Bstrength = a * GL_poloidal / (b * GLRadius**2)
 
    ## Limit BStrength to avoid non-physical values.
-   max_GL_Bstrength = 20 # Gs
+   ##   Default value is 20 Gs.
    if GL_Bstrength > max_GL_Bstrength:
       print('******************************************************')
       print("WARNING: BStrength > {:.1f} Gs.".format(max_GL_Bstrength))
