@@ -412,31 +412,32 @@ contains
     !--------------------------------------------------------------------------
     call xyz_to_rlonlat(Xyz_D, rLonLat_D)
 
-    ! Include the shift in Phi coordinate and make sure that it is
-    ! in the range provided by the lookup table
-    if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
-         modulo(rLonLat_D(2) - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
-
-    ! Lookup table uses degrees
-    rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
-
-    ! Extrapolate for r < rMinB0
     r = rLonLat_D(1)
 
     if(iTableB0local > 0 .and. &
-         rLonLat_D(1) <= rMaxB0local   .and. &  ! rMax
-         rLonLat_D(2) >= LonMinB0local .and. &  ! LonMin
-         rLonLat_D(2) <= LonMaxB0local .and. &  ! LonMax
-         rLonLat_D(3) >= LatMinB0local .and. &  ! LatMin
-         rLonLat_D(3) <= LatMaxB0local ) then   ! LatMax
+         r            <= rMaxB0local   .and. &  ! rMax
+         rLonLat_D(2) >= LonMinB0local*cDegToRad .and. &  ! LonMin
+         rLonLat_D(2) <= LonMaxB0local*cDegToRad .and. &  ! LonMax
+         rLonLat_D(3) >= LatMinB0local*cDegToRad .and. &  ! LatMin
+         rLonLat_D(3) <= LatMaxB0local*cDegToRad ) then   ! LatMax
+       ! Local lookup table should be in the same coordinate system
+       ! as the SC grid
+       ! Lookup table uses degrees
+       rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
        call interpolate_lookup_table(iTableB0local, rLonLat_D, B0_D, &
             DoExtrapolate=(r<rMinB0local) )
     else
+       ! Include the shift in Phi coordinate and make sure that it is
+       ! in the range provided by the lookup table
+       if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
+            modulo(rLonLat_D(2) - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
+       ! Lookup table uses degrees
+       rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
        call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
             DoExtrapolate=(r<rMinB0) )
+       ! Rotate Bx, By based on shifted coordinates
+       if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
     endif
-    ! Rotate Bx, By based on shifted coordinates
-    if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
 
     if(present(Carrington) .and. iTableB0New > 0)then
 
