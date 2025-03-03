@@ -24,10 +24,10 @@ module ModMagnetogram
   real:: rMinB0local ! radial limits of table
   real:: rMaxB0local
   !$acc declare create(rMinB0local, rMaxB0local)
-  real:: LonMinB0local ! longitude limits of table in degrees
+  real:: LonMinB0local ! longitude limits of table in radian
   real:: LonMaxB0local
   !$acc declare create(LonMinB0local, LonMaxB0local)
-  real:: LatMinB0local ! latitude limits of table in degrees
+  real:: LatMinB0local ! latitude limits of table in radian
   real:: LatMaxB0local
   !$acc declare create(LatMinB0local, LatMaxB0local)
 
@@ -223,16 +223,18 @@ contains
        call get_lookup_table(iTableB0local, nParam=nParam, Param_I=Param_I, &
             IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I)
        rMinB0local = IndexMin_I(1); rMaxB0local = IndexMax_I(1)
-       LonMinB0local = IndexMin_I(2); LonMaxB0local = IndexMax_I(2)
-       LatMinB0local = IndexMin_I(3); LatMaxB0local = IndexMax_I(3)
+       LonMinB0local = IndexMin_I(2)*cDegToRad
+       LonMaxB0local = IndexMax_I(2)*cDegToRad
+       LatMinB0local = IndexMin_I(3)*cDegToRad
+       LatMaxB0local = IndexMax_I(3)*cDegToRad
        if(iProc == 0)then
           write(*,*)NameSub," read B0local table"
           write(*,*)NameSub," rMinB0local,   rMaxB0local  =", &
                rMinB0local, rMaxB0local
           write(*,*)NameSub," LonMinB0local, LonMaxB0local=", &
-               LonMinB0local, LonMaxB0local
+               LonMinB0local*cRadToDeg, LonMaxB0local*cRadToDeg
           write(*,*)NameSub," LatMinB0local, LatMaxB0local=", &
-               LatMinB0local, LatMaxB0local
+               LatMinB0local*cRadToDeg, LatMaxB0local*cRadToDeg
        endif
     endif
 
@@ -416,10 +418,10 @@ contains
 
     if(iTableB0local > 0 .and. &
          r            <= rMaxB0local   .and. &  ! rMax
-         rLonLat_D(2) >= LonMinB0local*cDegToRad .and. &  ! LonMin
-         rLonLat_D(2) <= LonMaxB0local*cDegToRad .and. &  ! LonMax
-         rLonLat_D(3) >= LatMinB0local*cDegToRad .and. &  ! LatMin
-         rLonLat_D(3) <= LatMaxB0local*cDegToRad ) then   ! LatMax
+         rLonLat_D(2) >= LonMinB0local .and. &  ! LonMin
+         rLonLat_D(2) <= LonMaxB0local .and. &  ! LonMax
+         rLonLat_D(3) >= LatMinB0local .and. &  ! LatMin
+         rLonLat_D(3) <= LatMaxB0local) then   ! LatMax
        ! Local lookup table should be in the same coordinate system
        ! as the SC grid
        ! Lookup table uses degrees
