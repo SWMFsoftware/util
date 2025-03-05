@@ -24,10 +24,10 @@ module ModMagnetogram
   real:: rMinB0local ! radial limits of table
   real:: rMaxB0local
   !$acc declare create(rMinB0local, rMaxB0local)
-  real:: LonMinB0local ! longitude limits of table in radian
+  real:: LonMinB0local ! longitude limits of table in degrees
   real:: LonMaxB0local
   !$acc declare create(LonMinB0local, LonMaxB0local)
-  real:: LatMinB0local ! latitude limits of table in radian
+  real:: LatMinB0local ! latitude limits of table in degrees
   real:: LatMaxB0local
   !$acc declare create(LatMinB0local, LatMaxB0local)
 
@@ -223,18 +223,16 @@ contains
        call get_lookup_table(iTableB0local, nParam=nParam, Param_I=Param_I, &
             IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I)
        rMinB0local = IndexMin_I(1); rMaxB0local = IndexMax_I(1)
-       LonMinB0local = IndexMin_I(2)*cDegToRad
-       LonMaxB0local = IndexMax_I(2)*cDegToRad
-       LatMinB0local = IndexMin_I(3)*cDegToRad
-       LatMaxB0local = IndexMax_I(3)*cDegToRad
+       LonMinB0local = IndexMin_I(2); LonMaxB0local = IndexMax_I(2)
+       LatMinB0local = IndexMin_I(3); LatMaxB0local = IndexMax_I(3)
        if(iProc == 0)then
           write(*,*)NameSub," read B0local table"
           write(*,*)NameSub," rMinB0local,   rMaxB0local  =", &
                rMinB0local, rMaxB0local
           write(*,*)NameSub," LonMinB0local, LonMaxB0local=", &
-               LonMinB0local*cRadToDeg, LonMaxB0local*cRadToDeg
+               LonMinB0local, LonMaxB0local
           write(*,*)NameSub," LatMinB0local, LatMaxB0local=", &
-               LatMinB0local*cRadToDeg, LatMaxB0local*cRadToDeg
+               LatMinB0local, LatMaxB0local
        endif
     endif
 
@@ -414,32 +412,31 @@ contains
     !--------------------------------------------------------------------------
     call xyz_to_rlonlat(Xyz_D, rLonLat_D)
 
+    ! Include the shift in Phi coordinate and make sure that it is
+    ! in the range provided by the lookup table
+    if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
+         modulo(rLonLat_D(2) - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
+
+    ! Lookup table uses degrees
+    rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
+
+    ! Extrapolate for r < rMinB0
     r = rLonLat_D(1)
 
     if(iTableB0local > 0 .and. &
-         r            <= rMaxB0local   .and. &  ! rMax
+         rLonLat_D(1) <= rMaxB0local   .and. &  ! rMax
          rLonLat_D(2) >= LonMinB0local .and. &  ! LonMin
          rLonLat_D(2) <= LonMaxB0local .and. &  ! LonMax
          rLonLat_D(3) >= LatMinB0local .and. &  ! LatMin
-         rLonLat_D(3) <= LatMaxB0local) then   ! LatMax
-       ! Local lookup table should be in the same coordinate system
-       ! as the SC grid
-       ! Lookup table uses degrees
-       rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
+         rLonLat_D(3) <= LatMaxB0local ) then   ! LatMax
        call interpolate_lookup_table(iTableB0local, rLonLat_D, B0_D, &
             DoExtrapolate=(r<rMinB0local) )
     else
-       ! Include the shift in Phi coordinate and make sure that it is
-       ! in the range provided by the lookup table
-       if(dLonB0 /= 0.0 .or. LonMinB0 /= 0.0) rLonLat_D(2) = &
-            modulo(rLonLat_D(2) - dLonB0 - LonMinB0, cTwoPi) + LonMinB0
-       ! Lookup table uses degrees
-       rLonLat_D(2:3) = cRadToDeg*rLonLat_D(2:3)
        call interpolate_lookup_table(iTableB0, rLonLat_D, B0_D, &
             DoExtrapolate=(r<rMinB0) )
-       ! Rotate Bx, By based on shifted coordinates
-       if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
     endif
+    ! Rotate Bx, By based on shifted coordinates
+    if(dLonB0 /= 0.0) B0_D = matmul(RotB0_DD, B0_D)
 
     if(present(Carrington) .and. iTableB0New > 0)then
 
