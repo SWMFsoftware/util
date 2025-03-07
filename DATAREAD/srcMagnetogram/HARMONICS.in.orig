@@ -39,6 +39,9 @@ T			UseChebyshevNode
 SUBGRID
 25			nSubGrid
 
+USEMAGNETOGRAMDATE
+T			UseMagnetogramDate
+
 #END
 
 The file is copied to subfolder SC in the run rirectory as HARMONICS.in. This is

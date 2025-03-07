@@ -63,6 +63,7 @@ module ModReadMagnetogram
 
   ! To indicate if fdips is done or harmonics
   logical :: IsFdips = .false.
+  logical :: UseMagnetogramDate = .false.
 
 contains
   !============================================================================
@@ -88,6 +89,8 @@ contains
        call read_var('BrMin', BrMin)
     case("#CHEBYSHEV", "#UNIFORMTHETA")
        call read_var('UseChebyshevNode', UseChebyshevNode)
+    case('#USEMAGNETOGRAMDATE')
+       call read_var('UseMagnetogramDate', UseMagnetogramDate)
     case default
        call CON_stop(NameSub//': unknown command='//trim(NameCommand))
     end select
@@ -101,7 +104,7 @@ contains
     use ModPlotFile, ONLY: read_plot_file, save_plot_file
     use ModConst, ONLY: cDegToRad, tStartCarringtonRotation, &
          CarringtonSynodicPeriod
-    use ModTimeConvert, ONLY: time_real_to_int
+    use ModTimeConvert, ONLY: time_real_to_int, time_int_to_real
     use ModIoUnit, ONLY: UnitTmp_
     use ModUtilities,  ONLY: open_file, close_file, cTab
 
@@ -114,7 +117,7 @@ contains
     real:: BrAverage
     real, allocatable :: BrTmp_II(:,:), BrTrans_II(:,:), Var_VII(:,:,:)
     real :: MagnetogramTime, CRFraction
-    integer :: iTime_I(7)
+    integer :: iTime_I(7), iPos=0
 
     integer:: iError, nParam, iTheta, iPhi, nThetaRatio, nPhiRatio
     integer:: iTheta0, iTheta1, jPhi0, jPhi1, jPhi, nVar
@@ -153,6 +156,27 @@ contains
          ': could not read data from file '//trim(NameFileIn), iError)
     Br0_II = Var_VII(1,:,:); DoEliminateCmeBr = index(NameVarOut,'CmeBr') > 0
     if(MagnetogramTimeCR > 0.0)then
+       if(UseMagnetogramDate)then
+          ! Use MagnetogramDate field from the header to assign
+          ! magnetogram time
+          write(*,*)StringMagHeader
+          iPos = index(StringMagHeader, 'MagnetogramDate = ')
+          ! Skip 'MagnetogramDate = '
+          iPos = iPos + 17
+          if(iPos > 0) then
+             iTime_I=0
+             ! read YYYY-MM-DD"T"HH-MM-SS
+             read(StringMagHeader(iPos+1:iPos+4),*) iTime_I(1)
+             read(StringMagHeader(iPos+6:iPos+7),*) iTime_I(2)
+             read(StringMagHeader(iPos+9:iPos+10),*) iTime_I(3)
+             read(StringMagHeader(iPos+12:iPos+13),*) iTime_I(4)
+             read(StringMagHeader(iPos+15:iPos+16),*) iTime_I(5)
+             read(StringMagHeader(iPos+18:iPos+19),*) iTime_I(6)
+             call time_int_to_real(iTime_I, MagnetogramTime)
+             MagnetogramTimeCR = (MagnetogramTime - &
+                  tStartCarringtonRotation)/CarringtonSynodicPeriod
+          end if
+       end if
        MagnetogramTime = MagnetogramTimeCR*CarringtonSynodicPeriod &
             + tStartCarringtonRotation
        call time_real_to_int(MagnetogramTime, iTime_I)

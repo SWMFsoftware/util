@@ -92,7 +92,7 @@ contains
        case("#OUTPUT")
           call read_var('NameFileOut', NameFileOut)
        case("#MAGNETOGRAMFILE", "#CHEBYSHEV", '#CHANGEWEAKFIELD',&
-            '#CHANGEPOLARFIELD')
+            '#CHANGEPOLARFIELD','#USEMAGNETOGRAMDATE')
           call read_magnetogram_param(NameCommand)
        case("#SUBGRID")
           call read_var('nSubGrid', nSubGrid)
