@@ -153,10 +153,8 @@ module ModTransitionRegion
   ! Chromosphere top boundary, in Rsun
   real, public, parameter :: rChromo = 1.0
 
-  ! By default, this logical is .false. the entholpy increase needed to
-  ! heat the plasma flow across the transition region to the top temperature
-  ! If logical set is true, the energy frlux to/from the first control
-  ! volume is accounted for
+  ! By default, this logical is .false. If logical set is true, the energy
+  ! flux to/from the first control volume on the thread is accounted for.
   logical, public :: UseChromoEvap  = .false.
   ! To apply CromoEvaporation, the factor below is non-zero.
   real,    public :: ChromoEvapCoef = 0.0
