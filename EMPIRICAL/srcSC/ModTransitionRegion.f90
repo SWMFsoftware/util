@@ -1143,6 +1143,10 @@ contains
     ! 1. logarithm of density/pressure is better to be limited
     if(DoLimitLogVar.and.any(Primitive_VG(iLogVar_V,-nCell-1:0)<=0.0))then
        write(*,*)'-ncell-1=',-nCell - 1
+       write(*,*)'OpenThread TeTr=', OpenThread1%TeTr
+       write(*,*)'OpenThread uTr=', OpenThread1%uTr
+       write(*,*)'OpenThread PeTr=', OpenThread1%PeTr
+       if(OpenThread1%PeTr <= 0.0)write(*,*)'TrTable_V=', TrTable_V
        do iCell = -nCell-1, 0
           if(any(Primitive_VG(iLogVar_V,iCell)<=0.0))&
                write(*,*)'iCell=',iCell,' state:',&
