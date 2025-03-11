@@ -286,6 +286,9 @@ contains
 
     select case(NameCommand)
     case('#CHROMOEVAPORATION')
+       DoLimitLogVar = .true.
+       MinPress = 1.e-14     ! Pa
+       MinRho   = 1.e-23     ! kg/m3
        call read_var('UseChromoEvap',UseChromoEvap)
        if(UseChromoEvap)then
           ChromoEvapCoef = TeTrMin
@@ -726,6 +729,7 @@ contains
   contains
     !==========================================================================
     subroutine allocate_pointer
+      !------------------------------------------------------------------------
       allocate(OpenThread1%B_F(-iPoint:0))
       allocate(OpenThread1%Ds_G(-nCell-1:0))
       allocate(OpenThread1%Coord_DF(3,-iPoint:0))
@@ -738,6 +742,7 @@ contains
     end subroutine allocate_pointer
     !==========================================================================
     subroutine deallocate_pointer
+      !------------------------------------------------------------------------
       deallocate(OpenThread1%B_F)
       deallocate(OpenThread1%Ds_G)
       deallocate(OpenThread1%Coord_DF)
@@ -814,7 +819,7 @@ contains
     type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
     integer, intent(in) :: nI, nJ
     integer :: i, j
-    character(LEN=*), parameter :: NameSub='allocate_thread_arr'
+    character(len=*), parameter:: NameSub = 'allocate_thread_arr'
     !--------------------------------------------------------------------------
     allocate(Threads_II(nI,nJ))
     do j = 1, nJ; do i = 1, nI
@@ -850,7 +855,7 @@ contains
     type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
     integer, intent(in) :: nI, nJ
     integer :: i, j
-    character(LEN=*), parameter :: NameSub='allocate_thread_arr'
+    character(len=*), parameter:: NameSub = 'deallocate_thread_arr'
     !--------------------------------------------------------------------------
     do j = 1, nJ; do i = 1, nI
        call deallocate_thread(Threads_II(i,j))
@@ -1065,7 +1070,7 @@ contains
     real :: PparHeating, PperpHeating, PeHeating
     ! Loop variables:
     integer :: iCell, iFace
-    character(LEN=*), parameter :: NameSub = 'advance_thread_expl'
+    character(len=*), parameter:: NameSub = 'advance_thread_expl'
     !--------------------------------------------------------------------------
     if(present(DtIn).and.(.not.IsTimeAccurate))call CON_stop(&
          NameSub//':DtIn input is only allowed in time accurate mode')
@@ -1494,14 +1499,14 @@ contains
     ! there is the length of analytical transition
     real, pointer :: Ds_G(:)
     integer :: nCell
-    character(LEN=*), parameter :: NameSub = 'advance_thread_semi_impl'
+    character(len=*), parameter:: NameSub = 'advance_thread_semi_impl'
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
     Dt_C=>OpenThread1%Dt_C
     State_VG => OpenThread1%State_VG
     Te_G => OpenThread1%Te_G
     ! Mesh size along the line
-    Ds_G => OpenThread1%Ds_G 
+    Ds_G => OpenThread1%Ds_G
     ! Electron heat conduction and losses
     N_C(-nCell:-1) = State_VG(Rho_,-nCell:-1)/cProtonMass
     Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
@@ -1843,7 +1848,7 @@ contains
   !============================================================================
   subroutine apportion_heating(&
        ! Inputs, all in SI:
-       !-----------------------------------------------------------------------
+    !--------------------------------------------------------------------------
        PparIn, PperpIn, PeIn, RhoIn, BIn, &
        WmajorIn, WminorIn,                &
        DissRateMajorIn, DissRateMinorIn,  &
