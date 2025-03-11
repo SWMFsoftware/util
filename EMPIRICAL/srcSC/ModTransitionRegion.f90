@@ -1152,6 +1152,7 @@ contains
                write(*,*)'iCell=',iCell,' state:',&
                Primitive_VG(:,iCell)
        end do
+       call save_plot_thread(OpenThread1,'failed_thread.out')
        call CON_stop('Negative pressure/density')
     end if
     if(DoLimitLogVar)Primitive_VG(iLogVar_V,-nCell-1:0) = log(&
