@@ -59,7 +59,7 @@ if __name__ == '__main__':
                        'Stretching parameter of the flux-rope.')
    parser.add_argument('-Distance',type=float, default=-1., help=
                        'Distance parameter of the flux-rope.')
-   parser.add_argument('-MinBStrength',type=float, default=5.0, help=
+   parser.add_argument('-MinBStrength',type=float, default=2.0, help=
                        'Limit BStrength of flux rope to minimum value.' + \
                        'Weak events may produce unphysically low magnetic ' + \
                        'field strength. Default MinBStrength is 5.0 Gs.')

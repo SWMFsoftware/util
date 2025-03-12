@@ -115,7 +115,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
         Stretch, Distance, Helicity, DoHMI, UsePNDist, 
         UseARArea, DoScaling, Time,
-        min_GL_Bstrength = 5, max_GL_Bstrength = 40):
+        min_GL_Bstrength = 2, max_GL_Bstrength = 40):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
    # Pass the x, y indices of the clicks to calculate weighted center
@@ -353,10 +353,15 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    b = 21.457
    GL_Bstrength = a * GL_poloidal / (b * GLRadius**2)
 
-   # Print WARNING information is GL_Bstrength is negative
-   if GL_Bstrength <= 0 :
+   ## Print WARNING information if GL_Bstrength is below minimum.
+   ##   Default minimum is 2 Gs.
+   ##   Warning also notes if original BStrength would be below 0.   
+   if GL_Bstrength < min_GL_Bstrength:
       print('**********************************************')
-      print('WARNING: CALCULATION FAILED! USE WITH CAUTION!')
+      print('WARNING: BStrength < {:.1f} Gs.'.format(min_GL_Bstrength))
+      if GL_Bstrength <= 0:
+         print('   CALCULATION FAILED WITH 0 Gs!')
+         print('   USE WITH CAUTION!')
       print('Either the active region is too weak or the')
       print('CME speed is too small!')
       print('GL Poloidal Flux is set to minimum!')
@@ -365,7 +370,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       GL_poloidal = GL_Bstrength * b * GLRadius**2 / a
    
    ## Limit BStrength to avoid non-physical values.
-   ##   Default value is 20 Gs.
+   ##   Default value is 40 Gs.
    if GL_Bstrength > max_GL_Bstrength:
       print('******************************************************')
       print("WARNING: BStrength > {:.1f} Gs.".format(max_GL_Bstrength))
