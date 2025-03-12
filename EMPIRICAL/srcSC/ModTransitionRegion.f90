@@ -130,7 +130,6 @@ module ModTransitionRegion
 
   real, parameter :: cTwoSevenths = 2.0/7.0
   real,   public  :: cTolerance   = 1.0e-6
-  integer, public :: nIterMax = 40
 
   ! Correspondent named indexes: meaning of the columns in the table
   integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
@@ -1525,7 +1524,8 @@ contains
          uFace   = OpenThread1%uTr, &
          B_I  = OpenThread1%B_F(-nCell:0), &
          PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
-         TeFaceOut = OpenThread1%TeTr)
+         TeFaceOut = OpenThread1%TeTr, &
+         DoLimitTimestep=.true.)
     State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
     State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
     ! If no anysotropic pressure is used
@@ -1658,6 +1658,7 @@ contains
     ! Misc:
     ! Loop variable
     integer :: iPoint, iIter
+    integer :: nIterMax = 40
     !--------------------------------------------------------------------------
     BfaceInv_I = 1/B_I
     if(present(BcellIn_I))then
@@ -1769,9 +1770,10 @@ contains
        Cons_I(1:nPoint) = Cons_I(1:nPoint) + DCons_VI(Cons_,1:nPoint)
        if(any(Cons_I(1:nPoint)<=0))then
           do iPoint = 1, nPoint
-             write(*,*)'iPoint Cons_VI(:,iPoint)=',iPoint,Cons_I(iPoint),&
+             write(*,*)'iPoint Cons_VI=',iPoint,Cons_I(iPoint), &
                   Ti_I(iPoint) + DCons_VI(Ti_,iPoint)
           end do
+          call CON_stop('Reduce time step')
        end if
        ! Recover temperature
        Te_I(1:nPoint) = (3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths
