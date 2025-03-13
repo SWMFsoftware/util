@@ -3,6 +3,7 @@
 *.diff
 *.out
 *.log
+*.aux
 *.protex
 *.pyc
 *.png
