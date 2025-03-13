@@ -1232,8 +1232,9 @@ contains
        VaFace_F(iFace) = B_F(iFace)/sqrt(cMu*Rho_F(iFace))
     end do
     ! Set the speed on top of the transition region from the RS:
-    OpenThread1%uTr = Un_F(-nCell)*Rho_F(-nCell)/(&
-         OpenThread1%PeTr*cProtonMass/(OpenThread1%TeTr*cBoltzmann))
+    ! Fix 2025-3-13
+    OpenThread1%uTr = 0.0 ! Un_F(-nCell)*Rho_F(-nCell)/(&
+         ! OpenThread1%PeTr*cProtonMass/(OpenThread1%TeTr*cBoltzmann))
     call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
     ! Correct pressure for updated plasma speed
     OpenThread1%PeTr = TrTable_V(LengthPavrSi_)/Ds_G(-nCell-1)
