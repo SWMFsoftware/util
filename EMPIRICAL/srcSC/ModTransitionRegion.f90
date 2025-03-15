@@ -694,13 +694,16 @@ contains
     ! R_F(-iPoint) = norm2(Xyz_D)
     R_F(-iPoint) = norm2(Xyz_D)
     nCell = iPoint - 2
-    ! Allocate thread and store results from tracing
-    if(.not.associated(OpenThread1%Ds_G))then
-       call allocate_pointer
-    else
-       call deallocate_pointer
-       call allocate_pointer
+    ! Allocate threads if needed
+    if(nCell /= OpenThread1%nCell)then
+       if(.not.associated(OpenThread1%Ds_G))then
+          call allocate_pointer
+       else
+          call deallocate_pointer
+          call allocate_pointer
+       end if
     end if
+    ! Store results from tracing
     OpenThread1%Ds_G(-nCell:-1) = &
          Length_I(-nCell:-1)*Rsun
     ! Length of the analytical transition region,
@@ -717,12 +720,9 @@ contains
          B1_DF(:,-nCell:-1) + B1_DF(:,1-nCell:0))
     OpenThread1%B1_DG(:,0) = B1_DF(:,0)
     OpenThread1%DirB_DG(:,-nCell:0) = DirB_DG(:,-nCell:0)
-    if(.not.associated(OpenThread1%State_VG))then
-       ! Allocate state variables,
-       allocate(OpenThread1%State_VG(Rho_:Wminor_,-nCell:0))
-       ! Set nPoint
+    ! Re-initialize state vector if needed
+    if(nCell /= OpenThread1%nCell)then
        OpenThread1%nCell = nCell
-       ! Then initiate their values
        call init_thread_variables(OpenThread1)
     end if
   contains
@@ -738,6 +738,7 @@ contains
       allocate(OpenThread1%B1_DG(3,-nCell:0))
       allocate(OpenThread1%DirB_DG(3,-nCell:0))
       allocate(OpenThread1%ConservativeOld_VC(Rho_:Wminor_,-nCell:-1))
+      allocate(OpenThread1%State_VG(Rho_:Wminor_,-nCell:0))
     end subroutine allocate_pointer
     !==========================================================================
     subroutine deallocate_pointer
@@ -751,7 +752,53 @@ contains
       deallocate(OpenThread1%B1_DG)
       deallocate(OpenThread1%DirB_DG)
       deallocate(OpenThread1%ConservativeOld_VC)
+      deallocate(OpenThread1%State_VG)
     end subroutine deallocate_pointer
+    !==========================================================================
+    subroutine init_thread_variables(OpenThread1)
+
+      use ModConst,only : cBoltzmann, cProtonMass
+
+      type(OpenThread),intent(inout) :: OpenThread1
+
+      real :: RInvCenter_I(-OpenThread1%nCell:-1)
+      integer :: nCell
+
+      !------------------------------------------------------------------------
+      nCell = OpenThread1%nCell
+      RInvCenter_I(-nCell:-1) = &
+           (1/OpenThread1%R_F(-nCell:-1) + &
+           1/OpenThread1%R_F(-nCell+1: 0))*0.50
+
+      ! initial velocity is zero
+
+      OpenThread1%State_VG(U_,-nCell:-1) = 0.0
+
+      ! exponential pressure
+
+      OpenThread1%State_VG(P_,-nCell:-1) = PressInner * 0.5 * exp( &
+           cProtonMass * mSun * cGravitation / cBoltzmann / &
+           TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
+      OpenThread1%State_VG(Ppar_,-nCell:-1) = &
+           OpenThread1%State_VG(P_,-nCell:-1)
+      OpenThread1%State_VG(Pe_,-nCell:-1) = &
+           OpenThread1%State_VG(P_,-nCell:-1)
+      OpenThread1%State_VG(PePar_,-nCell:-1) = &
+           OpenThread1%State_VG(Pe_,-nCell:-1)
+
+      ! Pi = n * kB * T, n = Rho / Mp
+      ! -> Rho = Mp * Pi / (kB * T)
+      OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass * &
+           OpenThread1%State_VG(P_,-nCell:-1) / (cBoltzmann*TempInner)
+
+      OpenThread1%State_VG(Wmajor_,-nCell:-1) = 1.0
+      OpenThread1%State_VG(Wminor_,-nCell:-1) = 1.0e-8
+      OpenThread1%Te_G(-nCell:0) = TempInner
+      OpenThread1%TeTr = TempInner
+      OpenThread1%uTr  = 0.0
+      OpenThread1%PeTr = 0.50*PressInner
+
+    end subroutine init_thread_variables
     !==========================================================================
     subroutine limit_cosbr(Xyz_D, B_D)
 
@@ -772,48 +819,6 @@ contains
     !==========================================================================
   end subroutine set_thread
   !============================================================================
-  subroutine init_thread_variables(OpenThread1)
-
-    use ModConst,only : cBoltzmann, cProtonMass
-
-    type(OpenThread),intent(inout) :: OpenThread1
-
-    real :: RInvCenter_I(-OpenThread1%nCell:-1)
-    integer :: nCell
-
-    !--------------------------------------------------------------------------
-    nCell = OpenThread1%nCell
-    RInvCenter_I(-nCell:-1) = &
-         (1/OpenThread1%R_F(-nCell:-1) + &
-         1/OpenThread1%R_F(-nCell+1: 0))*0.50
-
-    ! initial velocity is zero
-
-    OpenThread1%State_VG(U_,-nCell:-1) = 0.0
-
-    ! exponential pressure
-
-    OpenThread1%State_VG(P_,-nCell:-1) = PressInner * 0.5 * exp( &
-         cProtonMass * mSun * cGravitation / cBoltzmann / &
-         TempInner * (RInvCenter_I - 1.0/rMin) / rSun)
-    OpenThread1%State_VG(Ppar_,-nCell:-1) = OpenThread1%State_VG(P_,-nCell:-1)
-    OpenThread1%State_VG(Pe_,-nCell:-1) = OpenThread1%State_VG(P_,-nCell:-1)
-    OpenThread1%State_VG(PePar_,-nCell:-1) = OpenThread1%State_VG(Pe_,-nCell:-1)
-
-    ! Pi = n * kB * T, n = Rho / Mp
-    ! -> Rho = Mp * Pi / (kB * T)
-    OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass * &
-         OpenThread1%State_VG(P_,-nCell:-1) / (cBoltzmann*TempInner)
-
-    OpenThread1%State_VG(Wmajor_,-nCell:-1) = 1.0
-    OpenThread1%State_VG(Wminor_,-nCell:-1) = 1.0e-8
-    OpenThread1%Te_G(-nCell:0) = TempInner
-    OpenThread1%TeTr = TempInner
-    OpenThread1%uTr  = 0.0
-    OpenThread1%PeTr = 0.50*PressInner
-
-  end subroutine init_thread_variables
-  !============================================================================
   subroutine allocate_thread_arr(Threads_II, nI, nJ)
     type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
     integer, intent(in) :: nI, nJ
@@ -824,31 +829,33 @@ contains
     do j = 1, nJ; do i = 1, nI
        call init_thread(Threads_II(i,j))
     end do; end do
+  contains
+    !==========================================================================
+    subroutine init_thread(OpenThread1)
+
+      ! Thread to set
+      type(OpenThread), intent(inout) :: OpenThread1
+      !------------------------------------------------------------------------
+
+      nullify(OpenThread1%ConservativeOld_VC)
+      nullify(OpenThread1%Dt_C)
+      nullify(OpenThread1%State_VG)
+      nullify(OpenThread1%B1_DG)
+      nullify(OpenThread1%DirB_DG)
+      nullify(OpenThread1%Te_G)
+      nullify(OpenThread1%R_F)
+      nullify(OpenThread1%Coord_DF)
+      nullify(OpenThread1%B_F)
+      nullify(OpenThread1%Ds_G)
+      OpenThread1%TeTr = -1.0
+      OpenThread1%uTr  = -1.0
+      OpenThread1%PeTr = -1.0
+      OpenThread1%Dt   = -1.0
+      OpenThread1%OpenFlux = 0.0
+      OpenThread1%nCell = -1
+    end subroutine init_thread
+    !==========================================================================
   end subroutine allocate_thread_arr
-  !============================================================================
-  subroutine init_thread(OpenThread1)
-
-    ! Thread to set
-    type(OpenThread), intent(inout) :: OpenThread1
-    !--------------------------------------------------------------------------
-
-    nullify(OpenThread1%ConservativeOld_VC)
-    nullify(OpenThread1%Dt_C)
-    nullify(OpenThread1%State_VG)
-    nullify(OpenThread1%B1_DG)
-    nullify(OpenThread1%DirB_DG)
-    nullify(OpenThread1%Te_G)
-    nullify(OpenThread1%R_F)
-    nullify(OpenThread1%Coord_DF)
-    nullify(OpenThread1%B_F)
-    nullify(OpenThread1%Ds_G)
-    OpenThread1%TeTr = -1.0
-    OpenThread1%uTr  = -1.0
-    OpenThread1%PeTr = -1.0
-    OpenThread1%Dt   = -1.0
-    OpenThread1%OpenFlux = 0.0
-    OpenThread1%nCell = -1
-  end subroutine init_thread
   !============================================================================
   subroutine deallocate_thread_arr(Threads_II, nI, nJ)
     type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
@@ -860,31 +867,33 @@ contains
        call deallocate_thread(Threads_II(i,j))
     end do; end do
     deallocate(Threads_II)
-  end subroutine deallocate_thread_arr
-  !============================================================================
-  subroutine deallocate_thread(OpenThread1)
+  contains
+    !==========================================================================
+    subroutine deallocate_thread(OpenThread1)
 
-    ! Thread to set
-    type(OpenThread), intent(inout) :: OpenThread1
-    !--------------------------------------------------------------------------
-    OpenThread1%TeTr = -1.0
-    OpenThread1%uTr  = -1.0
-    OpenThread1%PeTr = -1.0
-    OpenThread1%Dt   = -1.0
-    OpenThread1%nCell = -1
-    OpenThread1%OpenFlux = 0.0
-    if(.not.associated(OpenThread1%Coord_DF))RETURN
-    deallocate(OpenThread1%ConservativeOld_VC)
-    deallocate(OpenThread1%Dt_C)
-    deallocate(OpenThread1%State_VG)
-    deallocate(OpenThread1%B1_DG)
-    deallocate(OpenThread1%DirB_DG)
-    deallocate(OpenThread1%Te_G)
-    deallocate(OpenThread1%R_F)
-    deallocate(OpenThread1%Coord_DF)
-    deallocate(OpenThread1%B_F)
-    deallocate(OpenThread1%Ds_G)
-  end subroutine deallocate_thread
+      ! Thread to set
+      type(OpenThread), intent(inout) :: OpenThread1
+      !------------------------------------------------------------------------
+      OpenThread1%TeTr = -1.0
+      OpenThread1%uTr  = -1.0
+      OpenThread1%PeTr = -1.0
+      OpenThread1%Dt   = -1.0
+      OpenThread1%nCell = -1
+      OpenThread1%OpenFlux = 0.0
+      if(.not.associated(OpenThread1%Coord_DF))RETURN
+      deallocate(OpenThread1%ConservativeOld_VC)
+      deallocate(OpenThread1%Dt_C)
+      deallocate(OpenThread1%State_VG)
+      deallocate(OpenThread1%B1_DG)
+      deallocate(OpenThread1%DirB_DG)
+      deallocate(OpenThread1%Te_G)
+      deallocate(OpenThread1%R_F)
+      deallocate(OpenThread1%Coord_DF)
+      deallocate(OpenThread1%B_F)
+      deallocate(OpenThread1%Ds_G)
+    end subroutine deallocate_thread
+    !==========================================================================
+  end subroutine deallocate_thread_arr
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
     use ModLookupTable,  ONLY: interpolate_lookup_table
@@ -1777,7 +1786,8 @@ contains
           call CON_stop('Reduce time step')
        end if
        ! Recover temperature
-       Te_I(1:nPoint) = (3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths
+       Te_I(1:nPoint) = max((3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths&
+            , TeSiMin)
        Ti_I(1:nPoint) = Ti_I(1:nPoint) + DCons_VI(Ti_,1:nPoint)
        if(all(abs(DCons_VI(Cons_,1:nPoint))<cTolerance*Cons_I(1:nPoint)))EXIT
     end do
