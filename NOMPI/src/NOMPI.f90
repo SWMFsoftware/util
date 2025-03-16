@@ -541,6 +541,14 @@ subroutine MPI_BCAST(buffer,count,datatype,root,comm,ierror)
   ierror=0
 end subroutine MPI_BCAST
 
+subroutine MPI_comm_split_type(comm, commtype, rank, &
+     info, localcomm, ierror)
+  integer, intent(in):: comm, commtype, rank, info
+  integer, intent(out):: localcomm, ierror
+  localcomm = comm
+  ierror = 0
+end subroutine MPI_comm_split_type
+
 subroutine MPI_CART_CREATE(comm_old,ndims,dims,periods,reorder,comm_cart,&
      ierror)
   integer, intent(in) :: comm_old,ndims
