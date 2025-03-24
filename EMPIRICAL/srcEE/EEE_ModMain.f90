@@ -12,6 +12,7 @@ module EEE_ModMain
   private
 
   public :: EEE_initialize
+  public :: EEE_init_CME_parameters
   public :: EEE_set_parameters
   public :: EEE_get_state_init
   public :: EEE_get_state_bc
@@ -134,6 +135,20 @@ contains
    !$acc update device(Gbody)
   end subroutine EEE_initialize
   !============================================================================
+  subroutine EEE_init_CME_parameters
+    use EEE_ModCommonVariables, ONLY: UseTD, UseGL, UseSpheromak         
+    use EEE_ModTD99, ONLY: init_TD99_parameters
+    use EEE_ModGL98, ONLY: gl98_init
+    !--------------------------------------------------------------------------    
+    if(UseTD) then
+       call init_TD99_parameters
+    end if
+    
+    if(UseGL .or. UseSpheromak) then
+       call gl98_init
+    end if    
+  end subroutine EEE_init_CME_parameters
+   !============================================================================
   subroutine EEE_set_parameters(NameCommand)
 
     use ModReadParam,     ONLY: read_var
