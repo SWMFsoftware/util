@@ -5,7 +5,7 @@ program magnetogram
 
   use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
        EEE_set_plot_range, EEE_initialize
-  use EEE_ModCommonVariables, ONLY: & 
+  use EEE_ModCommonVariables, ONLY: &
        prefix, x_, y_, z_, DXyzPlot, Si2Io_V, &
        LongitudeCme, LatitudeCme, DoAddFluxRope, UnitB_
   use ModConst, ONLY: cPi, cTwoPi, cDegToRad, cRadToDeg
@@ -57,7 +57,7 @@ program magnetogram
         call read_var('NameMagnetogram',NameMagnetogram)
         write(*,'(a)')prefix//'Process magnetogram file='//NameMagnetogram
      case('#ELIMINATECMEBR')
-        call read_var('NameEliminatedCmeBr',NameEliminatedCmeBr)        
+        call read_var('NameEliminatedCmeBr',NameEliminatedCmeBr)
      case default
         call CON_stop(prefix//'Unknown command:'//NameCommand)
      end select
@@ -81,7 +81,7 @@ program magnetogram
   if(iError>0)call CON_stop(prefix//'Cannot open file '//NameMagnetogram)
   write(*,*)prefix//'nLong=', nLong,' nLat=', nLat, ' nVar=', nVar,&
        ' nParam=', nParam, ' Time=', Time
-  Long0 = nint(Param_I(1)) 
+  Long0 = nint(Param_I(1))
   write(*,*)prefix//'Long0=', Long0, ' Param_I=', Param_I(1:nParam)
   ! Allocate coord arrays
   allocate(Longitude_I(nLong), Latitude_I(nLat))
@@ -89,7 +89,7 @@ program magnetogram
   allocate(Var_VII(nVar+1,nLong,nLat), BrCme_II(nLong,nLat))
   call read_plot_file(NameFile = NameMagnetogram, &
        iUnitIn   = iUnit,                  &
-       Coord1Out_I   = Longitude_I,        & 
+       Coord1Out_I   = Longitude_I,        &
        Coord2Out_I   = Latitude_I,         &
        VarOut_VII    = Var_VII(1:nVar,:,:))
   write(*,*)prefix//'Start to calculate CME Br'
