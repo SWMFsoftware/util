@@ -150,7 +150,7 @@ contains
          3*KappaPrime2Ext*KappaExtMax*toroid_q(1,KappaPrime2In=KappaPrime2Ext)
 
     !$acc update device(CothU0,DPsiMinusJEOverDu0Minus,CurrentFactor,Q01)
-    !$acc update device(Kappa2ExtMax)    
+    !$acc update device(Kappa2ExtMax)
   end subroutine set_kappaprime0
   !============================================================================
   subroutine get_amplitude_int(KappaPrime2In, Amplitude_I)
@@ -304,7 +304,7 @@ contains
   !$acc update device(Eps, KappaPrime2Uniform, CothU0, DeltaInv, NormMinus)
   !$acc update device(NormPlus, CurrentFactor, CurrentE, Q01, Q1)
   !$acc update device(DPsiMinusJEOverDu0Minus, PsiMinusJEUOPlus, Toroidal2)
-  !$acc update device(Kappa2ExtMax)    
+  !$acc update device(Kappa2ExtMax)
 
   end subroutine set_kappaprime0
   !============================================================================
@@ -1362,7 +1362,7 @@ contains
     RhoFRope  = RhoFRope *No2Si_V(UnitRho_)
     pFluxRope = pFluxRope*No2Si_V(UnitP_)
   end subroutine get_TD99_fluxrope
-  !==========================================================================
+  !============================================================================
   subroutine td99(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, &
      Kappa, Kappa2, BFRope_D, RhoFRope, pFluxRope)
     !$acc routine seq
@@ -1380,7 +1380,7 @@ contains
     real:: AI, dAIdx, dAIdr
     ! Flux-rope related variables::
     real:: BIPhi_D(3)
-    !------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     if (RMinus >= aTube) then
        !
        ! No pressure and density outside flux rope
@@ -1474,7 +1474,7 @@ contains
     BFRope_D = BFRope_D + BIPhi_D
 
   end subroutine td99
-  !==========================================================================
+  !============================================================================
   subroutine tdm(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, Kappa, Kappa2, &
      BFRope_D, RhoFRope, pFluxRope)
     !$acc routine seq
@@ -1484,9 +1484,9 @@ contains
          calc_elliptic_int_2kind
 
     real, intent(in) :: XyzRel_D(3)
-    real, intent(in) :: R2Rel, xRel, RMinus, RPlus2, Rperp, Kappa, Kappa2       
+    real, intent(in) :: R2Rel, xRel, RMinus, RPlus2, Rperp, Kappa, Kappa2
     real, intent(out) :: BFRope_D(3)
-    real, intent(out) :: RhoFRope, pFluxRope  
+    real, intent(out) :: RhoFRope, pFluxRope
 
     real, parameter :: Delta = 0.1
     real :: bTheta_D(3),  bI_D(3)
@@ -1501,7 +1501,7 @@ contains
     real :: SewingH, dSewingH, SewingF, dSewingF, SewingG, dSewingG
     real :: Ai, dAIdX, dAIdR
     real :: TmpG, dGdX, dGdR, TmpH, dHdR, Afx, dAFRdX, dAFXdR
-    !------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     ! In spherical case the straping field magnitude bVert
     ! should be provided
 
@@ -1641,7 +1641,6 @@ contains
     pFluxRope = 0.0
 
   end subroutine tdm
-  !==========================================================================
   !============================================================================
   subroutine compute_TD99_BqField(Xyz_D, BqField_D, TimeNow)
     !$acc routine seq
