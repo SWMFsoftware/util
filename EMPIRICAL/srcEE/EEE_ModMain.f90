@@ -115,14 +115,14 @@ contains
        DoNormalizeXyz = .false.
     end if
 
-    DoInit = .true. 
+    DoInit = .true.
 
     if(DoInit .and. UseTD) then
       call init_TD99_parameters
       DoInit = .false.
     end if
 
-    if(DoInit .and. (UseGL .or. UseSpheromak)) then 
+    if(DoInit .and. (UseGL .or. UseSpheromak)) then
       call gl98_init
       DoInit = .false.
     end if
@@ -136,19 +136,19 @@ contains
   end subroutine EEE_initialize
   !============================================================================
   subroutine EEE_init_CME_parameters
-    use EEE_ModCommonVariables, ONLY: UseTD, UseGL, UseSpheromak         
+    use EEE_ModCommonVariables, ONLY: UseTD, UseGL, UseSpheromak
     use EEE_ModTD99, ONLY: init_TD99_parameters
     use EEE_ModGL98, ONLY: gl98_init
-    !--------------------------------------------------------------------------    
+    !--------------------------------------------------------------------------
     if(UseTD) then
        call init_TD99_parameters
     end if
-    
+
     if(UseGL .or. UseSpheromak) then
        call gl98_init
-    end if    
+    end if
   end subroutine EEE_init_CME_parameters
-   !============================================================================
+  !============================================================================
   subroutine EEE_set_parameters(NameCommand)
 
     use ModReadParam,     ONLY: read_var
@@ -292,7 +292,7 @@ contains
        B_D = B_D + Coeff*B1_D; U_D = U_D + Coeff*U1_D
     endif
 
-#ifndef _OPENACC    
+#ifndef _OPENACC
     if(UseShearFlow)then
        call get_shearflow(Xyz_D, Time, U1_D, nIter)
        U_D = U_D + Coeff*U1_D
