@@ -96,8 +96,8 @@ contains
     use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
 
     real :: Rotate_DD(3,3)
-    !--------------------------------------------------------------------------
 
+    !--------------------------------------------------------------------------
     alpha0 = Alpha0R0/Radius
     Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
 
