@@ -365,11 +365,5 @@ contains
     nZ  = nint(ExtensionFactor*SizeZ /DXyzPlot)
   end subroutine EEE_set_plot_range
   !============================================================================
-  subroutine EEE_init_CME_parameters
-    character(len=*), parameter:: NameSub = 'EEE_init_CME_parameters'
-    !--------------------------------------------------------------------------
-    call CON_stop('Incorrect routine '//NameSub//' is disabled')
-  end subroutine EEE_init_CME_parameters
-  !============================================================================
 end module EEE_ModMain
 !==============================================================================
