@@ -20,12 +20,13 @@ module EEE_ModMain
   public :: EEE_do_not_add_cme_again
   public :: EEE_set_plot_range
 
+  logical :: DoInit
+  !$acc declare create(DoInit)
+
 contains
   !============================================================================
   subroutine EEE_initialize(BodyNDim, BodyTDim, Gamma, iCommIn, TimeNow)
     use EEE_ModCommonVariables
-    use EEE_ModGL98, ONLY: gl98_init
-    use EEE_ModTD99, ONLY: init_TD99_parameters
 #ifdef _OPENACC
     use ModUtilities, ONLY: norm2
 #endif
@@ -33,8 +34,6 @@ contains
     real, intent(in)             :: BodyNDim, BodyTDim, Gamma
     integer, optional, intent(in):: iCommIn
     real, optional, intent(in)   :: TimeNow
-
-    logical :: DoInit
 
     integer :: iComm, iError
     !--------------------------------------------------------------------------
@@ -116,38 +115,14 @@ contains
     end if
 
     DoInit = .true.
+    !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22)
+    !$acc update device(UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak)
 
-    if(DoInit .and. UseTD) then
-      call init_TD99_parameters
-      DoInit = .false.
-    end if
-
-    if(DoInit .and. (UseGL .or. UseSpheromak)) then
-      call gl98_init
-      DoInit = .false.
-    end if
-
-   !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22)
-   !$acc update device(UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak)
-
-   !$acc update device(Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V)
-   !$acc update device(rCmeApexInvSi, tStartCme, tDecayCmeDim, tDecayCme)
-   !$acc update device(Gbody)
+    !$acc update device(Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V)
+    !$acc update device(rCmeApexInvSi, tStartCme, tDecayCmeDim, tDecayCme)
+    !$acc update device(Gbody)
+    !$acc update device(DoInit)
   end subroutine EEE_initialize
-  !============================================================================
-  subroutine EEE_init_CME_parameters
-    use EEE_ModCommonVariables, ONLY: UseTD, UseGL, UseSpheromak
-    use EEE_ModTD99, ONLY: init_TD99_parameters
-    use EEE_ModGL98, ONLY: gl98_init
-    !--------------------------------------------------------------------------
-    if(UseTD) then
-       call init_TD99_parameters
-    end if
-
-    if(UseGL .or. UseSpheromak) then
-       call gl98_init
-    end if
-  end subroutine EEE_init_CME_parameters
   !============================================================================
   subroutine EEE_set_parameters(NameCommand)
 
@@ -306,8 +281,8 @@ contains
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
          DoAddGL, UseCms, DoAddSpheromak, tStartCme
-    use EEE_ModGL98, ONLY: get_GL98_fluxrope
-    use EEE_ModTD99, ONLY: get_TD99_fluxrope
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope, gl98_init
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope, init_TD99_parameters
     use EEE_ModCms,  ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3)
@@ -323,17 +298,32 @@ contains
 
     if(DoAddTD)then
        ! Add Titov & Demoulin (TD99) flux rope
+       if(DoInit)then
+          call init_TD99_parameters
+          DoInit = .false.
+          !$acc update device(DoInit)
+       end if
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     endif
 
     if(DoAddGL)then
        ! Add Gibson & Low (GL98) flux rope
+       if(DoInit)then
+          call gl98_init
+          DoInit = .false.
+          !$acc update device(DoInit)
+       end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
     end if
 
     if(DoAddSpheromak)then
+       if(DoInit)then
+          call gl98_init
+          DoInit = .false.
+          !$acc update device(DoInit)
+       end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, tStartCme)
        Rho = Rho + Rho1; B_D = B_D + B1_D
        p = p + p1; U_D = U_D + U1_D
@@ -374,6 +364,12 @@ contains
     nXY = nint(ExtensionFactor*SizeXY/DXyzPlot)
     nZ  = nint(ExtensionFactor*SizeZ /DXyzPlot)
   end subroutine EEE_set_plot_range
+  !============================================================================
+  subroutine EEE_init_CME_parameters
+    character(len=*), parameter:: NameSub = 'EEE_init_CME_parameters'
+    !--------------------------------------------------------------------------
+    call CON_stop('Incorrect routine '//NameSub//' is disabled')
+  end subroutine EEE_init_CME_parameters
   !============================================================================
 end module EEE_ModMain
 !==============================================================================
