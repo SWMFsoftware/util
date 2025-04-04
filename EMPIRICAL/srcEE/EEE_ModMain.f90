@@ -12,7 +12,6 @@ module EEE_ModMain
   private
 
   public :: EEE_initialize
-  public :: EEE_init_CME_parameters
   public :: EEE_set_parameters
   public :: EEE_get_state_init
   public :: EEE_get_state_bc
