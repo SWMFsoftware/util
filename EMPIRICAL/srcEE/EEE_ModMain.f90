@@ -120,7 +120,6 @@ contains
     !$acc update device(Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V)
     !$acc update device(rCmeApexInvSi, tStartCme, tDecayCmeDim, tDecayCme)
     !$acc update device(Gbody)
-    !$acc update device(DoInit)
   end subroutine EEE_initialize
   !============================================================================
   subroutine EEE_set_parameters(NameCommand)
@@ -225,9 +224,9 @@ contains
     !$acc routine seq
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, tStartCme, tDecayCmeDim
-    use EEE_ModTD99, ONLY: get_TD99_fluxrope
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope, init_TD99_parameters
     use EEE_ModShearFlow, ONLY: get_shearflow
-    use EEE_ModGL98, ONLY: get_GL98_fluxrope
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope, gl98_init
     use EEE_ModCms, ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3), Time
@@ -251,17 +250,29 @@ contains
          1 - (Time - tStartCme)/tDecayCmeDim)
 
     if (UseTD) then
+       if(DoInit)then
+          call init_TD99_parameters
+          DoInit = .false.
+       end if
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
        Rho = Rho + Coeff*Rho1; B_D = B_D + Coeff*B1_D; p = p + Coeff*p1
     end if
 
     if(UseGL)then
        ! Add Gibson & Low (GL98) flux rope
+       if(DoInit)then
+          call gl98_init
+          DoInit = .false.
+       end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time) !! send Time
        B_D = B_D + Coeff*B1_D
     end if
 
     if(UseSpheromak)then
+       if(DoInit)then
+          call gl98_init
+          DoInit = .false.
+       end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
        B_D = B_D + Coeff*B1_D; U_D = U_D + Coeff*U1_D
     endif
@@ -300,7 +311,6 @@ contains
        if(DoInit)then
           call init_TD99_parameters
           DoInit = .false.
-          !$acc update device(DoInit)
        end if
        call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
@@ -311,7 +321,6 @@ contains
        if(DoInit)then
           call gl98_init
           DoInit = .false.
-          !$acc update device(DoInit)
        end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D)
        Rho = Rho + Rho1; B_D = B_D + B1_D; p = p + p1
@@ -321,7 +330,6 @@ contains
        if(DoInit)then
           call gl98_init
           DoInit = .false.
-          !$acc update device(DoInit)
        end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, tStartCme)
        Rho = Rho + Rho1; B_D = B_D + B1_D
