@@ -289,7 +289,7 @@ contains
     if(UseCms) call get_cms(Xyz_D, B_D)
 #endif
   end subroutine EEE_get_state_BC
-    !============================================================================
+  !============================================================================
   subroutine EEE_get_fast_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
     !$acc routine seq
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
@@ -400,7 +400,7 @@ contains
   end subroutine EEE_get_state_init
   !============================================================================
   subroutine EEE_get_state_fast(Xyz_D, Rho, B_D, p, nStep, nIter)
-
+    !$acc routine seq
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
          DoAddGL, UseCms, DoAddSpheromak, tStartCme
     use EEE_ModGL98, ONLY: get_GL98_fluxrope
