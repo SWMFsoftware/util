@@ -16,6 +16,7 @@ module EEE_ModMain
   public :: EEE_get_state_init
   public :: EEE_get_state_fast
   public :: EEE_get_state_bc
+  public :: EEE_get_fast_bc
   public :: EEE_init_CME_parameters
   public :: EEE_get_b0
   public :: EEE_do_not_add_cme_again
@@ -223,7 +224,6 @@ contains
   end subroutine EEE_set_parameters
   !============================================================================
   subroutine EEE_get_state_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
-    !$acc routine seq
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
          UseCms, UseSpheromak, tStartCme, tDecayCmeDim
     use EEE_ModTD99, ONLY: get_TD99_fluxrope, init_TD99_parameters
@@ -289,6 +289,62 @@ contains
     if(UseCms) call get_cms(Xyz_D, B_D)
 #endif
   end subroutine EEE_get_state_BC
+    !============================================================================
+  subroutine EEE_get_fast_bc(Xyz_D, Rho, U_D, B_D, p, Time, nStep, nIter)
+    !$acc routine seq
+    use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
+         UseCms, UseSpheromak, tStartCme, tDecayCmeDim
+    use EEE_ModTD99, ONLY: get_TD99_fluxrope
+    use EEE_ModShearFlow, ONLY: get_shearflow
+    use EEE_ModGL98, ONLY: get_GL98_fluxrope
+    use EEE_ModCms, ONLY: get_cms
+
+    real, intent(in) :: Xyz_D(3), Time
+    real, intent(out) :: Rho, U_D(3), B_D(3), p
+    integer, intent(in):: nStep, nIter
+
+    ! Perturbations due to CME
+    real :: Rho1, U1_D(3), B1_D(3), p1
+
+    ! Coefficient for perturbations (less than 1 for decay)
+    real :: Coeff
+    ! initialize perturbed state variables
+    character(len=*), parameter :: NameSub='EEE_get_state_bc'
+    !--------------------------------------------------------------------------
+    Rho = 0.0; U_D = 0.0; B_D = 0.0; p = 0.0
+
+    if(.not.UseCme) RETURN
+
+    ! linearly decay the perturbed magnetic field to 0 during tDecay time
+    Coeff = 1.0
+    if(tDecayCmeDim > 0.0) Coeff = max(0.0, &
+         1 - (Time - tStartCme)/tDecayCmeDim)
+
+    if (UseTD) then
+       call get_TD99_fluxrope(Xyz_D, B1_D, Rho1, p1)
+       Rho = Rho + Coeff*Rho1; B_D = B_D + Coeff*B1_D; p = p + Coeff*p1
+    end if
+
+    if(UseGL)then
+       ! Add Gibson & Low (GL98) flux rope
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time) !! send Time
+       B_D = B_D + Coeff*B1_D
+    end if
+
+    if(UseSpheromak)then
+       call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
+       B_D = B_D + Coeff*B1_D; U_D = U_D + Coeff*U1_D
+    endif
+
+#ifndef _OPENACC
+    if(UseShearFlow)then
+       call get_shearflow(Xyz_D, Time, U1_D, nIter)
+       U_D = U_D + Coeff*U1_D
+    end if
+
+    if(UseCms) call get_cms(Xyz_D, B_D)
+#endif
+  end subroutine EEE_get_fast_BC
   !============================================================================
   subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, nIter)
 
