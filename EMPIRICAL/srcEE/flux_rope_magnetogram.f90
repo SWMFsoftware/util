@@ -63,7 +63,7 @@ program magnetogram
         call EEE_set_parameters(NameCommand)
      case('#LOOKUPTABLE')
         call read_lookup_table_param
-        call init_magnetogram_lookup_table()
+        call init_magnetogram_lookup_table
      case('#MAGNETOGRAM')
         ! Do nothing
      case default
