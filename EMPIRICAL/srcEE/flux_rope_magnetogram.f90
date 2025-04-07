@@ -4,7 +4,7 @@
 
 program magnetogram
 
-  use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_BC, &
+  use EEE_ModMain, ONLY:  EEE_set_parameters, EEE_get_state_bc, &
        EEE_set_plot_range, EEE_initialize
   use EEE_ModCommonVariables, ONLY: &
        prefix, x_, y_, z_, DXyzPlot, Si2Io_V, &
@@ -38,7 +38,7 @@ program magnetogram
 
   ! Loop indexes
   integer           :: i, j, k, iUnit, iError
-  integer           :: Long0
+  real              :: Long0
   real              :: Longitude, Latitude
   real              :: Longitude_I(nLong), Latitude_I(nLat)
   real              :: BSurface_DC(3,nLong,nLat) = 0
@@ -109,7 +109,7 @@ program magnetogram
            Xyz_D = DirCme_D + DXyzPlot*matmul(Rotate_DD, &
                 [i - 1 - nXY, j - 1 - nXY, k - 1] )
            if(DoAddFluxRope)then
-              call EEE_get_state_BC(Xyz_D, Rho, U_D, B_D, p, &
+              call EEE_get_state_bc(Xyz_D, Rho, U_D, B_D, p, &
                    Time=0.0, nStep=0, nIter=0)
               B_D = B_D*Si2Io_V(UnitB_)
               Var_VN(B1x_:B1z_,i,j,k) = matmul(B_D, Rotate_DD)
@@ -178,8 +178,8 @@ contains
     ! (longitude of left margin and the use of uniform or sin(lat) grid
     ! are red from RunFRM file. Is not invoked if the file does not exist
     !--------------------------------------------------------------------------
-    read(iUnit,*)Long0
-    write(*,'(a,i3)')prefix, Long0
+    read(iUnit,*) Long0
+    write(*,'(a,f6.1)')prefix, Long0
     read(iUnit,*)TypeLatAxis
     write(*,'(a)')prefix//TypeLatAxis
     close(iUnit)
@@ -217,7 +217,7 @@ contains
          TypeFileIn = 'ascii', &
          StringHeaderIn = 'Flux rope magnetic field at 1 R_s', &
          nDimIn = 2, &
-         ParamIn_I = [real(Long0)], &
+         ParamIn_I = [Long0], &
          CoordIn_I = Longitude_I, &
          Coord2In_I= Latitude_I, &
          NameVarIn = 'Longitude Latitude Br Blon Blat Long0', &
