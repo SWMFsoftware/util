@@ -102,9 +102,9 @@ module  ModParabolicCurrent
   use ModFormFactors
   implicit none
   PRIVATE  ! Except
-  !
+
   ! Constant  factors  to calculate internal field
-  !
+
   ! Value of coth(u^-_0)
   real :: CothU0
   ! Q01*dQ^{-1}_{-1/2}(u^-_0)/du^-_0
@@ -187,7 +187,7 @@ contains
   !============================================================================
 end module ModParabolicCurrent
 !==============================================================================
-module  ModUniformCurrent
+module ModUniformCurrent
   use ModExternalField, ONLY: &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax, external_field
   use ModFormFactors
@@ -355,7 +355,7 @@ contains
   !============================================================================
 end module ModUniformCurrent
 !==============================================================================
-module  ModSurfaceCurrent
+module ModSurfaceCurrent
   use ModExternalField, ONLY:   &
        Axial_, Poloidal_, Toroidal_, Kappa2ExtMax
   use ModFormFactors
@@ -451,11 +451,11 @@ contains
     Kappa2ExtMax  = -1.0
     if(UseUniformCurrent)then
        call set_uniform_current(KappaPrime0,EpsIn)
-       ! Calculate inductance depending on the choice of the current form-factor
+       ! Calculate inductance depending on choice of the current form-factor
        ! Inductance includes external and internal field iductances as well as
        ! the torooidal field inductance:
        !                      external               internal  toroidal
-       Inductance = l0_ext_inductance(KappaPrime0**2) + 0.250 + 0.50
+       Inductance = l0_ext_inductance(KappaPrime0**2) + 0.25 + 0.5
     end if
     if(UseSurfaceCurrent)then
        call set_surface_current(KappaPrime0)
@@ -472,7 +472,7 @@ contains
        ! \kappa one has \kappa^2 < Kappa_0^2=1
        Kappa2ExtMax = 1.0; rInfty = rMajor; rInfty2  = rInfty**2
        ! Approximate formula expressed in terms of a/R0 ratio
-       Inductance =  log(8.0*rMajor/rMinor) - 1.250
+       Inductance =  log(8.0*rMajor/rMinor) - 1.25
        ! Set \kappa^\prime = a/(2R_0)
        KappaPrime0 = 0.5* rMinor / rMajor
     end if
@@ -610,7 +610,7 @@ contains
     real, parameter:: ZMax = 2.0
     ! Grid size
     real, parameter :: DGrid = ZMax/N
-    real, parameter :: LCharge = 0.7
+    real, parameter :: Lcharge = 0.7
     real :: QCharge
     real :: R_D(3), BStrap_D(3)
     ! Internal field
@@ -781,7 +781,7 @@ contains
          VarIn_VII = Field_DII )
     ! Express magnetic charge in terms of BStrap:
     ! 2L/(L^2 +R_\infty^2)^{3/2}*QCharge = -BStrap
-    QCharge = norm2(BStrap_D)*0.50*(LCharge**2 + 1)**1.50/LCharge
+    QCharge = norm2(BStrap_D)*0.50*(Lcharge**2 + 1)**1.50/Lcharge
     ! Test the strapped field created by a pair of magnetic charges:
     do j = JMin, N
        do i = -N/2, N/2
@@ -791,10 +791,10 @@ contains
           R_D = [DGrid*i, DGrid*j, 0.0]
           ! Add  strapping field of twoo magnetic charges
           Field_DII(:, i, j) = Field_DII(:, i, j) + &
-               QCharge*(R_D - [LCharge, 0.0, 0.0])/&  ! Positive charge
-               norm2(R_D - [LCharge, 0.0, 0.0])**3 &  ! field
-               -QCharge*(R_D + [LCharge, 0.0, 0.0])/& ! Negative charge
-               norm2(R_D + [LCharge, 0.0, 0.0])**3    ! field
+               QCharge*(R_D - [Lcharge, 0.0, 0.0])/&  ! Positive charge
+               norm2(R_D - [Lcharge, 0.0, 0.0])**3 &  ! field
+               -QCharge*(R_D + [Lcharge, 0.0, 0.0])/& ! Negative charge
+               norm2(R_D + [Lcharge, 0.0, 0.0])**3    ! field
        end do
     end do
     call save_plot_file(NameFile='charge_field.out', &
@@ -827,11 +827,11 @@ module EEE_ModTD99
   save
   private
 
-  public :: init_TD99_parameters
-  public :: set_parameters_TD99
-  public :: get_TD99_fluxrope
-  public :: compute_TD99_BqField
-  public :: get_TD99_size
+  public :: init_td99_parameters
+  public :: set_parameters_td99
+  public :: get_td99_fluxrope
+  public :: compute_td99_bqfield
+  public :: get_td99_size
 
   ! Variables related to the position of the flux rope:
 
@@ -854,8 +854,8 @@ module EEE_ModTD99
   !$acc declare create(RTube, aTube, Depth, XyzCenter_D, UnitX_D)
 
   ! magnetic field of the current tube at the center of configuration
-  real :: BcTube, BcTubeDim, ITube
-  !$acc declare create(BcTube, BcTubeDim, ITube)
+  real :: BcTube, BcTubeDim, Itube
+  !$acc declare create(BcTube, BcTubeDim, Itube)
 
   ! Magnetic field at the center of configuration is always parallel,
   ! while starpping field is antiparallel, to the x-axis. Phi-conponent
@@ -928,7 +928,7 @@ module EEE_ModTD99
 
 contains
   !============================================================================
-  subroutine set_parameters_TD99(NameCommand)
+  subroutine set_parameters_td99(NameCommand)
     use EEE_ModCommonVariables, ONLY: &
          XyzCmeApexSi_D, XyzCmeCenterSi_D, DoNormalizeXyz
     use ModReadParam, ONLY: read_var
@@ -936,7 +936,7 @@ contains
     real    :: MassDim
     character(len=*), intent(in):: NameCommand
 
-    character(len=*), parameter:: NameSub = 'set_parameters_TD99'
+    character(len=*), parameter:: NameSub = 'set_parameters_td99'
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#CME")
@@ -1035,21 +1035,20 @@ contains
        call CON_stop(NameSub//' unknown NameCommand='//NameCommand)
     end select
 
-  end subroutine set_parameters_TD99
+  end subroutine set_parameters_td99
   !============================================================================
-  subroutine init_TD99_parameters
+  subroutine init_td99_parameters
 
     use EEE_ModCommonVariables, ONLY: prefix, OrientationCme,  &
          LongitudeCme, LatitudeCme, BAmbientApexSi_D
     use ModCoordTransform, ONLY: rot_xyz_mercator, rot_matrix_z
-    ! use ModFieldGS, ONLY: BStrap_D
-    real :: AlphaRope, LInduct, WFRope, FootSepar, ITubeSi
+
+    real :: AlphaRope, Linduct, WFRope, FootSepar, ItubeSi
 
     ! Rotational matrix of coordinate transformation:
     real :: Rotate_DD(3,3)
 
-    ! MISC
-    character(len=*), parameter:: NameSub = 'init_TD99_parameters'
+    character(len=*), parameter:: NameSub = 'init_td99_parameters'
     !--------------------------------------------------------------------------
     Rtube = Rtube*Io2No_V(UnitX_)
     aTube = aTube*Io2No_V(UnitX_)
@@ -1090,10 +1089,10 @@ contains
     ! Computation of the portion of the flux rope current that is above
     ! the solar surface:
     if(UseTD22)then
-       ! More accurate formula for R_S = (1.0*Io2No_V(UnitX_))
-       if(rInfty>=Depth)then
-          AlphaRope = 2.0*acos((2.0*(1.0*Io2No_V(UnitX_))*Depth - Depth**2 &
-               -rInfty**2)/(2.0*( (1.0*Io2No_V(UnitX_)) - Depth)*rInfty))
+       ! More accurate formula for R_S = Io2No_V(UnitX_)
+       if(rInfty >= Depth)then
+          AlphaRope = 2*acos((2.0*(1.0*Io2No_V(UnitX_))*Depth - Depth**2 &
+               -rInfty**2)/(2*(Io2No_V(UnitX_) - Depth)*rInfty))
        else
           ! Only valid for testing the entire loop
           AlphaRope = cTwoPi
@@ -1162,14 +1161,12 @@ contains
 
     if(UseEquilibriumCurrent)then
        if(DoGetBStrap)then
-          !
           ! Calculate projection of the MHD field at the apex point
           ! anti-parallel to the X-axis
           bStrapping = - sum(BAmbientApexSi_D*UnitX_D)*Si2No_V(UnitB_)
           if(bStrapping < 0.0)call CON_stop(NameSub//&
                ': Strapping MHD field is negative')
        else
-          !
           ! Normalize field read from PARAM.in file
           bStrapping = bStrappingDim*Io2No_V(UnitB_)
        end if
@@ -1183,16 +1180,16 @@ contains
           !     4*cPi*(2*q*qDistance/(qDistance**2 + RTube**2))*RTube/&
           !     /(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)    =
           !     4*cPi*bStrapping*RTube/(alog(8.0*Rtube/aTube) -1.5 + Li/2.0)
-          ! From here, we can calculate BcTube = ITube/(2*RTube)
+          ! From here, we can calculate BcTube = Itube/(2*RTube)
           ! in [-]
           BcTube  = 2*cPi*bStrapping/ Inductance
-          ! Invert the equation, BcTubeSi = 0.5 \Mu_0 * ITubeSi/ RTubeSi
-          ITubeSi = 2*(BcTube*No2Si_V(UnitB_))*&
+          ! Invert the equation, BcTubeSi = 0.5 \Mu_0 * ItubeSi/ RTubeSi
+          ItubeSi = 2*(BcTube*No2Si_V(UnitB_))*&
                (RTube*No2Si_V(UnitX_))/cMu ![A]
        else
           ! Use equation from TD14:
-          ITube =  (4*cPi*RTube*bStrapping) / (log(8*RTube/aTube)-25./24.)
-          ITubeSi = ITube*No2Si_V(UnitB_)*No2Si_V(UnitX_)/cMu ![A]
+          Itube =  (4*cPi*RTube*bStrapping) / (log(8*RTube/aTube)-25./24.)
+          ItubeSi = Itube*No2Si_V(UnitB_)*No2Si_V(UnitX_)/cMu ![A]
        end if
        if (iProc==0) then
           write(*,'(a,es13.5,a)') prefix//' The strapping field, bStrapping=',&
@@ -1206,11 +1203,11 @@ contains
     else
        ! Normalize field read from parameter file
        BcTube= BcTubeDim*Io2No_V(UnitB_)
-       ! Invert the equation, BcTube = 0.5  * ITube/ RTube
-       ITube   = 2*BcTube*RTube
-       ITubeSi = ITube*No2Si_V(UnitB_)*No2Si_V(UnitX_)/cMu ![A]
+       ! Invert the equation, BcTube = 0.5  * Itube/ RTube
+       Itube   = 2*BcTube*RTube
+       ItubeSi = Itube*No2Si_V(UnitB_)*No2Si_V(UnitX_)/cMu ![A]
        if(iProc==0)then
-          write(*,'(a,es13.5,a)') prefix//'Itube  = ',ITubeSi,'[A]'
+          write(*,'(a,es13.5,a)') prefix//'Itube  = ',ItubeSi,'[A]'
           write(*,'(a)') prefix
        end if
        ! Equilibrium bStrapping
@@ -1221,9 +1218,9 @@ contains
        write(*,'(a)') prefix
     end if
 
-    LInduct = cMu*(AlphaRope/cTwoPi)*Rtube*No2Si_V(UnitX_)*&
+    Linduct = cMu*(AlphaRope/cTwoPi)*Rtube*No2Si_V(UnitX_)*&
          Inductance    ! in [H]
-    WFRope  = 0.5*LInduct*ItubeSi**2*1.0e7             ! in [ergs]
+    WFRope  = 0.5*Linduct*ItubeSi**2*1.0e7             ! in [ergs]
 
     if(iProc==0)then
        write(*,'(a,es13.5,a)') prefix//'Free energy of flux rope is ',&
@@ -1270,14 +1267,14 @@ contains
     !$acc update device(UsePlasmaBeta, PlasmaBeta, EjectaTemperature)
     !$acc update device(EjectaTemperatureDim, MassSi, Rho0)
     !$acc update device(UseStaticCharge, iHelicity, UseDynamicStrapping)
-    !$acc update device(BcTube, BcTubeDim, ITube)
+    !$acc update device(BcTube, BcTubeDim, Itube)
 
     !$acc update device(q, qDistance, bQStrappingDim, bQStrapFraction)
     !$acc update device(RPlus_D, RMinus_D, UChargeX)
 
-  end subroutine init_TD99_parameters
+  end subroutine init_td99_parameters
   !============================================================================
-  subroutine get_TD99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
+  subroutine get_td99_fluxrope(Xyz_D, BFRope_D, RhoFRope, pFluxRope)
     !$acc routine seq
 
     !    Twisted Magnetic Field Configuration by Titov & Demoulin '99   !
@@ -1350,18 +1347,18 @@ contains
           Kappa, Kappa2, BFRope_D, RhoFRope, pFluxRope)
        end if
     end if
-    !
+
     ! Add the field of two magnetic charges
-    !
     if (UseStaticCharge) then
-       call compute_TD99_BqField(Xyz_D, B1qField_D)
+       call compute_td99_BqField(Xyz_D, B1qField_D)
        BFRope_D = BFRope_D + B1qField_D
     endif
 
     BFRope_D  = BFRope_D *No2Si_V(UnitB_)
     RhoFRope  = RhoFRope *No2Si_V(UnitRho_)
     pFluxRope = pFluxRope*No2Si_V(UnitP_)
-  end subroutine get_TD99_fluxrope
+
+  end subroutine get_td99_fluxrope
   !============================================================================
   subroutine td99(XyzRel_D, R2Rel, xRel, RMinus, RPlus2, Rperp, &
      Kappa, Kappa2, BFRope_D, RhoFRope, pFluxRope)
@@ -1390,9 +1387,7 @@ contains
        call get_filament_field(XyzRel_D, BFRope_D)
        BIPhi_D = 0.0
     else
-       !
        ! Compute the field and density inside the current torus
-       !
        ! 1.
        ! Define the model input, KappaA. A given point is characterized by
        ! two coordinates, say, RPepr and RMinus. In this case,
@@ -1402,40 +1397,32 @@ contains
        ! KappaA = function(RPepr,ATube), or
        KappaA2 = 4.0*Rperp*Rtube/(4.0*Rperp*Rtube + aTube**2)
        KappaA  = sqrt(KappaA2)
-       !
        ! 2.
        ! The vector potential of the externap field, Ak and its derivative,
        ! dAk/dk, are both prolonged to the tube interior using the following
        ! sewing function (below we use A_k by a factor of Kappa**3 different
        ! from what we used above:
        ! A_i = A_k(KappaA) + dA_k/dKappaA*(Kappa - Kappa_A) (*)
-       !
        Ak      = toroid_P(0, Kappa2In=KappaA2)*KappaA**3
        dAkdk   = 3*toroid_p(1,Kappa2In=KappaA2)*KappaA2
        AI = Ak + dAkdk*(Kappa - KappaA)
-       !
        ! 3.
        ! Now, we derive the field components in terms of x and rPerp
        ! derivatives. Function A_i depends on x only via Kappa, so that:
        ! dA_i/dx = dA_k/dKappaA*dKappa/dx:
-       !
        dKappadx  = 2.0*xRel*Kappa/RPlus2
        dAIdx   = dAkdk*dKappadx
-       !
        ! 4.
        ! Analogously we account for the dependence of Kappa on the radial
        ! coordinate:
        ! dA_i/dr = dA_k/dKappaA*dKappaA/dr:
-       !
        dKappadr  = Kappa*(Rtube**2 - R2Rel)/RPlus2
        dAIdr   = dAkdk*dKappadr
-       !
        ! 5.
        ! Now, we account for the dependence of KappaA on rPerp. From (*), the
        ! contributions from the first derivative dA_k(KappaA)/dKappaA cancel
        ! each other, so that only the second derivative matters, which is
        ! equal to  d^2A_k(KappaA)/dKappaA^2:
-       !
        d2Akdk2A = &
             KappaA/(1 - KappaA**2)*(3*toroid_P(0, Kappa2In=KappaA**2) +&
             3*toroid_p(1,Kappa2In=KappaA**2)*(1 + KappaA**2))
@@ -1460,9 +1447,7 @@ contains
           RhoFRope = Rho0*exp(-10.0*(RMinus/aTube)**6)
           pFluxRope = 0
        else
-          !
           ! Rescale BIPhi, which is not only a part of total pressure:
-          !
           BIPhi_D = BIPhi_D/sqrt(1 + PlasmaBeta)
           pFluxRope = 0.50*sum(BIPhi_D**2)*PlasmaBeta
           RhoFRope = pFluxRope/EjectaTemperature
@@ -1493,8 +1478,8 @@ contains
     real :: RhoStarF, RhoStarG
     real :: RPerpHat_D(3), ThetaHat_D(3)
     real :: AxialFlux, Xi
-    real :: DKappaDx, DKappaDRperp, kStarF, dKSFdX, dKSFdR, &
-         kStarG, dKSGdX, dKSGdR
+    real :: DKappaDx, DKappaDRperp, KstarF, dKSFdX, dKSFdR, &
+         KstarG, dKSGdX, dKSGdR
     real :: EllipticKf, EllipticEf, FuncAf, dFuncAf, d2FuncAf, d3FuncAf
     real :: EllipticKg, EllipticEg
     real :: FuncAg, dFuncAg, d2FuncAg, d3FuncAg
@@ -1517,7 +1502,7 @@ contains
     DKappaDRperp = &
          Kappa**3/(8*RPerp**2*RTube) * (RMinus**2-2*RPerp*(RPerp-RTube))
 
-    AxialFlux = 3./(5*sqrt(2.)) * ITube * aTube
+    AxialFlux = 3./(5*sqrt(2.)) * Itube * aTube
 
     ! Sewing functions
     Xi = (RMinus - aTube)/(Delta*aTube)
@@ -1538,58 +1523,58 @@ contains
 
     ! curly-A function and its derivatives for k_(six-edged-star)
     RhoStarF = aTube*(1 + Delta*SewingF)
-    kStarF = sqrt((RPerp*RTube)/(RPerp*RTube + RhoStarF**2/4.))
-    dKSFdX = - (xRel*kStarF**3) / (4*RPerp*RTube)*dSewingF*RhoStarF/RMinus
-    dKSFdR = kStarF**3/(8*RPerp**2*RTube) &
+    KstarF = sqrt((RPerp*RTube)/(RPerp*RTube + RhoStarF**2/4.))
+    dKSFdX = - (xRel*KstarF**3) / (4*RPerp*RTube)*dSewingF*RhoStarF/RMinus
+    dKSFdR = KstarF**3/(8*RPerp**2*RTube) &
          * (RhoStarF**2 - 2*RPerp*(RPerp-RTube)*dSewingF*RhoStarF/RMinus)
 
-    call calc_elliptic_int_1kind(kStarF,EllipticKf)
-    call calc_elliptic_int_2kind(kStarF,EllipticEf)
+    call calc_elliptic_int_1kind(KstarF,EllipticKf)
+    call calc_elliptic_int_2kind(KstarF,EllipticEf)
 
-    FuncAf = ((2-kStarF**2)*EllipticKf - 2*EllipticEf) / kStarF
-    dFuncAf = (2-kStarF**2)/(kStarF**2*(1-kStarF**2)) * EllipticEf &
-         - 2/(kStarF**2) * EllipticKf
-    d2FuncAf = -(kStarF**4-7*kStarF**2+4)/(kStarF**3*(1-kStarF**2)**2) &
-         *EllipticEf - (5*kStarF**2-4)/(kStarF**3*(1-kStarF**2))*EllipticKf
-    d3FuncAf = -(2*kStarF**6-31*kStarF**4+33*kStarF**2-12) &
-         /(kStarF**4*(1-kStarF**2)**3) * EllipticEf &
-         - (19*kStarF**4-27*kStarF**2+12) &
-         /(kStarF**4*(1-kStarF**2)**2) * EllipticKf
+    FuncAf = ((2-KstarF**2)*EllipticKf - 2*EllipticEf) / KstarF
+    dFuncAf = (2-KstarF**2)/(KstarF**2*(1-KstarF**2)) * EllipticEf &
+         - 2/(KstarF**2) * EllipticKf
+    d2FuncAf = -(KstarF**4-7*KstarF**2+4)/(KstarF**3*(1-KstarF**2)**2) &
+         *EllipticEf - (5*KstarF**2-4)/(KstarF**3*(1-KstarF**2))*EllipticKf
+    d3FuncAf = -(2*KstarF**6-31*KstarF**4+33*KstarF**2-12) &
+         /(KstarF**4*(1-KstarF**2)**3) * EllipticEf &
+         - (19*KstarF**4-27*KstarF**2+12) &
+         /(KstarF**4*(1-KstarF**2)**2) * EllipticKf
 
     ! curly-A function for k_(five-sided-star)
     RhoStarG = aTube*(1 + Delta*SewingG)
-    kStarG = sqrt((RPerp*RTube)/(RPerp*RTube+RhoStarG**2/4.))
-    dKSGdX = - (xRel*kStarG**3) / (4*RPerp*RTube) * dSewingG*RhoStarG/RMinus
-    dKSGdR = kStarG**3/(8*RPerp**2*RTube) &
+    KstarG = sqrt((RPerp*RTube)/(RPerp*RTube+RhoStarG**2/4.))
+    dKSGdX = - (xRel*KstarG**3) / (4*RPerp*RTube) * dSewingG*RhoStarG/RMinus
+    dKSGdR = KstarG**3/(8*RPerp**2*RTube) &
          * (RhoStarG**2 - 2*RPerp*(RPerp-RTube)*dSewingG*RhoStarG/RMinus)
 
-    call calc_elliptic_int_1kind(kStarG,EllipticKg)
-    call calc_elliptic_int_2kind(kStarG,EllipticEg)
+    call calc_elliptic_int_1kind(KstarG,EllipticKg)
+    call calc_elliptic_int_2kind(KstarG,EllipticEg)
 
-    FuncAg = ((2-kStarG**2)*EllipticKg - 2*EllipticEg) / kStarG
-    dFuncAg = (2-kStarG**2)/(kStarG**2*(1-kStarG**2)) * EllipticEg - &
-         2/(kStarG**2) * EllipticKg
-    d2FuncAg = -(kStarG**4-7*kStarG**2+4)/(kStarG**3*(1-kStarG**2)**2) &
-         *EllipticEg - (5*kStarG**2-4)/(kStarG**3*(1-kStarG**2))*EllipticKg
-    d3FuncAg = -(2*kStarG**6-31*kStarG**4+33*kStarG**2-12) &
-         /(kStarG**4*(1-kStarG**2)**3)*EllipticEg &
-         - (19*kStarG**4-27*kStarG**2+12) &
-         /(kStarG**4*(1-kStarG**2)**2)*EllipticKg
+    FuncAg = ((2-KstarG**2)*EllipticKg - 2*EllipticEg) / KstarG
+    dFuncAg = (2-KstarG**2)/(KstarG**2*(1-KstarG**2)) * EllipticEg - &
+         2/(KstarG**2) * EllipticKg
+    d2FuncAg = -(KstarG**4-7*KstarG**2+4)/(KstarG**3*(1-KstarG**2)**2) &
+         *EllipticEg - (5*KstarG**2-4)/(KstarG**3*(1-KstarG**2))*EllipticKg
+    d3FuncAg = -(2*KstarG**6-31*KstarG**4+33*KstarG**2-12) &
+         /(KstarG**4*(1-KstarG**2)**3)*EllipticEg &
+         - (19*KstarG**4-27*KstarG**2+12) &
+         /(KstarG**4*(1-KstarG**2)**2)*EllipticKg
 
     ! ---- ring current field B_I ----
     !
     ! A phi-component of vector potential
-    Ai = ITube/cTwoPi*sqrt(RTube/RPerp)* &
-         (FuncAf + dFuncAf*(Kappa - kStarF)+0.5*d2FuncAf*(Kappa - kStarF)**2)
+    Ai = Itube/cTwoPi*sqrt(RTube/RPerp)* &
+         (FuncAf + dFuncAf*(Kappa - KstarF)+0.5*d2FuncAf*(Kappa - KstarF)**2)
     !
     ! Its partial derivatives
     !
-    dAIdX = ITube/cTwoPi*sqrt(RTube/RPerp)*&
-         (dFuncAf*DKappaDx + d2FuncAf*DKappaDx*(Kappa - kStarF) &
-         + 0.5*d3FuncAf*dKSFdX*(Kappa - kStarF)**2)
-    dAIdR = ITube/cTwoPi*sqrt(RTube/RPerp) &
-         *(dFuncAf*DKappaDRperp + d2FuncAf*DKappaDRperp*(Kappa-kStarF) &
-         + 0.5*d3FuncAf*dKSFdR*(Kappa-kStarF)**2) - Ai/(2*RPerp)
+    dAIdX = Itube/cTwoPi*sqrt(RTube/RPerp)*&
+         (dFuncAf*DKappaDx + d2FuncAf*DKappaDx*(Kappa - KstarF) &
+         + 0.5*d3FuncAf*dKSFdX*(Kappa - KstarF)**2)
+    dAIdR = Itube/cTwoPi*sqrt(RTube/RPerp) &
+         *(dFuncAf*DKappaDRperp + d2FuncAf*DKappaDRperp*(Kappa-KstarF) &
+         + 0.5*d3FuncAf*dKSFdR*(Kappa-KstarF)**2) - Ai/(2*RPerp)
     !
     ! Poloidal magnetic field
     bI_D = - dAIdX*RPerpHat_D + (dAIdR + Ai/RPerp)*UnitX_D
@@ -1597,25 +1582,25 @@ contains
     ! ---- toroidal field B_theta ----
 
     ! just a temporary variable, same for tmpH below
-    TmpG = 3 + 4*dFuncAf*(Kappa-kStarF)
+    TmpG = 3 + 4*dFuncAf*(Kappa-KstarF)
 
-    dGdX = 4*(d2FuncAf*dKSFdX*(Kappa-kStarF)+dFuncAf*(DKappaDx-dKSFdX))
-    dGdR = 4*(d2FuncAf*dKSFdR*(Kappa-kStarF)+dFuncAf*(DKappaDRperp-dKSFdR))
+    dGdX = 4*(d2FuncAf*dKSFdX*(Kappa-KstarF)+dFuncAf*(DKappaDx-dKSFdX))
+    dGdR = 4*(d2FuncAf*dKSFdR*(Kappa-KstarF)+dFuncAf*(DKappaDRperp-dKSFdR))
 
     TmpH = (Kappa**3*(xRel**2 + RTube**2 - RPerp**2) - &
-         aTube**2*kStarG**3)*dFuncAg + &
-         aTube**2*kStarG**3*d2FuncAg*(Kappa-kStarG)
+         aTube**2*KstarG**3)*dFuncAg + &
+         aTube**2*KstarG**3*d2FuncAg*(Kappa-KstarG)
     dHdR = (3*Kappa**2*DKappaDRperp*(xRel**2 + RTube**2 -RPerp**2) - &
          2*Kappa**3*RPerp-&
-         3*aTube**2*kStarG**2*dKSGdR)*dFuncAg + &
+         3*aTube**2*KstarG**2*dKSGdR)*dFuncAg + &
          (Kappa**3*(xRel**2 + RTube**2 - RPerp**2) - &
-         aTube**2*kStarG**3)*d2FuncAg*dKSGdR + &
-         aTube**2*( (3*kStarG**2*dKSGdR*(Kappa - kStarG) &
-         + kStarG**3*(DKappaDRperp - dKSGdR))*d2FuncAg &
-         + kStarG**3*(Kappa - kStarG)*d3FuncAg*dKSGdR )
+         aTube**2*KstarG**3)*d2FuncAg*dKSGdR + &
+         aTube**2*( (3*KstarG**2*dKSGdR*(Kappa - KstarG) &
+         + KstarG**3*(DKappaDRperp - dKSGdR))*d2FuncAg &
+         + KstarG**3*(Kappa - KstarG)*d3FuncAg*dKSGdR )
 
     Afx = AxialFlux/(4*cPi*RPerp)*sqrt(RTube/RPerp) * &
-         ( FuncAg + (aTube**2*kStarG**3)/(4*RPerp*RTube)*dFuncAg &
+         ( FuncAg + (aTube**2*KstarG**3)/(4*RPerp*RTube)*dFuncAg &
          + TmpG**(5./2.)/(30*sqrt(3.)) &
          - 0.3 + TmpG**(3./2.)/(12*sqrt(3.)*RPerp*RTube)*TmpH )
 
@@ -1625,9 +1610,9 @@ contains
          + (Kappa**3+3*xRel*Kappa**2*DKappaDx)*dFuncAf))
     dAFXdR = (AxialFlux*sqrt(RTube))/(4*cPi)*RPerp**(-3./2.) &
          * ( dFuncAg*dKSGdR + &
-         aTube**2/(4*RTube)*((3*kStarG**2*RPerp*dKSGdR-kStarG**3) &
+         aTube**2/(4*RTube)*((3*KstarG**2*RPerp*dKSGdR-KstarG**3) &
          /(RPerp**2)*dFuncAg + &
-         kStarG**3/RPerp*d2FuncAg*dKSGdR) &
+         KstarG**3/RPerp*d2FuncAg*dKSGdR) &
          + TmpG**(3./2.)/(12*sqrt(3.))*dGdR + &
          1./(12*sqrt(3.)*RTube)*((1.5*sqrt(TmpG)*dGdR*RPerp-TmpG**(3./2.)) &
          /(RPerp**2)*TmpH + &
@@ -1642,7 +1627,7 @@ contains
 
   end subroutine tdm
   !============================================================================
-  subroutine compute_TD99_BqField(Xyz_D, BqField_D, TimeNow)
+  subroutine compute_td99_bqfield(Xyz_D, BqField_D, TimeNow)
     !$acc routine seq
 
     real, intent(in)  :: Xyz_D(3)
@@ -1691,14 +1676,14 @@ contains
     BqField_D = (BqField_D + &
          q*(RPlusMoving_D/RPlus**3 - RMinusMoving_D/RMinus**3))*No2Si_V(UnitB_)
 
-  end subroutine compute_TD99_BqField
+  end subroutine compute_td99_BqField
   !============================================================================
-  subroutine get_TD99_size(SizeXY,  SizeZ)
+  subroutine get_td99_size(SizeXY,  SizeZ)
     real,  intent(out) :: SizeXY,  SizeZ
     !--------------------------------------------------------------------------
     SizeXY = sqrt( (rTube + aTube)**2 - Depth**2 ) ! Horrizontal size
     SizeZ  = rTube +  aTube - Depth                ! Apex height
-  end subroutine get_TD99_size
+  end subroutine get_td99_size
   !============================================================================
 end module EEE_ModTD99
 !==============================================================================
