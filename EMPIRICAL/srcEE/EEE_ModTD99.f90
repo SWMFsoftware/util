@@ -1117,7 +1117,7 @@ contains
     Rotate_DD  = matmul(rot_xyz_mercator(DirCme_D), &
          rot_matrix_z(OrientationCme*cDegToRad))
 
-    ! In the rotated frane magnetic field at the center of configuration
+    ! In the rotated frame magnetic field at the center of configuration
     ! is antiparallel to x-axis
     UnitX_D = matmul(Rotate_DD, [-1.0, 0.0, 0.0])
 
