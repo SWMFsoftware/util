@@ -562,8 +562,9 @@ def FITS_RECOGNIZE(inputfile, IsSilent=True):
             print ("unknown NSO-GONG magnetogram type")
             return(-1)
 
-    if telescope.find('SOHO') > -1:
-        if ( (inst.find('MDI') > -1) & (ctyp.find('Sine Latitude') > -1) ):
+    if ( (telescope.find('SOHO') > -1) or (telescope.find('SoHO') > -1)):
+        if ( (inst.find('MDI') > -1) & (ctyp.find('Sine Latitude') > -1
+                                        or cunit.find('Sine Latitude')) > -1 ):
             magnetogram_type = 'MDI Synoptic'
             grid_type = 'sin(lat)'
             map_data = 'MDI'
