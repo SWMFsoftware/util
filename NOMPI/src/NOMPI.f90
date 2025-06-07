@@ -765,3 +765,25 @@ subroutine MPI_FILE_READ
   write(*,*)'MPI_FILE_WRITE is not implemented in NOMPI library'
 
 end subroutine MPI_FILE_READ
+
+subroutine MPI_FILE_OPEN
+
+  write(*,*)'MPI_FILE_OPEN is not implemented in NOMPI library'
+
+end subroutine MPI_FILE_OPEN
+
+subroutine MPI_FILE_WRITE_AT(fh, offset, buf, count, datatype, status, &
+     ierror)
+  use ModMpiOrig, only: mpi_status_size, mpi_offset_kind
+
+  integer, intent(in) :: fh
+  integer(kind=mpi_offset_kind), intent(in) :: offset
+  integer,  intent(in) :: buf
+  integer, intent(in) :: count
+  integer, intent(in) :: datatype
+  integer, intent(in) :: status(mpi_status_size)
+  integer, intent(out) :: ierror
+
+  write(*,*)'MPI_FILE_WRITE_AT is not implemented in NOMPI library'
+
+end subroutine MPI_FILE_WRITE_AT
