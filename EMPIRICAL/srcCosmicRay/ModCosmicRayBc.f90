@@ -8,7 +8,8 @@ module ModCosmicRay
      module procedure local_interstellar_spectrum_a
   end interface local_interstellar_spectrum
 
-  character(LEN=18), public :: TypeLisBc = 'default' ! Decide which LIS to use
+  ! Decide which model for LIS to use (usoskin or corti)
+  character(LEN=18), public :: TypeLisBc = 'usoskin' 
   logical, public :: UseModulationPot = .false.
   real,    public :: ModulationPot = 0.0             ! phi, in the unit of MV
 contains
@@ -104,12 +105,12 @@ contains
 
     ! Calculate LIS based on the input of TypeLisBc
     select case(trim(TypeLisBc))
-    case('default', 'usoskin2005')
+    case('usoskin')
        ! For Eq.(2) in Usoskin et al. 2005 (doi: 10.1029/2005JA011250)
        ! Formula Input: R(E_K/A + Phi)[GV]; Output: j_LIS[.../(GeV/nuc)]
        DistTimesP2Gn_I = 1.9E+4*RigidityGv_I**(-2.78)/ &
             (1.0+0.4866*RigidityGv_I**(-2.51))
-    case('corti2019')
+    case('corti')
        ! For Eq.(13) in Corti et al. 2019 (doi: 10.3847/1538-4357/aafac4)
        ! Formula Input: R(E_K)[GV]; Output: j_LIS[.../(GV)]
        DistTimesP2Gn_I = cFit*(RigidityGv_I**Gamma0Fit)
