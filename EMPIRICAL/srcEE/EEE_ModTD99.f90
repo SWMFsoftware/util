@@ -432,7 +432,7 @@ module ModCurrentFilament
   logical :: UseParabolicCurrent = .false.
   ! Inductunce  coefficient; the ratio of the total inductance of the filament
   ! in the SI units ormalized by \mu_0 R_\infty
-  real :: Inductance
+  real :: Inductance = 0.0
 
   !$acc declare create(rInfty, rInfty2, KappaPrime0, Inductance)
 contains
