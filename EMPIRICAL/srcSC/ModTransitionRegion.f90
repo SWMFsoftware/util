@@ -31,7 +31,7 @@ module ModTransitionRegion
      ! the chromosphere to the face with the index -nCell
      ! Ds_G(0) is the distance from the center of interface
      ! between the threaded gap and the computational domain to
-     ! simulate SC, and the point used to interpolate the state variables
+     ! simulate SC, to the point used to interpolate the state variables
      ! at the said interface. In meters
      real, pointer :: Ds_G(:)
      ! Magnetic field intensity (SI) in the points further associated to
@@ -44,6 +44,9 @@ module ModTransitionRegion
      ! CELL (nor face!) centered array of the physical quantities
      ! to be solved for the given thread
      real, pointer :: State_VG(:,:)
+     ! Set of primiteve variables, to be used for limiing the variables
+     ! at the upper boundary face
+     real, pointer :: LimiterPrim_V(:)
      ! Cell-centered array of B1 (induction) field
      real, pointer :: B1_DG(:,:)
      ! Unit direction vector of the cell-centered magnetic field
@@ -739,6 +742,7 @@ contains
       allocate(OpenThread1%DirB_DG(3,-nCell:0))
       allocate(OpenThread1%ConservativeOld_VC(Rho_:Wminor_,-nCell:-1))
       allocate(OpenThread1%State_VG(Rho_:Wminor_,-nCell:0))
+      allocate(OpenThread1%LimiterPrim_V(Rho_:Wminor_))
     end subroutine allocate_pointer
     !==========================================================================
     subroutine deallocate_pointer
@@ -753,6 +757,7 @@ contains
       deallocate(OpenThread1%DirB_DG)
       deallocate(OpenThread1%ConservativeOld_VC)
       deallocate(OpenThread1%State_VG)
+      deallocate(OpenThread1%LimiterPrim_V)
     end subroutine deallocate_pointer
     !==========================================================================
     subroutine init_thread_variables(OpenThread1)
@@ -847,6 +852,7 @@ contains
       nullify(OpenThread1%Coord_DF)
       nullify(OpenThread1%B_F)
       nullify(OpenThread1%Ds_G)
+      nullify(OpenThread1%LimiterPrim_V)
       OpenThread1%TeTr = -1.0
       OpenThread1%uTr  = -1.0
       OpenThread1%PeTr = -1.0
@@ -891,6 +897,7 @@ contains
       deallocate(OpenThread1%Coord_DF)
       deallocate(OpenThread1%B_F)
       deallocate(OpenThread1%Ds_G)
+      deallocate(OpenThread1%LimiterPrim_V)
     end subroutine deallocate_thread
     !==========================================================================
   end subroutine deallocate_thread_arr
@@ -1078,6 +1085,8 @@ contains
     real :: PparHeating, PperpHeating, PeHeating
     ! Loop variables:
     integer :: iCell, iFace
+    ! Vector of primitives used in limiting
+    real :: LimiterPrim_V(Rho_:Wminor_), DeltaLtd_V(Rho_:Wminor_)
     character(len=*), parameter:: NameSub = 'advance_thread_expl'
     !--------------------------------------------------------------------------
     if(present(DtIn).and.(.not.IsTimeAccurate))call CON_stop(&
@@ -1205,6 +1214,22 @@ contains
     ! limiter function) approximates the face value
     dVarUp_V = Ds_G(-1)/(0.50*Ds_G(-1) + Ds_G(0))*&
          (Primitive_VG(:,0) - Primitive_VG(:,-1))
+    if(present(LeftFace0_V))then
+       LimiterPrim_V = OpenThread1%LimiterPrim_V
+       if(DoLimitLogVar)then
+          if(any(LimiterPrim_V(iLogVar_V)<=0.0))&
+               call CON_stop('Negative pressure/density in the limiter state')
+          LimiterPrim_V(iLogVar_V) = log(LimiterPrim_V(iLogVar_V))
+       end if
+       ! This is the slope between the rightmost physical cell
+       ! on the thread, Primitive_VG(:,-1), and the leftmost state in the
+       ! physical cell in the SC, which is passed here as LimiterPrim_V
+       DeltaLtd_V = LimiterPrim_V - Primitive_VG(:,-1)
+       ! Now, we limit dVarUp_V to get the limited-slope-interpolated
+       ! value at the boundary face lay between the said two physical states
+       dVarUp_V = (sign(0.5, dVarUp_V) + sign(0.5, DeltaLtd_V))*&
+            min(abs(dVarUp_V), abs(DeltaLtd_V))
+    end if
     ! Calculate and apply the limited slopes, to get the limited
     ! reconstructed values:
     pRight_VF(:,-1) = Primitive_VG(:,-1) - &
