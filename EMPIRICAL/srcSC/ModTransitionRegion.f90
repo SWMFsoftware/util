@@ -1484,46 +1484,46 @@ contains
 
       ! exact solver
 
-      call exact_rs_pu_star(3.0, 3.0, UseAnotherRS=UseArtificialWind)
+      call exact_rs_pu_star(3.0, 3.0) !, UseAnotherRS=UseArtificialWind)
       
-      if(UseArtificialWind)then
-         ConsL_V = pLeft_V
-         ! Except:
-         ! 1. Momentum density
-         ConsL_V(RhoU_)   = pLeft_V(U_)*pLeft_V(Rho_)
+      ! if(UseArtificialWind)then
+      !   ConsL_V = pLeft_V
+          ! Except:
+          ! 1. Momentum density
+         ! ConsL_V(RhoU_)   = pLeft_V(U_)*pLeft_V(Rho_)
          ! 2. Energy density
-         ConsL_V(Energy_) = 0.50*pLeft_V(Ppar_) + &
-              0.50*ConsL_V(RhoU_)*pLeft_V(U_)
+         ! ConsL_V(Energy_) = 0.50*pLeft_V(Ppar_) + &
+         !     0.50*ConsL_V(RhoU_)*pLeft_V(U_)
          ! 3. "Conserved" electron parallel energy density is a half of PePar
-         ConsL_V(PePar_)  = 0.50*pLeft_V(PePar_)
-         FluxL_V          = UnL*ConsL_V
-         FluxL_V(RhoU_)   = FluxL_V(RhoU_) + PL
-         FluxL_V(Energy_) = FluxL_V(Energy_) + PL*UnL
+         ! ConsL_V(PePar_)  = 0.50*pLeft_V(PePar_)
+         ! FluxL_V          = UnL*ConsL_V
+         ! FluxL_V(RhoU_)   = FluxL_V(RhoU_) + PL
+         ! FluxL_V(Energy_) = FluxL_V(Energy_) + PL*UnL
 
-         ConsR_V = pRight_V
+         ! ConsR_V = pRight_V
          ! Except:
          ! 1. Momentum density
-         ConsR_V(RhoU_)   = pRight_V(U_)*pRight_V(Rho_)
+         ! ConsR_V(RhoU_)   = pRight_V(U_)*pRight_V(Rho_)
          ! 2. Energy density
-         ConsR_V(Energy_) = 0.50*pRight_V(Ppar_) + &
-              0.50*ConsR_V(RhoU_)*pRight_V(U_)
+         ! ConsR_V(Energy_) = 0.50*pRight_V(Ppar_) + &
+         !     0.50*ConsR_V(RhoU_)*pRight_V(U_)
          ! 3. "Conserved" electron parallel energy density is a half of PePar
-         ConsR_V(PePar_)  = 0.50*pRight_V(PePar_)
-         FluxR_V          = UnR*ConsR_V
-         FluxR_V(RhoU_)   = FluxR_V(RhoU_)   + PR
-         FluxR_V(Energy_) = FluxR_V(Energy_) + PR*UnR
+         ! ConsR_V(PePar_)  = 0.50*pRight_V(PePar_)
+         ! FluxR_V          = UnR*ConsR_V
+         ! FluxR_V(RhoU_)   = FluxR_V(RhoU_)   + PR
+         ! FluxR_V(Energy_) = FluxR_V(Energy_) + PR*UnR
          
-         Cleft = WL; Cright = WR
-         WeightL   = Cright/(Cright - Cleft)
-         WeightR   = 1.0 - WeightL
-         Diffusion = Cright*WeightR
+         ! Cleft = WL; Cright = WR
+         ! WeightL   = Cright/(Cright - Cleft)
+         ! WeightR   = 1.0 - WeightL
+         ! Diffusion = Cright*WeightR
       
-         Flux_V = FluxL_V*WeightL + FluxR_V*WeightR + &
-              Diffusion*(ConsL_V - ConsR_V)
-         UnFace  = UnL* WeightL + UnR* WeightR
-         RhoFace = RhoL*WeightL + RhoR*WeightR
-         RETURN
-      end if
+         ! Flux_V = FluxL_V*WeightL + FluxR_V*WeightR + &
+         !     Diffusion*(ConsL_V - ConsR_V)
+         ! UnFace  = UnL* WeightL + UnR* WeightR
+         ! RhoFace = RhoL*WeightL + RhoR*WeightR
+         ! RETURN
+      ! end if
       call exact_rs_sample(0.0, RhoFace, UnFace, TotalP)
 
       ! Store WL WR
