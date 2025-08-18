@@ -64,6 +64,7 @@ module ModTransitionRegion
      ! from -nCell to -1
      integer :: nCell = -1
      real    :: OpenFlux = 0.0 ! [T Rsun**2]
+     real    :: Tmax = -1.0
   end type OpenThread
   public :: OpenThread
 
@@ -576,6 +577,8 @@ contains
   !============================================================================
   subroutine set_thread(XyzIn_D, FaceArea, OpenThread1, &
        xyz_to_coord, get_field)
+
+    use ModLookupTable, ONLY: interpolate_lookup_table
     ! Origin point coordinates (Xyz)
     real, intent(in) :: XyzIn_D(3)
     ! Face area, to calculate flux
@@ -616,6 +619,8 @@ contains
     real :: Coord_DI(3,-nPointMax:0), R_F(-nPointMax:0)
     real :: CosBrMin = -1.0
     integer :: iRefine ! Factor of step refinement near null point
+    real :: BLength
+    real :: HeatFluxXLength, Value_V(LengthPavrSi_:DlogLambdaOverDlogT_)
     ! Trace the open thread with the given origin point
     character(len=*), parameter:: NameSub = 'set_thread'
     !--------------------------------------------------------------------------
@@ -728,6 +733,19 @@ contains
        OpenThread1%nCell = nCell
        call init_thread_variables(OpenThread1)
     end if
+    ! TMax [K], such that the ingoing heat flux to the TR at this
+    ! temperature equals the Poynting flux (which is not realistic and means
+    ! that the input temperature exceeding TMax assumes that something is
+    ! going wrong
+    BLength = sum((OpenThread1%B_F(-nCell:-1) + OpenThread1%B_F(1-nCell:0))*&
+         0.50*OpenThread1%Ds_G(-nCell:-1))
+    HeatFluxXLength = 2*PoyntingFluxPerBSi*BLength
+    call interpolate_lookup_table(iTable=iTableTR, Arg2In=0.0, &
+         iVal=HeatFluxLength_, &
+         ValIn=HeatFluxXLength,&
+         Value_V=Value_V,      &
+         Arg1Out=OpenThread1%TMax,  &
+         DoExtrapolate=.false.)
   contains
     !==========================================================================
     subroutine allocate_pointer
