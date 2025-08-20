@@ -672,8 +672,8 @@ contains
              R = norm2(XyzStart_D)
              call get_field(XyzStart_D, B_D)
              ! Don't allow magnetic field too much decline from radial dir
-             CosBRMin = ( (R**2-rChromo**2)/nPointMax +Ds0**2)/&
-                  (2*rChromo*Ds0)
+             CosBRMin = ((R**2 - rChromo**2)/(nPointMax - 2) &
+                  + (R*Ds0)**2)/ (2*rChromo*Ds0)
              if(CosBRMin>0.9)call CON_stop('Increase nPointThreadMax')
              ! Prohibit step refinement
              iRefine = 1
