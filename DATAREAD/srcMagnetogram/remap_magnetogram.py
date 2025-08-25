@@ -728,7 +728,12 @@ def read_bats(inputfile):
     """
     f = open(inputfile,'r')
     # Header line
-    StrHeader=f.readline()
+    string=f.readline()
+    array=string.split()
+    StrHeader=''
+    for x in array:
+        StrHeader=StrHeader+' '+str(x)
+    print(StrHeader)
     # Second line
     string=f.readline()
     array=string.split()
@@ -751,7 +756,11 @@ def read_bats(inputfile):
     Param_I=[float(x) for  x in string.split()]
     print('Param_I = '+str(Param_I))
     # Fifth line
-    NameVar=f.readline()
+    NameVar=''
+    string=f.readline()
+    array=string.split()
+    for x in array:
+        NameVar=NameVar+' '+str(x)
     print(NameVar)
     # Allocate data arrays
     Coord1_I = np.zeros(nIndex_I[0])
