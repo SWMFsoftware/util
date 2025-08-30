@@ -378,12 +378,12 @@ Contains
               IonizPotential_II(1:nZ_I(iMix),iMix)*TeInv) )
 
 
-         if(iZ(1)==1)then
+         if(iZ(1) == 1)then
             !Find zAv in the case when Z<=1
-            InitZ_I(iMix)  = min( 1.0, exp(cHalf*( lnC1 -IonizPotential_II(1,iMix)*TeInv) ) )
+            InitZ_I(iMix)  = min( 1.0, exp(0.5*( lnC1 -IonizPotential_II(1,iMix)*TeInv) ) )
          else
             !Apply the above estimate
-            InitZ_I(iMix)  = real(iZ( 1)) -cHalf
+            InitZ_I(iMix)  = iZ(1) - 0.5
 
          end if
 
