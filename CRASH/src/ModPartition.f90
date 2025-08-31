@@ -1,4 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 module CRASH_ModPartition
@@ -337,14 +338,14 @@ Contains
     Te = TeIn
     call init_madelung(NaIn)
 
-    if( Te <= 0.02 * minval( IonizPotential_II( 1,1:nMix) ) )then
+    if(Te <= 0.02*minval(IonizPotential_II(1,1:nMix)))then
        call set_zero_ionization
        call check_applicability(iError)
-       return
+       RETURN
     end if
 
-    TeInv = cOne / TeIn        ! 1/kT; units: [1/eV]
-    lnC1  = log( eWeight1eV1m3  * sqrt(TeIn)*TeIn / Na)
+    TeInv = 1/TeIn        ! 1/kT; units: [1/eV]
+    lnC1  = log(eWeight1eV1m3*sqrt(TeIn)*TeIn /Na)
 
     call set_Z
     call set_averages_and_deviators(DoZOnly=.false.)
@@ -432,11 +433,11 @@ Contains
             call set_averages_and_deviators(DoZOnly = .true.)
 
 
-            DiffZ = (ZTrial - zAv)/(cOne + DeltaZ2Av/ZTrial)
+            DiffZ = (ZTrial - zAv)/(1 + DeltaZ2Av/ZTrial)
             ZNew = ZTrial - DiffZ
 
 
-            iIter = iIter+1
+            iIter = iIter + 1
          end do
       end if
 
@@ -701,22 +702,22 @@ Contains
            )then
          do iMix=1,nMix
             DeltaZ2Av = DeltaZ2Av + Concentration_I(iMix)*&
-                 (Z_I(iMix) - zAv) **2
+                 (Z_I(iMix) - zAv)**2
             if(DoZOnly)CYCLE
             DeltaETeInv2Av   = DeltaETeInv2Av + Concentration_I(iMix)*&
                  (ETeInvAv_I(iMix) - EAv)**2
 
             ETeInvDeltaZAv   = ETeInvDeltaZAv + Concentration_I(iMix)*&
-                 (ETeInvAv_I(iMix) - EAv) * (Z_I(iMix) - zAv)
+                 (ETeInvAv_I(iMix) - EAv)*(Z_I(iMix) - zAv)
 
             CovEnergyVirial = CovEnergyVirial + Concentration_I(iMix)*&
-                 (ETeInvAv_I(iMix) - EAv) * (VirialCoeff_I(iMix) - VirialCoeffAv)
+                 (ETeInvAv_I(iMix) - EAv)*(VirialCoeff_I(iMix) - VirialCoeffAv)
             
             Cov2Virial = Cov2Virial + Concentration_I(iMix)*&
                  (VirialCoeff_I(iMix) - VirialCoeffAv)**2
             
             CovVirialZ = CovVirialZ - Concentration_I(iMix)*&
-                 (Z_I(iMix) - zAv) * (VirialCoeff_I(iMix) - VirialCoeffAv)
+                 (Z_I(iMix) - zAv)*(VirialCoeff_I(iMix) - VirialCoeffAv)
          end do
       end if
 
