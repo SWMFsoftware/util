@@ -203,8 +203,8 @@ module ModTransitionRegion
   real, public :: BMinSi  = 0.0125*Gs2Si
 
   ! Minimum pressure and density
-  real, public :: MinPress = 0.0
-  real, public :: MinRho = 0.0
+  real, public :: MinPress = 1.e-14   ! Pa
+  real, public :: MinRho = 1.e-23     ! kg/m3
   ! Constant values read from the parameter file,
   ! if the uniform partitioning is assumed for dissipated turbulent energy
   real :: QparPerQtotal, QperpPerQtotal, QePerQtotal
@@ -232,6 +232,11 @@ contains
     !--------------------------------------------------------------------------
     if(.not.DoInit)RETURN
     DoInit = .false.
+    if(UseChromoEvap)then
+       ChromoEvapCoef = TeTrMin
+    else
+       ChromoEvapCoef = 0.0
+    end if
     ! Set model parameters
     Z = zIn
     SqrtZ = sqrt(Z)
@@ -289,15 +294,7 @@ contains
 
     select case(NameCommand)
     case('#CHROMOEVAPORATION')
-       DoLimitLogVar = .true.
-       MinPress = 1.e-14     ! Pa
-       MinRho   = 1.e-23     ! kg/m3
        call read_var('UseChromoEvap',UseChromoEvap)
-       if(UseChromoEvap)then
-          ChromoEvapCoef = TeTrMin
-       else
-          ChromoEvapCoef = 0.0
-       end if
     case("#STOCHASTICHEATING")
        UseStochasticHeating = .true.
        ! Stochastic heating when Beta_proton is below 1
@@ -1285,8 +1282,8 @@ contains
     end do
     ! Set the speed on top of the transition region from the RS:
     ! Fix 2025-3-13
-    OpenThread1%uTr = 0.0 ! Un_F(-nCell)*Rho_F(-nCell)/(&
-         ! OpenThread1%PeTr*cProtonMass/(OpenThread1%TeTr*cBoltzmann))
+    OpenThread1%uTr = Un_F(-nCell)*Rho_F(-nCell)/(&
+         OpenThread1%PeTr*cProtonMass/(OpenThread1%TeTr*cBoltzmann))
     call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
     ! Correct pressure for updated plasma speed
     OpenThread1%PeTr = TrTable_V(LengthPavrSi_)/Ds_G(-nCell-1)
@@ -2221,6 +2218,8 @@ contains
          ParamIn_I= [OpenThread1%TeTr,&
          OpenThread1%uTr,&
          OpenThread1%PeTr,&
+         OpenThread1%TMax,&
+         OpenThread1%Te_G(0),&
          OpenThread1%Dt],&
          VarIn_VI= Value_VI(:,-nCell:-1), &
          TypeFileIn    = 'ascii',           &
@@ -2230,10 +2229,10 @@ contains
          NameUnitsIn  = &
          '[Rsun] '//&
          '[kg/m3] [m/s] [J/m3] [J/m3] [J/m3] [J/m3] [K] [K] [Gs] '//&
-         '[K] [m/s] [J/m3] [s]',&
+         '[K] [m/s] [J/m3] [K] [K] [s]',&
          NameVarIn = 'R '//&
          'Rho U P Pe Wp Wm Ti Te B'//&
-         ' TeTR UTR PeTR Dt' )
+         ' TeTR UTR PeTR TMax Te0 Dt' )
   end subroutine save_plot_thread
   !============================================================================
   subroutine test
