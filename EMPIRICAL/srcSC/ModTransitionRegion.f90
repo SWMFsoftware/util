@@ -1500,7 +1500,7 @@ contains
       ! exact solver
 
       call exact_rs_pu_star(3.0, 3.0) !, UseAnotherRS=UseArtificialWind)
-      
+
       ! if(UseArtificialWind)then
       !   ConsL_V = pLeft_V
           ! Except:
@@ -1527,12 +1527,12 @@ contains
          ! FluxR_V          = UnR*ConsR_V
          ! FluxR_V(RhoU_)   = FluxR_V(RhoU_)   + PR
          ! FluxR_V(Energy_) = FluxR_V(Energy_) + PR*UnR
-         
+
          ! Cleft = WL; Cright = WR
          ! WeightL   = Cright/(Cright - Cleft)
          ! WeightR   = 1.0 - WeightL
          ! Diffusion = Cright*WeightR
-      
+
          ! Flux_V = FluxL_V*WeightL + FluxR_V*WeightR + &
          !     Diffusion*(ConsL_V - ConsR_V)
          ! UnFace  = UnL* WeightL + UnR* WeightR
@@ -2187,52 +2187,55 @@ contains
 
     type(OpenThread),intent(inout) :: OpenThread1
     character(LEN=*), intent(in) :: NameFile
-    integer, parameter :: sWPlus_ = 5, sWminus_ = 6,sTi_=7,  sTe_=8, &
-         iPlotVar_V(Rho_:sWminus_) = [Rho_, U_, P_, Pe_, Wmajor_, Wminor_]
-    real :: Value_VI(Rho_:sTe_+1,-nPointMax:-1)
+    integer, parameter :: sWPlus_ = 6, sWminus_ = 7,sTi_=8,  sTe_=9, &
+         iPlotVar_V(Rho_:sWminus_) = [Rho_, U_, Ppar_,P_, Pe_, Wmajor_, Wminor_]
+    real :: Value_VI(Rho_:sTe_+1,-nPointMax:0), Coord_I(-nPointMax:0)
     real, pointer :: State_VG(:,:)
     integer :: nCell
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
     State_VG => OpenThread1%State_VG
-    Value_VI(Rho_:sWminus_,-nCell:-1) = State_VG(iPlotVar_V,-nCell:-1)
+    Value_VI(Rho_:sWminus_,-nCell:0) = State_VG(iPlotVar_V,-nCell:0)
     if(sign(1.0, OpenThread1%OpenFlux) > 0)then
-       Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:-1))*State_VG(Wmajor_,-nCell:-1)
-       Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:-1))*State_VG(Wminor_,-nCell:-1)
+       Value_VI(sWplus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VG(Rho_,-nCell:0))*State_VG(Wmajor_,-nCell:0)
+       Value_VI(sWminus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VG(Rho_,-nCell:0))*State_VG(Wminor_,-nCell:0)
 
     else
-       Value_VI(sWplus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:-1))*State_VG(Wminor_,-nCell:-1)
-       Value_VI(sWminus_,-nCell:-1) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:-1))*State_VG(Wmajor_,-nCell:-1)
+       Value_VI(sWplus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VG(Rho_,-nCell:0))*State_VG(Wminor_,-nCell:0)
+       Value_VI(sWminus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
+            State_VG(Rho_,-nCell:0))*State_VG(Wmajor_,-nCell:0)
     end if
-    Value_VI(sTi_,-nCell:-1) = State_VG(P_,-nCell:-1)*cProtonMass/&
-         (cBoltzmann*State_VG(Rho_,-nCell:-1))
-    Value_VI(sTe_,-nCell:-1) = OpenThread1%Te_G(-nCell:-1)
+    Value_VI(sTi_,-nCell:0) = State_VG(P_,-nCell:0)*cProtonMass/&
+         (cBoltzmann*State_VG(Rho_,-nCell:0))
+    Value_VI(sTe_,-nCell:0) = OpenThread1%Te_G(-nCell:0)
     Value_VI(sTe_+1,-nCell:-1) = &
          OpenThread1%B_F(-nCell:-1)*Si2Gs
+    Value_VI(sTe_+1,0) = Value_VI(sTe_+1,-1)
+    Coord_I(-nCell:-1) = 0.5*(OpenThread1%R_F(-nCell:-1) +&
+         OpenThread1%R_F(-nCell+1:0))
+    Coord_I(0) = OpenThread1%R_F(0)
     call save_plot_file(NameFile = NameFile,  &
          nDimIn  = 1,                       &
          ParamIn_I= [OpenThread1%TeTr,&
          OpenThread1%uTr,&
          OpenThread1%PeTr,&
          OpenThread1%TMax,&
-         OpenThread1%Te_G(0),&
+         sign(1.0,OpenThread1%OpenFlux),&
          OpenThread1%Dt],&
-         VarIn_VI= Value_VI(:,-nCell:-1), &
+         VarIn_VI= Value_VI(:,-nCell:0), &
          TypeFileIn    = 'ascii',           &
-         CoordIn_I  = 0.5*(OpenThread1%R_F(-nCell:-1) +&
-         OpenThread1%R_F(-nCell+1:0)), &
+         CoordIn_I  = Coord_I(-nCell:0), &
          StringHeaderIn  = 'Thread file ', &
          NameUnitsIn  = &
          '[Rsun] '//&
-         '[kg/m3] [m/s] [J/m3] [J/m3] [J/m3] [J/m3] [K] [K] [Gs] '//&
-         '[K] [m/s] [J/m3] [K] [K] [s]',&
+         '[kg/m3] [m/s] [J/m3] [J/m3] [J/m3] [J/m3] [J/m3] [K] [K] [Gs] '//&
+         '[K] [m/s] [J/m3] [K] [1] [s]',&
          NameVarIn = 'R '//&
-         'Rho U P Pe Wp Wm Ti Te B'//&
-         ' TeTR UTR PeTR TMax Te0 Dt' )
+         'Rho U Ppar P Pe Wp Wm Ti Te B'//&
+         ' TeTR UTR PeTR TMax SignB Dt' )
   end subroutine save_plot_thread
   !============================================================================
   subroutine test
