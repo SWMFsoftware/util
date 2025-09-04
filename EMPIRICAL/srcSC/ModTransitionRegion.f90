@@ -1175,6 +1175,7 @@ contains
     ! 1. logarithm of density/pressure is better to be limited
     if(DoLimitLogVar.and.any(Primitive_VG(iLogVar_V,-nCell-1:0)<=0.0))then
        write(*,*)'-ncell-1=',-nCell - 1
+       write(*,*)'Stage=', iStage
        write(*,*)'OpenThread TeTr=', OpenThread1%TeTr
        write(*,*)'OpenThread uTr=', OpenThread1%uTr
        write(*,*)'OpenThread PeTr=', OpenThread1%PeTr
@@ -1184,6 +1185,8 @@ contains
                write(*,*)'iCell=',iCell,' state:',&
                Primitive_VG(:,iCell)
        end do
+       if(present(RightFace0_V))&
+            write(*,*)'RightFace0_V=',RightFace0_V
        call save_plot_thread(OpenThread1,'failed_thread.out')
        call CON_stop('Negative pressure/density')
     end if
@@ -1481,7 +1484,7 @@ contains
       real    :: UpwindState_V(Rho_:Wminor_), &
            TotalP, DensityRatio, PparFace, ExtraP, ExtraPright, ExtraPleft
       ! To calculate AW flux, if needed
-      logical :: UseArtificialWind = .false.
+      logical :: DoStop = .false.
       real, dimension(Rho_:Wminor_) :: ConsL_V, ConsR_V, FluxL_V, FluxR_V
       real :: WeightL, WeightR, Diffusion
       !------------------------------------------------------------------------
@@ -1499,7 +1502,15 @@ contains
 
       ! exact solver
 
-      call exact_rs_pu_star(3.0, 3.0) !, UseAnotherRS=UseArtificialWind)
+      call exact_rs_pu_star(3.0, 3.0, UseAnotherRS=DoStop)
+      if(DoStop)then
+         write(*,*)'iFace=', iFace
+         write(*,*)'Stage=', iStage
+         if(present(RightFace0_V))&
+              write(*,*)'RightFace0_V=',RightFace0_V
+         call save_plot_thread(OpenThread1,'Vacuum_RS.out')
+         call CON_stop('Vacuum in RS; see Vacuum_RS.out')
+      end if
 
       ! if(UseArtificialWind)then
       !   ConsL_V = pLeft_V
