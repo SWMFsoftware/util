@@ -1167,7 +1167,7 @@ contains
     ! Apply left BC in the ghostcell #=-nCell-1
     call set_thread_inner_bc(&
          TeIn = OpenThread1%TeTr, &
-         uIn  = OpenThread1%uTr,  &
+         uIn  = 0.0, & ! OpenThread1%uTr,  &
          pIn  = OpenThread1%PeTr, &
          Primitive_V= Primitive_VG(:,-nCell-1))
     !
@@ -1185,8 +1185,10 @@ contains
                write(*,*)'iCell=',iCell,' state:',&
                Primitive_VG(:,iCell)
        end do
-       if(present(RightFace0_V))&
-            write(*,*)'RightFace0_V=',RightFace0_V
+       if(present(RightFace0_V))then
+          write(*,*)'RightFace0_V=',RightFace0_V
+          write(*,*)'LimiterPrim_V=',OpenThread1%LimiterPrim_V
+       end if
        call save_plot_thread(OpenThread1,'failed_thread.out')
        call CON_stop('Negative pressure/density')
     end if
@@ -1285,11 +1287,17 @@ contains
     end do
     ! Set the speed on top of the transition region from the RS:
     ! Fix 2025-3-13
-    OpenThread1%uTr = Un_F(-nCell)*Rho_F(-nCell)/(&
-         OpenThread1%PeTr*cProtonMass/(OpenThread1%TeTr*cBoltzmann))
-    call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
+    ! Version of OldTr: pressure on top of TR is corrected for the enthalpy
+    ! flux in the lowest cell, 5/2(U(-nCell)*(P(-nCell)+Pe(-nCell))
+    ! Below, this flux is calculated as (5/2)*2*pTr*uTr, which requires
+    ! to store the combination, U(-nCell)*(P(-nCell)+Pe(-nCell))/pTr as uTr
+    OpenThread1%uTr = Primitive_VG(U_,-nCell)*&
+         (cThird*(Primitive_VG(PePar_,-nCell) + Primitive_VG(Ppar_,-nCell)) +&
+         cTwoThird*(Primitive_VG(PePerp_,-nCell) + Primitive_VG(&
+         Pperp_,-nCell)))*Z/( (Z + 1)*OpenThread1%PeTr )
+    ! call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
     ! Correct pressure for updated plasma speed
-    OpenThread1%PeTr = TrTable_V(LengthPavrSi_)/Ds_G(-nCell-1)
+    ! OpenThread1%PeTr = TrTable_V(LengthPavrSi_)/Ds_G(-nCell-1)
     ! du/ds, dV_A/ds, V_A
     do iCell = -nCell,-1
        DuDs_C(iCell)  = (Un_F(iCell+1) - Un_F(iCell)) / &
@@ -1506,8 +1514,10 @@ contains
       if(DoStop)then
          write(*,*)'iFace=', iFace
          write(*,*)'Stage=', iStage
-         if(present(RightFace0_V))&
-              write(*,*)'RightFace0_V=',RightFace0_V
+         if(present(RightFace0_V))then
+            write(*,*)'RightFace0_V=',RightFace0_V
+            write(*,*)'LimiterPrim_V=',OpenThread1%LimiterPrim_V
+         end if
          call save_plot_thread(OpenThread1,'Vacuum_RS.out')
          call CON_stop('Vacuum in RS; see Vacuum_RS.out')
       end if
@@ -1665,6 +1675,8 @@ contains
     real    :: ConsFace, dConsFace, ConsCell, Tolerance
     ! Newton-Rapson coefficients: dConsFace = -Res/dResdCons
     real    :: Res, dResdCons
+    ! Pressure correction accounting for the hydro enthalpy flux
+    real :: PressureTrCoef, EnthalpyFlux
     integer :: iCounter
     integer, parameter :: iCounterMax=20
     character(len=*), parameter:: NameSub = 'solve_tr_face'
@@ -1676,7 +1688,7 @@ contains
     TeFace = TeCell
     iCounter = 0
     do
-       call get_trtable_value(TeFace, uFace)
+       call get_trtable_value(TeFace)
        HeatFluxFace = TrTable_V(HeatFluxLength_)/LengthTr
        ! Solve equation HeatFlux = (ConsCell - ConsFace)/DeltaS
        Res = DeltaS*HeatFluxFace + ConsFace - ConsCell
@@ -1685,7 +1697,6 @@ contains
           write(*,*)'ChromoEvapCoef=',ChromoEvapCoef
           write(*,*)'Lengthtr',LengthTr
           write(*,*)'TeCell=', TeCell
-          write(*,*)'uFace=',uFace
           write(*,*)'DeltaS=',DeltaS
           call CON_stop(NameSub//': No convergence')
        end if
@@ -1702,7 +1713,16 @@ contains
        dFluxOverdConsOut = TrTable_V(dHeatFluxXOverU_)/LengthTr
        dFluxOverdConsOut = dFluxOverdConsOut/(1 + DeltaS*dFluxOverdConsOut)
     end if
-    if(present(PeFaceOut))PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
+    if(present(PeFaceOut))then
+       PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
+       ! Correction coefficient, based on the algorithm used in OldTr
+       EnthalpyFlux = 2.50* & ! this is 1/(Gamma - 1) + 1
+            uFace* & ! this is Ucell*(PeCell + PiCell)*Z/(1 + Z)/PeFace
+            PeFaceOut*(1/Z +1) ! Approximate the enthalpy flux in the Cell
+       PressureTRCoef = sqrt(max(&
+            1 - EnthalpyFlux/HeatFluxFace,1.0e-8))
+       PeFaceOut = PressureTRCoef*PeFaceOut
+    end if
   end subroutine solve_tr_face
   !============================================================================
   real function cooling_rate(RhoSi, PeSi)
