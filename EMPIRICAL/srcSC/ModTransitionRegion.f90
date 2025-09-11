@@ -1863,12 +1863,12 @@ contains
           write(*,'(a)')'iPoint Cons_V TeOld TiOld TeStart TiStart'
           do iPoint = 1, nPoint
              write(*,'(i4,6es12.4)')iPoint,Cons_I(iPoint), &
-                   Ti_I(iPoint) + DCons_VI(Ti_,iPoint),&
-                   (3.5*(Cons_I(iPoint) - DCons_VI(Cons_,1:nPoint))/&
-                   HeatCondParSi)**cTwoSevenths,&
-                   Ti_I(iPoint),                &
-                   TeStart_I(iPoint),           &
-                   TiStart_I(iPoint)
+                  Ti_I(iPoint) + DCons_VI(Ti_,iPoint),&
+                  (3.5*(Cons_I(iPoint) - DCons_VI(Cons_,iPoint))/&
+                  HeatCondParSi)**cTwoSevenths,&
+                  Ti_I(iPoint),                &
+                  TeStart_I(iPoint),           &
+                  TiStart_I(iPoint)
           end do
           call CON_stop('Reduce time step')
        end if
