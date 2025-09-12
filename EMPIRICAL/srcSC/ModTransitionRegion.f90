@@ -1744,9 +1744,9 @@ contains
 
     real :: Res_I(nPoint), bFaceInv_I(1:nPoint+1), BcellInv_I(nPoint), &
          Lower_I(nPoint), Main_I(nPoint), Upper_I(nPoint),&
-         SpecHeat_I(nPoint), ExchangeRate_I(nPoint), Cons_I(0:nPoint+1),    &
-         TeStart_I(nPoint), DeltaEnergy_I(nPoint),       &
-         dCons_I(nPoint), DtInv_I(nPoint), Cooling, TeFace
+         SpecHeat_I(nPoint), ExchangeRate_I(nPoint), Cons_I(nPoint+1),    &
+         TeStart_I(nPoint), DeltaEnergy_I(nPoint), dCons_I(nPoint),       &
+         DtInv_I(nPoint), HeatFlux2Tr, dFluxOverdCons, Cooling
     real, parameter :: QuasiCfl = 0.50
     ! Misc:
     ! Loop variable
@@ -1763,14 +1763,6 @@ contains
     TeStart_I(1:nPoint) = Te_I(1:nPoint)
     ! dCons = kappa(Te)dTe=> Cons = 2/7 kappa*Te
     Cons_I(1:nPoint+1) = cTwoSevenths*HeatCondParSi*Te_I(1:nPoint+1)**3.5
-    call solve_tr_face(TeCell =        Te_I(1), &
-         uFace = uFace,                         &
-         LengthTr      = Ds_I(0),               &
-         DeltaS        = 0.50*Ds_I(1),          &
-         PeFaceOut = PeFaceOut,                 &
-         TeFaceOut = TeFace)
-    if(present(TeFaceOut))TeFaceOut = TeFace
-    Cons_I(0) = cTwoSevenths*HeatCondParSi*TeFace**3.5
     SpecHeat_I     = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)*BcellInv_I
     do iIter = 1,nIterMax
        Main_I = 0.0; Upper_I = 0.0; Lower_I = 0.0
@@ -1781,14 +1773,26 @@ contains
        Upper_I(1:nPoint-1) = &
             -BFaceInv_I(2:nPoint)*2/(Ds_I(1:nPoint-1) + Ds_I(2:nPoint))
        Lower_I(2:nPoint) = Upper_I(1:nPoint-1)
-       Lower_I(1) = -BFaceInv_I(1)/(0.5*Ds_I(1))
-       Main_I(1:nPoint) = -Upper_I(1:nPoint) - Lower_I(1:nPoint)
+       Main_I(2:nPoint) = -Upper_I(2:nPoint) - Lower_I(2:nPoint)
        ! Right heat fluxes
        Res_I(1:nPoint) = &
             (Cons_I(1:nPoint) - Cons_I(2:nPoint+1))*Upper_I(1:nPoint)
        ! Add left heat fluxes
-       Res_I(1:nPoint) = Res_I(1:nPoint) + &
-            (Cons_I(1:nPoint) - Cons_I(0:nPoint-1))*Lower_I(1:nPoint)
+       Res_I(2:nPoint) = Res_I(2:nPoint) + &
+            (Cons_I(2:nPoint) - Cons_I(1:nPoint-1))*Lower_I(2:nPoint)
+       call solve_tr_face(TeCell =        Te_I(1), &
+            uFace = uFace,                         &
+            LengthTr      = Ds_I(0),               &
+            DeltaS        = 0.50*Ds_I(1),          &
+            HeatFluxOut   = HeatFlux2Tr,           &
+            DFluxOverDConsOut = dFluxOverdCons,    &
+            PeFaceOut = PeFaceOut,                 &
+            TeFaceOut = TeFaceOut)
+       ! Add left heat flux to the TR
+       Res_I(1) = Res_I(1) - HeatFlux2Tr*BFaceInv_I(1)
+       ! Linearize left heat flux to the TR
+       Main_I(1) = &
+            - Upper_I(1) + dFluxOverdCons*BFaceInv_I(1)
        ! Radiative cooling, limit timestep
        do iPoint = 1, nPoint
           call get_trtable_value(Te_I(iPoint))
@@ -1827,7 +1831,7 @@ contains
             W_I=DCons_I(1:nPoint))
        Cons_I(1:nPoint) = Cons_I(1:nPoint) + DCons_I(1:nPoint)
        if(any(Cons_I(1:nPoint)<=0))then
-          write(*,*)'At iIter=',iIter, ' uFace=',uFace,' TeFace=',TeFace
+          write(*,*)'At iIter=',iIter, ' uFace=',uFace,' TeFace=',TeFaceOut
           write(*,'(a)')'iPoint Cons TeOld TeStart TiStart'
           do iPoint = 1, nPoint
              write(*,'(i4,4es12.4)')iPoint - nPoint - 1,Cons_I(iPoint), &
