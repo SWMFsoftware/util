@@ -1867,7 +1867,8 @@ contains
     ! Account for implicit correction. Multiply by the temperature difference
     ExchangeRate_I = ExchangeRate_I/(1 + (Z+1)*ExchangeRate_I)*&
          (Ti_I(1:nPoint) - Te_I(1:nPoint))
-    Te_I = Te_I + ExchangeRate_I; Ti_I = Ti_I - Z*ExchangeRate_I
+    Te_I(1:nPoint) = Te_I(1:nPoint) + ExchangeRate_I
+    Ti_I = Ti_I - Z*ExchangeRate_I
   end subroutine advance_heat_conduction_ss
   !============================================================================
     subroutine tridiag(n, Lower_I, Main_I, Upper_I, Res_I, W_I)
