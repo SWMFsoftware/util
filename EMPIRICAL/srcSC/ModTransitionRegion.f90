@@ -142,7 +142,7 @@ module ModTransitionRegion
   ! integer, parameter :: R_=1 ! to mark the radial coordinate, in R_sun
 
   ! Control parameter: below TeSiMin the observables are not calculated
-  real, public :: TeSiMin = 5.0e4
+  real, public :: TeSiMin = 5.0e4, ConsSiMin, ConsSiMax
   ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
@@ -243,6 +243,8 @@ contains
     ! electron heat conduct coefficient for single charged ions
     ! = 9.2e-12 W/(m*K^(7/2))
     HeatCondParSi   = kappa_0_e(CoulombLog)
+    ConsSiMin = cTwoSevenths*HeatCondParSi*TeSiMin**3.50
+    ConsSiMax = cTwoSevenths*HeatCondParSi*TeTrMax**3.50
     cExchangeRateSi = te_ti_exchange_rate(CoulombLog)
     ! Init Riemann solver:
     call exact_rs_set_gamma(Gamma)
@@ -802,14 +804,15 @@ contains
       OpenThread1%State_VG(Pe_,-nCell:-1) = &
            OpenThread1%State_VG(P_,-nCell:-1)
 
-      ! Pi = n * kB * T, n = Rho / Mp
-      ! -> Rho = Mp * Pi / (kB * T)
-      OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass*2*     &
-           OpenThread1%State_VG(P_,-nCell:-1)/(cBoltzmann*TempInner)
-
       OpenThread1%State_VG(Wmajor_,-nCell:-1) = 1.0
       OpenThread1%State_VG(Wminor_,-nCell:-1) = 1.0e-8
-      OpenThread1%Te_G(-nCell:0) = 0.50*TempInner
+      OpenThread1%Te_G(1-nCell:-1) = TempInner
+      OpenThread1%Te_G(-nCell) = 0.5*TempInner
+      ! Pi = n * kB * T, n = Rho / Mp
+      ! -> Rho = Mp * Pi / (kB * T)
+      OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass*     &
+           OpenThread1%State_VG(P_,-nCell:-1)/(cBoltzmann*&
+           OpenThread1%Te_G(-nCell:-1))
       OpenThread1%TeTr = 0.50*TempInner
       OpenThread1%uTr  = 0.0
       OpenThread1%PeTr = 0.50*PressInner
@@ -1091,7 +1094,7 @@ contains
     real :: Heating_C(-OpenThread1%nCell:-1)
     real :: Reflection_C(-OpenThread1%nCell:-1)
     ! Calculated using the constants above or by applying apportion_heating
-    real :: PparHeating, PperpHeating, PeHeating
+    real :: PparHeating, PperpHeating, PeHeating, pLimit
     ! Loop variables:
     integer :: iCell, iFace
     ! Vector of primitives used in limiting
@@ -1290,8 +1293,8 @@ contains
     do iCell = -nCell,-1
        DuDs_C(iCell)  = (Un_F(iCell+1) - Un_F(iCell)) / &
             Ds_G(iCell)
-       DivU_C(iCell)  = vInv_C(iCell)*(Un_F(iCell+1)*VaFace_F(iCell+1) &
-            - Un_F(iCell)*VaFace_F(iCell))
+       DivU_C(iCell)  = vInv_C(iCell)*(Un_F(iCell+1)*FaceArea_F(iCell+1) &
+            - Un_F(iCell)*FaceArea_F(iCell))
        DvaDs_C(iCell) = (VaFace_F(iCell+1) - VaFace_F(iCell)) / &
             Ds_G(iCell)
        VaCell_C(iCell) = 0.50*(VaFace_F(iCell+1) + VaFace_F(iCell))
@@ -1408,18 +1411,19 @@ contains
     do iCell = -nCell, -1
        State_VG(Rho_,iCell) = max(MinRho, State_VG(Rho_,iCell) )
        State_VG(U_,iCell)   = State_VG(RhoU_,iCell)/State_VG(Rho_,iCell)
-
+       pLimit = max(MinPress,  State_VG(Rho_,iCell)*cBoltzmann*TeSiMin/&
+            cProtonMass)
        ! 3/2*P = Energy - 1/2*Rho U**2
-       State_VG(P_,iCell)   = max(MinPress, cTwoThird*(State_VG(Energy_,iCell)&
+       State_VG(P_,iCell)   = max(pLimit, cTwoThird*(State_VG(Energy_,iCell)&
             - 0.5*State_VG(Rho_,iCell)*State_VG(U_,iCell)**2 ))
 
        ! EnergyPar = 1/2*Ppar
        if(UseAnisoPressure)State_VG(Ppar_,iCell)   = &
-            max(MinPress, 2*State_VG(Ppar_,iCell))
+            max(pLimit, 2*State_VG(Ppar_,iCell))
        ! Convert electron internal energy, 3/2*Pe, to pressure
-       State_VG(Pe_,iCell)  = max(MinPress, cTwoThird*State_VG(Pe_,iCell))
+       State_VG(Pe_,iCell)  = max(Z*pLimit, cTwoThird*State_VG(Pe_,iCell))
        Te_G(iCell) = State_VG(Pe_,iCell)*cProtonMass/&
-         (cBoltzmann*State_VG(Rho_,iCell))
+         (Z*cBoltzmann*State_VG(Rho_,iCell))
     end do
     if(iStage==1)RETURN
     ! Semi-implicit stage
