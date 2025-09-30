@@ -142,6 +142,7 @@ module ModTransitionRegion
 
   ! Control parameter: below TeSiMin the observables are not calculated
   real, public :: TeSiMin = 5.0e4
+  real :: ConsSiMax
   ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
@@ -237,6 +238,7 @@ contains
     ! electron heat conduct coefficient for single charged ions
     ! = 9.2e-12 W/(m*K^(7/2))
     HeatCondParSi   = kappa_0_e(CoulombLog)
+    ConsSiMax = cTwoSevenths*HeatCondParSi*TeTrMax**3.50
     cExchangeRateSi = te_ti_exchange_rate(CoulombLog)
     ! Init Riemann solver:
     call exact_rs_set_gamma(Gamma)
@@ -1323,7 +1325,7 @@ contains
          cThird*abs(2*dVarDown_V+dVarUp_V))
     pLeft_VF(:,0) = Primitive_VG(:,-1) + &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(Beta*abs(dVarUp_V),Beta*abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V), Beta*abs(dVarDown_V), &
          cThird*abs(dVarDown_V+2*dVarUp_V))
     if(DoLimitLogVar)then
        Primitive_VG(iLogVar_V,-nCell-1:0) = exp(&
@@ -1725,13 +1727,43 @@ contains
     TeFace = TeCell
     iCounter = 0
     do
-       if(TeFace<=TeSiMin)then
+       if(TeFace >= TeTrMax)then
+          TeFace = TeTrMax
+          call get_trtable_value(TeFace,uFace)
+          if(present(TeFaceOut))TeFaceOut = TeFace
+          HeatFluxFace = (ConsCell - ConsSiMax)/DeltaS
+          if(present(HeatFluxOut))HeatFluxOut = HeatFluxFace
+          if(present(dFluxOverdConsOut))dFluxOverdConsOut = 1/DeltaS
+          if(present(PeFaceOut))then
+             PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
+             ! Correction coefficient, based on the algorithm used in OldTr
+             EnthalpyFlux = 2.50* & ! this is 1/(Gamma - 1) + 1
+                  uFace* & ! this is Ucell*(PeCell + PiCell)*Z/(1 + Z)/PeFace
+                  PeFaceOut*(1/Z +1) ! Approximate the enthalpy flux in the Cell
+             PressureTRCoef = sqrt(max(&
+                  1 - EnthalpyFlux/HeatFluxFace,1.0e-8))
+             PeFaceOut = PressureTRCoef*PeFaceOut
+          end if
+          RETURN
+       elseif(TeFace<=TeSiMin)then
           TeFace = TeSiMin
-          call get_trtable_value(TeFace)
+          call get_trtable_value(TeFace,uFace)
           HeatFluxFace = TrTable_V(HeatFluxLength_)/LengthTr
-          EXIT
+          if(present(HeatFluxOut))HeatFluxOut = HeatFluxFace
+          if(present(dFluxOverdConsOut))dFluxOverdConsOut = 0.0
+          if(present(PeFaceOut))then
+             PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
+             ! Correction coefficient, based on the algorithm used in OldTr
+             EnthalpyFlux = 2.50* & ! this is 1/(Gamma - 1) + 1
+                  uFace* & ! this is Ucell*(PeCell + PiCell)*Z/(1 + Z)/PeFace
+                  PeFaceOut*(1/Z +1) ! Approximate the enthalpy flux in the Cell
+             PressureTRCoef = sqrt(max(&
+                  1 - EnthalpyFlux/HeatFluxFace,1.0e-8))
+             PeFaceOut = PressureTRCoef*PeFaceOut
+          end if
+          RETURN
        end if
-       call get_trtable_value(TeFace)
+       call get_trtable_value(TeFace,uFace)
        HeatFluxFace = TrTable_V(HeatFluxLength_)/LengthTr
        ! Solve equation HeatFlux = (ConsCell - ConsFace)/DeltaS
        Res = DeltaS*HeatFluxFace + ConsFace - ConsCell
