@@ -1673,11 +1673,11 @@ contains
     Ti_C(-nCell:-1) = State_VG(P_,-nCell:-1)/(cBoltzmann*N_C)
     call advance_heat_conduction(&
          nPoint = nCell, &
-         Dt_I = Dt_C,    &
-         Te_I = Te_G,    &
-         Ti_I = Ti_C,    &
-         Ni_I = N_C,     &
-         Ds_I = Ds_G,    &
+         Dt_I = Dt_C(-nCell:-1),    &
+         Te_I = Te_G(-nCell:0),     &
+         Ti_I = Ti_C(-nCell:-1),    &
+         Ni_I = N_C(-nCell:-1),     &
+         Ds_I = Ds_G(-nCell-1:0),   &
          uFace   = OpenThread1%uTr, &
          B_I  = OpenThread1%B_F(-nCell:0), &
          PeFaceOut = OpenThread1%PeTr, & ! Store state for the top of TR
@@ -1685,8 +1685,8 @@ contains
          DoLimitTimestep=.true.)
     State_VG(P_ ,-nCell:-1) = cBoltzmann*N_C*Ti_C(-nCell:-1)
     State_VG(Pe_,-nCell:-1) = cBoltzmann*N_C*Te_G(-nCell:-1)
-    ! If no anysotropic pressure is used
-    State_VG(Ppar_ ,-nCell:-1) = State_VG(P_ ,-nCell:-1)
+    if(UseAnisoPressure)&
+         State_VG(Ppar_ ,-nCell:-1) = State_VG(P_ ,-nCell:-1)
   end subroutine advance_thread_semi_impl
   !============================================================================
   subroutine solve_tr_face(TeCell, & ! cell-centered, in SI
@@ -1841,7 +1841,7 @@ contains
     SpecHeat_I  = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)*BcellInv_I
     Main_I = 0.0; Upper_I = 0.0; Lower_I = 0.0
     ! Contribution from heat conduction fluxes
-    ! Flux linearizations over small dCons
+    ! Flux linearizations over small dTe
     Upper_I(nPoint) = -BFaceInv_I(nPoint+1)                      &
          *HeatCondParSi*(0.50*(Te_I(nPoint)+Te_I(nPoint+1)))**2.5&
          /(0.50*Ds_I(nPoint) + Ds_I(nPoint+1))
