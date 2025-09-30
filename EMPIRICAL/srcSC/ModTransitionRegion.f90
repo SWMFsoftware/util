@@ -432,7 +432,7 @@ contains
     real   :: uHeat2_I(nPointTe)     ! uHeat**2 (present in energy equation)
     real   :: EnthalpyFlux_I(nPointTe) ! (present in energy equation)
     real   :: dHeatFluxXoverDcons_I(nPointTe) ! 4th column, derivative of 3rd
-    real   :: dHeatFluxXoverDutr_I(nPointTe)   ! derivative of 3rd over uTr
+    real   :: dHeatFluxXoverDutr     ! derivative of 3rd column over uTr
     real   :: LambdaSi_I(nPointTe)     ! 5th column of the table, rad. loss
     real   :: dLogLambdaOverDlogT_I(nPointTe) ! 6th column, derivative of 5th
     real   :: pOverPch_I(nPointTe)   ! Pressure ratio to Pch
@@ -471,7 +471,7 @@ contains
     ! The table is now initialized.
     iTableTr = i_lookup_table('TR')
     ! Fill in the array of tabulated values:
-    allocate(Value_VII(DlogLambdaOverDlogT_,nPointTe,nPointU))
+    allocate(Value_VII(DuOverDcons_,nPointTe,nPointU))
 
     FactorStep = exp(DeltaLogTe)
     ! Fill in TeSi array
@@ -561,26 +561,26 @@ contains
           ! Not multiplied by \kappa_0
        end do
        dHeatFluxXoverDcons_I(1) = &
-            (LengthPavr_I(2)*UHeat_I(2) - &
-            LengthPavr_I(1)*UHeat_I(1))/&
+            (LengthPavr_I(2)*uHeat_I(2) - &
+            LengthPavr_I(1)*uHeat_I(1))/&
             (DeltaLogTe*TeSi_I(1)**3.5)
        do iTe = 2, nPointTe - 1
           dHeatFluxXoverDcons_I(iTe) = &
-               ( LengthPavr_I(iTe+1)*UHeat_I(iTe+1)   &
-               - LengthPavr_I(iTe-1)*UHeat_I(iTe-1) ) &
+               ( LengthPavr_I(iTe+1)*uHeat_I(iTe+1)   &
+               - LengthPavr_I(iTe-1)*uHeat_I(iTe-1) ) &
                /(2*DeltaLogTe*TeSi_I(iTe)**3.5)
        end do
        dHeatFluxXoverDcons_I(nPointTe) = &
-            (LengthPavr_I(nPointTe)*UHeat_I(nPointTe) - &
-            LengthPavr_I(nPointTe-1)*UHeat_I(nPointTe-1))/&
+            (LengthPavr_I(nPointTe)*uHeat_I(nPointTe) - &
+            LengthPavr_I(nPointTe-1)*uHeat_I(nPointTe-1))/&
             (DeltaLogTe*TeSi_I(nPointTe)**3.5)
 
        LengthPavr_I(:) = LengthPavr_I(:)*HeatCondParSi
        do iTe = 1, nPointTe
           Value_VII(LengthPAvrSi_:DlogLambdaOverDlogT_, iTe, iU) = &
                [ LengthPavr_I(iTe), &
-               UHeat_I(iTe),                 &
-               UHeat_I(iTe)*LengthPavr_I(iTe), &
+               uHeat_I(iTe),                 &
+               uHeat_I(iTe)*LengthPavr_I(iTe), &
                dHeatFluxXoverDcons_I(iTe),    &
                LambdaSi_I(iTe)/cBoltzmann**2,&
                DLogLambdaOverDLogT_I(iTe)]
@@ -590,13 +590,13 @@ contains
     do iU = 2, nPointU - 1
        uTr = (iU - 1)*DeltaU + uMin
        do iTe = 1, nPointTe
-          dHeatFluxXoverDutr_I(iTe) = &
+          dHeatFluxXoverDutr = &
                (Value_VII(Uheat_,iTe,iU+1)*Value_VII(LengthPavrSi_,iTe,iU+1) -&
                Value_VII(Uheat_,iTe,iU-1)*Value_VII(LengthPavrSi_,iTe,iU-1))/ &
                (2*DeltaU)
           Value_VII(dHeatFluxXOverDcons_,iTe,iU) = &
                Value_VII(dHeatFluxXOverDcons_,iTe,iU) - &
-               uTr*dHeatFluxXoverDutr_I(iTe)/(HeatCondParSi*TeSi_I(iTe)**3.5)
+               uTr*dHeatFluxXoverDutr/(HeatCondParSi*TeSi_I(iTe)**3.5)
        end do
     end do
     ! Shape the table using the filled in array
