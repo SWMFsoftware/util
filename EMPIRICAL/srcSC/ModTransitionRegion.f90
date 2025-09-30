@@ -1232,7 +1232,7 @@ contains
     ! Apply left BC in the ghostcell #=-nCell-1
     call set_thread_inner_bc(&
          TeIn = OpenThread1%TeTr, &
-         uIn  = 0.0, & ! OpenThread1%uTr,  &
+         uIn  = OpenThread1%uTr,  &
          pIn  = OpenThread1%PeTr, &
          Primitive_V= Primitive_VG(:,-nCell-1))
     !
@@ -1270,11 +1270,11 @@ contains
     ! reconstructed values:
     pRight_VF(:,-nCell) = Primitive_VG(:,-nCell) - &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(Beta*abs(dVarUp_V), abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V), Beta*abs(dVarDown_V), &
          cThird*abs(2*dVarDown_V+dVarUp_V))
     pLeft_VF(:,-nCell+1) = Primitive_VG(:,-nCell) + &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(Beta*abs(dVarUp_V), abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V), Beta*abs(dVarDown_V), &
          cThird*abs(dVarDown_V+2*dVarUp_V))
     ! Pass through all cells, limit slopes
     do iCell = -nCell+1, -2
@@ -1297,7 +1297,7 @@ contains
     dVarDown_V = dVarUp_V
     ! Calculate the up slope. The half of this (as assumed in the
     ! limiter function) approximates the face value
-    dVarUp_V = Ds_G(-1)/(0.50*Ds_G(-1) + Ds_G(0))*&
+    dVarUp_V = min(Ds_G(-1)/(0.50*Ds_G(-1) + Ds_G(0)),1.0)*&
          (Primitive_VG(:,0) - Primitive_VG(:,-1))
     if(present(LeftFace0_V))then
        LimiterPrim_V = OpenThread1%LimiterPrim_V
@@ -1319,11 +1319,11 @@ contains
     ! reconstructed values:
     pRight_VF(:,-1) = Primitive_VG(:,-1) - &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(abs(dVarUp_V), Beta*abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V), Beta*abs(dVarDown_V), &
          cThird*abs(2*dVarDown_V+dVarUp_V))
     pLeft_VF(:,0) = Primitive_VG(:,-1) + &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(abs(dVarUp_V),Beta*abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V),Beta*abs(dVarDown_V), &
          cThird*abs(dVarDown_V+2*dVarUp_V))
     if(DoLimitLogVar)then
        Primitive_VG(iLogVar_V,-nCell-1:0) = exp(&
@@ -1351,17 +1351,11 @@ contains
        VaFace_F(iFace) = B_F(iFace)/sqrt(cMu*Rho_F(iFace))
     end do
     ! Set the speed on top of the transition region from the RS:
-    ! Fix 2025-3-13
-    ! Version of OldTr: pressure on top of TR is corrected for the enthalpy
-    ! flux in the lowest cell, 5/2(U(-nCell)*(P(-nCell)+Pe(-nCell))
-    ! Below, this flux is calculated as (5/2)*2*pTr*uTr, which requires
-    ! to store the combination, U(-nCell)*(P(-nCell)+Pe(-nCell))/pTr as uTr
-    OpenThread1%uTr = Primitive_VG(U_,-nCell)*&
-         min((Primitive_VG(P_,-nCell) + Primitive_VG(Pe_,-nCell))*&
-         Z/( (Z + 1)*OpenThread1%PeTr ),1.0)
-    ! call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
+    OpenThread1%uTr = Un_F(-nCell)*min(1.0,Rho_F(-nCell)/(&
+         OpenThread1%PeTr*cProtonMass/(Z*OpenThread1%TeTr*cBoltzmann)))
+    call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
     ! Correct pressure for updated plasma speed
-    ! OpenThread1%PeTr = TrTable_V(LengthPavrSi_)/Ds_G(-nCell-1)
+    OpenThread1%PeTr = TrTable_V(LengthPavrSi_)*SqrtZ/Ds_G(-nCell-1)
     ! du/ds, dV_A/ds, V_A
     do iCell = -nCell,-1
        DuDs_C(iCell)  = (Un_F(iCell+1) - Un_F(iCell)) / &
