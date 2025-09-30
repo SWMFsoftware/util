@@ -594,8 +594,8 @@ contains
                (Value_VII(Uheat_,iTe,iU+1)*Value_VII(LengthPavrSi_,iTe,iU+1) -&
                Value_VII(Uheat_,iTe,iU-1)*Value_VII(LengthPavrSi_,iTe,iU-1))/ &
                (2*DeltaU)
-          Value_VII(dHeatFluxXOverDcons_,iTe,iU) = &
-               Value_VII(dHeatFluxXOverDcons_,iTe,iU) - &
+          Value_VII(dHeatFluxXoverDcons_,iTe,iU) = &
+               Value_VII(dHeatFluxXoverDcons_,iTe,iU) - &
                uTr*dHeatFluxXoverDutr/(HeatCondParSi*TeSi_I(iTe)**3.5)
        end do
     end do
@@ -615,7 +615,7 @@ contains
     !--------------------------------------------------------------------------
     iTe = 1 + nint(log(Arg1/TeTrMin)/DeltaLogTe)
     iU = nint( (Arg2 - uMin)/ DeltaU) + 1
-    Value_V(:) = Value_VII(:, iTe, iU)
+    Value_V(:) = Value_VII(LengthPAvrSi_:DlogLambdaOverDlogT_, iTe, iU)
   end subroutine calc_tr_table
   !============================================================================
   subroutine get_trtable_value(Te, uFace)
@@ -1820,9 +1820,9 @@ contains
     logical, optional, intent(in) :: DoLimitTimestep
 
     real :: Res_I(nPoint), bFaceInv_I(1:nPoint+1), BcellInv_I(nPoint), &
-         Lower_I(nPoint), Main_I(nPoint), Upper_I(nPoint),&
-         SpecHeat_I(nPoint), ExchangeRate_I(nPoint), Cons_I(nPoint+1),    &
-         TeStart_I(nPoint), DeltaEnergy_I(nPoint), dCons_I(nPoint),       &
+         Lower_I(nPoint), Main_I(nPoint), dMain_I(nPoint), Upper_I(nPoint),&
+         SpecHeat_I(nPoint), ExchangeRate_I(nPoint),      &
+         TeStart_I(nPoint), DeltaEnergy_I(nPoint), dTe_I(nPoint), &
          DtInv_I(nPoint), HeatFlux2Tr, dFluxOverdCons, Cooling
     real, parameter :: QuasiCfl = 0.50
     ! Misc:
@@ -1838,25 +1838,26 @@ contains
     end if
     ! Initialization
     TeStart_I(1:nPoint) = Te_I(1:nPoint)
-    ! dCons = kappa(Te)dTe=> Cons = 2/7 kappa*Te
-    Cons_I(1:nPoint+1) = cTwoSevenths*HeatCondParSi*Te_I(1:nPoint+1)**3.5
-    SpecHeat_I     = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)*BcellInv_I
+    SpecHeat_I  = 1.50*cBoltzmann*Ni_I*Ds_I(1:nPoint)*BcellInv_I
+    Main_I = 0.0; Upper_I = 0.0; Lower_I = 0.0
+    ! Contribution from heat conduction fluxes
+    ! Flux linearizations over small dCons
+    Upper_I(nPoint) = -BFaceInv_I(nPoint+1)                      &
+         *HeatCondParSi*(0.50*(Te_I(nPoint)+Te_I(nPoint+1)))**2.5&
+         /(0.50*Ds_I(nPoint) + Ds_I(nPoint+1))
+    Upper_I(1:nPoint-1) = -BFaceInv_I(2:nPoint)                  &
+         *HeatCondParSi*(0.50*(Te_I(1:nPoint-1)+Te_I(2:nPoint)))**2.5&
+         *2/(Ds_I(1:nPoint-1) + Ds_I(2:nPoint))
+    Lower_I(2:nPoint) = Upper_I(1:nPoint-1)
+    Main_I(2:nPoint) = -Upper_I(2:nPoint) - Lower_I(2:nPoint)
+    Main_I(1) = - Upper_I(1)
     do iIter = 1,nIterMax
-       Main_I = 0.0; Upper_I = 0.0; Lower_I = 0.0
-       ! Contribution from heat conduction fluxes
-       ! Flux linearizations over small dCons
-       Upper_I(nPoint) = &
-            -BFaceInv_I(nPoint+1)/(0.50*Ds_I(nPoint) + Ds_I(nPoint+1))
-       Upper_I(1:nPoint-1) = &
-            -BFaceInv_I(2:nPoint)*2/(Ds_I(1:nPoint-1) + Ds_I(2:nPoint))
-       Lower_I(2:nPoint) = Upper_I(1:nPoint-1)
-       Main_I(2:nPoint) = -Upper_I(2:nPoint) - Lower_I(2:nPoint)
        ! Right heat fluxes
        Res_I(1:nPoint) = &
-            (Cons_I(1:nPoint) - Cons_I(2:nPoint+1))*Upper_I(1:nPoint)
+            (Te_I(1:nPoint) - Te_I(2:nPoint+1))*Upper_I(1:nPoint)
        ! Add left heat fluxes
        Res_I(2:nPoint) = Res_I(2:nPoint) + &
-            (Cons_I(2:nPoint) - Cons_I(1:nPoint-1))*Lower_I(2:nPoint)
+            (Te_I(2:nPoint) - Te_I(1:nPoint-1))*Lower_I(2:nPoint)
        call solve_tr_face(TeCell =        Te_I(1), &
             uFace = uFace,                         &
             LengthTr      = Ds_I(0),               &
@@ -1867,60 +1868,62 @@ contains
             TeFaceOut = TeFaceOut)
        ! Add left heat flux to the TR
        Res_I(1) = Res_I(1) - HeatFlux2Tr*BFaceInv_I(1)
-       ! Linearize left heat flux to the TR
-       Main_I(1) = &
-            - Upper_I(1) + dFluxOverdCons*BFaceInv_I(1)
        ! Radiative cooling, limit timestep
        do iPoint = 1, nPoint
           call get_trtable_value(Te_I(iPoint))
-          Cooling =Ds_I(iPoint)*BcellInv_I(iPoint)*TrTable_V(LambdaSI_)*Z*&
-               (cBoltzmann*Ni_I(iPoint))**2
+          Cooling =Ds_I(iPoint)*BcellInv_I(iPoint)*Z*&
+               TrTable_V(LambdaSI_)*(cBoltzmann*Ni_I(iPoint))**2
           Res_I(iPoint) = Res_I(iPoint) - Cooling
-          ! linearized -dCooling/dCons
-          Main_I(iPoint) = Main_I(iPoint) +&
-               TrTable_V(DLogLambdaOverDLogT_)*Cooling/(3.5*Cons_I(iPoint))
           ! Limit time step:
           if(iIter==1)then
              if(present(DoLimitTimestep))then
-                DtInv_I(iPoint) = max(1/Dt_I(iPoint),   &
-                     (3.50 + max(0.0, -TrTable_V(DLogLambdaOverDLogT_)))&
-                     *Cooling/(QuasiCfl*Z*Te_I(iPoint)*SpecHeat_I(iPoint)))
+                DtInv_I(iPoint) = max(1/Dt_I(iPoint), (3.50 + max(0.0,&
+                     -TrTable_V(DLogLambdaOverDLogT_)))*Cooling/      &
+                     (QuasiCfl*Z*Te_I(iPoint)*SpecHeat_I(iPoint)))
              else
                 DtInv_I(iPoint) = 1/Dt_I(iPoint)
              end if
           end if
+          ! linearized -dCooling/dTe and energy change are included             
+          ! into iteration-dependent part of the main diagonal. Ensure          
+          ! the positivity of their total, to guarantee the diagonal            
+          ! dominance property                                                  
+         dMain_I(iPoint) = max(0.0, &
+              TrTable_V(DLogLambdaOverDLogT_)*Cooling/Te_I(iPoint) + &
+              DtInv_I(iPoint)*Z*SpecHeat_I(iPoint))
        end do
        ! Change in the internal energy (to correct the energy source
        ! for the time-accurate mode):
        DeltaEnergy_I(1:nPoint) = Z*SpecHeat_I(1:nPoint)*DtInv_I* &
             (Te_I(1:nPoint) - TeStart_I(1:nPoint))
-       ! Energy evolution:
-       Main_I(1:nPoint) = Main_I(1:nPoint) + &
-              DtInv_I*Z*SpecHeat_I(1:nPoint)*Te_I(1:nPoint)/   &
-              (3.5*Cons_I(1:nPoint))
        Res_I(1:nPoint) = Res_I(1:nPoint) - DeltaEnergy_I(1:nPoint)
-       ! Point implicit limiter:
+       ! Linearize left heat flux to the TR                                     
+       dMain_I(1) = dMain_I(1) + dFluxOverdCons*HeatCondParSi*&
+            Te_I(1)**2.5*BFaceInv_I(1)
        call tridiag(n=nPoint,  &
             Lower_I=Lower_I(1:nPoint),&
-            Main_I=Main_I(1:nPoint),&
+            Main_I=Main_I(1:nPoint) + dMain_I(1:nPoint),&
             Upper_I=Upper_I(1:nPoint),&
             Res_I=Res_I(1:nPoint),  &
-            W_I=DCons_I(1:nPoint))
-       Cons_I(1:nPoint) = Cons_I(1:nPoint) + DCons_I(1:nPoint)
-       if(any(Cons_I(1:nPoint)<=0))then
-          write(*,*)'At iIter=',iIter, ' uFace=',uFace,' TeFace=',TeFaceOut
-          write(*,'(a)')'iPoint Cons TeOld TeStart TiStart'
+            W_I=dTe_I(1:nPoint))
+       dTe_I(1:nPoint) = min(Te_I(1:nPoint), max(dTe_I(1:nPoint),&
+            TeSiMin - Te_I(1:nPoint), - 0.5*Te_I(1:nPoint)))
+       Te_I(1:nPoint) = Te_I(1:nPoint) + dTe_I(1:nPoint)
+       if(all(abs(dTe_I(1:nPoint))<cTolerance*Te_I(1:nPoint)))EXIT
+       if(iIter==nIterMax)then
+          write(*,'(a,i4,a,es12.4,a,es12.4)')'At iIter=',iIter, &
+               ' uFace=',uFace,' TeFace=',TeFaceOut
+          write(*,'(a)')&
+               'iPoint Te Res Heat DeltaE TeOld TeStart TiStart Ni'
           do iPoint = 1, nPoint
-             write(*,'(i4,4es12.4)')iPoint - nPoint - 1,Cons_I(iPoint), &
-                  (3.5*(Cons_I(iPoint) - DCons_I(iPoint))/&
-                  HeatCondParSi)**cTwoSevenths,&
-                  TeStart_I(iPoint), Ti_I(iPoint)
+             write(*,'(i4,9es12.4)')iPoint - nPoint - 1,Te_I(iPoint),  &
+                  Res_I(iPoint), Res_I(iPoint) + DeltaEnergy_I(iPoint),&
+                  DeltaEnergy_I(iPoint), Te_I(iPoint) - dTe_I(iPoint),&
+                  TeStart_I(iPoint), Ti_I(iPoint), Ni_I(iPoint)
           end do
-          call CON_stop('Reduce time step')
+          write(*,'(a,es12.4)')'Upper boundary, Te=', Te_I(nPoint+1)
+          call CON_stop('No convergence in advance_heat_conduction')
        end if
-       ! Recover temperature
-       Te_I(1:nPoint) = (3.5*Cons_I(1:nPoint)/HeatCondParSi)**cTwoSevenths
-       if(all(abs(DCons_I(1:nPoint))<cTolerance*Cons_I(1:nPoint)))EXIT
     end do
     ! To treat the electron-ion energy exchange, one can
     ! solve the system of fully implicit equations as follows:
