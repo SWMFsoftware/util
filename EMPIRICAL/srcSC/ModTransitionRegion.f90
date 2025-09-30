@@ -134,15 +134,14 @@ module ModTransitionRegion
   real,   public  :: cTolerance   = 1.0e-6
 
   ! Correspondent named indexes: meaning of the columns in the table
-  integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2, &
-       HeatFluxLength_ = 3, dHeatFluxXOverU_ = 4, LambdaSi_=5, &
+  integer, parameter, public :: LengthPavrSi_ = 1, uHeat_ = 2,       &
+       HeatFluxLength_ = 3, dHeatFluxXoverDcons_ = 4, LambdaSi_ = 5, &
        DlogLambdaOverDlogT_ = 6
   ! Tabulated analytical solution:
   real, public :: TrTable_V(LengthPAvrSi_:DlogLambdaOverDlogT_)
-  ! integer, parameter :: R_=1 ! to mark the radial coordinate, in R_sun
 
   ! Control parameter: below TeSiMin the observables are not calculated
-  real, public :: TeSiMin = 5.0e4, ConsSiMin, ConsSiMax
+  real, public :: TeSiMin = 5.0e4
   ! Average ion charge number and its square root
   real, public :: SqrtZ   = 1.0
   real :: Z = 1.0
@@ -158,22 +157,17 @@ module ModTransitionRegion
   ! flux to/from the first control volume on the thread is accounted for.
   logical, public :: UseChromoEvap  = .false.
   ! To apply CromoEvaporation, the factor below is non-zero.
-  real,    public :: ChromoEvapCoef = 0.0
+  real            :: ChromoEvapCoef = 0.0
   ! Parameters of the TR table:
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
   integer, parameter :: nPointTe = 310, nPointU = 89
-  ! Global array used in calculating the table
-  ! To be allocated as Value_VII (DlogLambdaOverDlogT_,nPointTe,nPointU)
+  ! Global array used to fill in the table
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
   real, parameter :: uMax = 2000.0, uMin = -200.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
-  ! Parameter of the chromosphere energy budget:
-  ! How many hydrogen atoms should be ionized by the heat conduction flux
-  ! to lift a single pair of proton+electron to the solar wind
-  real, parameter :: cEnergyEfficiency = 1.0
   ! Needed for initialization:
   logical :: DoInit = .true.
   interface advance_heat_conduction
@@ -243,8 +237,6 @@ contains
     ! electron heat conduct coefficient for single charged ions
     ! = 9.2e-12 W/(m*K^(7/2))
     HeatCondParSi   = kappa_0_e(CoulombLog)
-    ConsSiMin = cTwoSevenths*HeatCondParSi*TeSiMin**3.50
-    ConsSiMax = cTwoSevenths*HeatCondParSi*TeTrMax**3.50
     cExchangeRateSi = te_ti_exchange_rate(CoulombLog)
     ! Init Riemann solver:
     call exact_rs_set_gamma(Gamma)
@@ -368,6 +360,52 @@ contains
     end if
   end subroutine check_tr_param
   !============================================================================
+  ! Three routines below solve the convervation laws for field-aligned flow
+  ! and tabulate the solution under the following asumptions:
+  ! 1. Steady-state (d/dt=0)
+  ! 2. Magnetic field is constant along the magnetic field line
+  ! 3. Gravity is neglected
+  ! 4. No anisotropy and Te=Ti. Ion and electron pressure are expressed
+  !    in terms of Pavr: Pi = Pavr/SqrtZ, Pe = Pavr*SqrtZ
+  ! 5. No wave pressure and wave heating
+  ! ------------------------------
+  ! From the mass conservation law:
+  ! cProtonMass*uTr*N_ch = cProtonMass*U*N
+  ! Combining this with the momentum conservation law, in which
+  ! (SqrtZ + 1/SqrtZ)*Pavr + cProtonMass*N_ch*uTr**2*(U/uTr) = &
+  !           (SqrtZ + 1/SqrtZ)*P_ch + cProtonMass*N_ch*uTr**2
+  ! we have: Pavr/P_ch = 1 + Eps*(1 - U/uTr),
+  ! where Eps = cProtonMass*uTr**2/(cBoltzmann*T_ch*(Z + 1)
+  ! is the dimensionless coefficient known for given uTr
+  ! and, since Pavr/P_ch = (T/T_ch)/(U/uTr),
+  ! we have an equation relating U, uTr and T/T_ch
+  ! T/T_ch = (1 + Eps) (U/uTr) - Eps*(U/uTr)**2,
+  ! from which U can be solved
+  ! U/uTr = (T/T_ch)/( (1+Eps)/2 +sqrt( (1+Eps)**2/4 - Eps*(T/T_ch)))
+  real function u_over_utr(Te, uTr)
+    real, intent(in) :: Te, uTr
+    real :: Eps, ToverTtr
+    !--------------------------------------------------------------------------
+    Eps = cProtonMass*uTr**2/(cBoltzmann*TeTrMin*(Z + 1))
+    ToverTtr = Te/TeTrMin
+    u_Over_Utr = ToverTtr/(0.5*(1 + Eps) + &
+         sqrt(max(0.0, 0.25*(1 + Eps)**2 - Eps*ToverTtr) ) )
+  end function u_over_utr
+  !============================================================================
+  ! Similarly, we can rewrite an equation relating U, uTr and T/T_ch
+  !  (U/uTr) + Eps1*(uTr/U)  - Eps1 - T/T_ch = 0,
+  ! in terms of Eps1 = cProtonMass*U**2/(cBoltzmann*T_ch*(Z + 1),
+  ! expressed in terms of U. From this quadratic equation uTr can be solved
+  real function utr_over_u(Te, U)
+    real, intent(in) :: Te, U
+    real :: Eps1Ttr
+    !--------------------------------------------------------------------------
+    Eps1Ttr = cProtonMass*U**2/(cBoltzmann*(Z + 1))
+    ! if(UseChromoEvap)ChromoEvapCoef = TeTrMin; else ChromoEvapCoef = 0
+    uTr_Over_U = ChromoEvapCoef/( 0.5*(Te + Eps1Ttr) + sqrt(&
+         max(0.0, 0.25*(Te + Eps1Ttr)**2 - Eps1Ttr*TeTrMin) ) )
+  end function utr_over_u
+  !============================================================================
   subroutine check_tr_table(TypeFileIn,iComm)
     use ModLookupTable, ONLY: i_lookup_table, &
          init_lookup_table, make_lookup_table, interpolate_lookup_table
@@ -378,35 +416,31 @@ contains
     character(len=5)::TypeFile
     ! Ionization potential for hydrogen
     ! cPotential_II(1,1) from util/CRASH/src/ModIonizPotential.f90:
-    real, parameter :: cIonizPotentialH =  13.59844  ! eV
-    ! Ratio of enthalpy flux, divided by (u(Tmin)*Pe):
-    real, parameter :: FluxTouPe = cEnergyEfficiency*&
-         cIonizPotentialH*ceV/(cBoltzmann*TeTrMin)   & ! ionization loss,
-         + 5                                           ! enthalpy, per ion
+    real, parameter :: cIonizPotentialH =  13.59844*ceV
+    ! Ratio of the ionization energy flux to (uTr*Pch):
+    real, parameter :: IonizationLoss = cIonizPotentialH/&
+         (cBoltzmann*TeTrMin)
     ! Misc:
     ! Loop variables
     integer            :: iTe, iU
     ! Arguments corresponding to these indexes:
     real   :: TeSi_I(nPointTe), uTr
-
-    real, dimension(nPointTe) :: LambdaSi_I, DLogLambdaOverDLogT_I, &
-         LengthPe_I, UHeat_I, dFluxXLengthOverDU_I, dHeatFluxOverVel_I
-    real            :: SemiIntUheat_I(1:nPointTe-1)
-    real            :: DeltaLogTeCoef
-    real   :: LambdaCgs_V(1)
-
-    ! at the moment, radcool not a function of Ne, but need a dummy 2nd
-    ! index, and might want to include Ne dependence in table later.
-    ! Table variable should be normalized to radloss_cgs * 10E+22
-    ! since we don't want to deal with such tiny numbers
-    ! real, parameter :: RadNorm = 1.0E+22
-    ! real, parameter :: Cgs2SiEnergyDens = &
-    !     1.0e-7&   ! erg = 1e-7 J
-    !     /1.0e-6    ! cm3 = 1e-6 m3
-    ! real, parameter :: Radcool2Si = 1.0e-12 & ! (cm-3=>m-3)**2
-    !     /RadNorm*Cgs2SiEnergyDens
+    integer, parameter :: Vel_ = 7, DuOverDcons_ = 8
+    real   :: LengthPavr_I(nPointTe) ! 1st column of the table, Pavr*length
+    real   :: uHeat_I(nPointTe)      ! 2nd column of the table, qHeat/Pch
+    real   :: SemiIntUheat_I(1:nPointTe-1) ! uHeat in mid points
+    real   :: uHeat2_I(nPointTe)     ! uHeat**2 (present in energy equation)
+    real   :: EnthalpyFlux_I(nPointTe) ! (present in energy equation)
+    real   :: dHeatFluxXoverDcons_I(nPointTe) ! 4th column, derivative of 3rd
+    real   :: dHeatFluxXoverDutr_I(nPointTe)   ! derivative of 3rd over uTr
+    real   :: LambdaSi_I(nPointTe)     ! 5th column of the table, rad. loss
+    real   :: dLogLambdaOverDlogT_I(nPointTe) ! 6th column, derivative of 5th
+    real   :: pOverPch_I(nPointTe)   ! Pressure ratio to Pch
+    real   :: Vel_I(nPointTe)        ! Velocity
+    real   :: dUoverDcons_I(nPointTe)! Its derivative over Te
     ! Misc:
-    real :: FactorStep, uOverTmin5, SqrtOfU2, KinEnergyFlux
+    real :: FactorStep, DeltaLogTeCoef, LambdaCgs_V(1)
+    real :: uOverTmin5, KinEnergyFlux
 
     character(len=*), parameter:: NameSub = 'check_tr_table'
     !--------------------------------------------------------------------------
@@ -419,7 +453,7 @@ contains
     call init_lookup_table(                                      &
          NameTable = 'TR',                                       &
          NameCommand = 'save',                                   &
-         Param_I = [cEnergyEfficiency, uMin, uMax],              &
+         Param_I = [1.0, uMin, uMax],                            &
          NameVar =                                               &
          'logTe u LPe UHeat FluxXLength '//                      &
          'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT '//&
@@ -446,9 +480,20 @@ contains
        TeSi_I(iTe) = TeSi_I(iTe-1)*FactorStep
     end do
     ! Fill in LambdaSi
+    ! at the moment, radcool not a function of Ne, but need a dummy 2nd
+    ! index, and might want to include Ne dependence in table later.
+    ! Table variable should be normalized to radloss_cgs * 10E+22
+    ! since we don't want to deal with such tiny numbers
+    ! real, parameter :: RadNorm = 1.0E+22
+    ! real, parameter :: Cgs2SiEnergyDens = &
+    !     1.0e-7&   ! erg = 1e-7 J
+    !     /1.0e-6    ! cm3 = 1e-6 m3
+    ! real, parameter :: Radcool2Si = 1.0e-12 & ! (cm-3=>m-3)**2
+    !     /RadNorm*Cgs2SiEnergyDens
     do iTe = 1, nPointTe
        call interpolate_lookup_table(iTableRadCool,&
             TeSi_I(iTe), LambdaCgs_V)
+       ! Here, Lambda is not divided by cBoltzmann**2 as in the final table
        LambdaSi_I(iTe) = LambdaCgs_V(1)*Radcool2Si
     end do
     ! Calculate dLogLambda/DLogTe
@@ -460,71 +505,99 @@ contains
     end do
     DLogLambdaOverDLogT_I(nPointTe) = &
          log(LambdaSi_I(npointTe)/LambdaSi_I(nPointTe-1))/DeltaLogTe
-
+    ! Coefficient present below in Eq. (**)
     DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
     do iU = 1, nPointU
        uTr = (iU - 1)*DeltaU + uMin
        uOverTmin5 = 5*(uTr/TeTrMin)*DeltaLogTe
        KinEnergyFlux = (cProtonMass/cBoltzmann)*(uTr/TeTrMin)**3*DeltaLogTe
-       LengthPe_I = 0.0; uHeat_I = 0.0
-       UHeat_I(1) = (max(uTr, 0.0)*(FluxTouPe + &
-            0.50*cProtonMass*uTr**2/(cBoltzmann*TeTrMin)))**2
+       do iTe = 1, nPointTe
+          Vel_I(iTe) = u_over_utr(TeSi_I(iTe), uTr)*uTr
+          ! See above: Pavr/P_ch = 1 + Eps*(1 - U/uTr),
+          ! where Eps = cProtonMass*uTr**2/(cBoltzmann*T_ch*(Z + 1)
+          pOverPch_I(iTe) = 1 + (uTr - Vel_I(iTe))*cProtonMass*uTr/&
+               (cBoltzmann*TeTrMin*(Z + 1))
+          ! Enthalpy Flux
+          ! u*Ni*((Z+1)*(5/2)*cBoltzmann*Te + (1/2)*cProtonMass*U**2)
+          ! Its ratio to P_ch=SqrtZ*cBoltzmann*Tch*Nch equals
+          ! Enthalpy Flux / P_ch = &
+          !    uTr*((SqrtZ+1/SqrtZ) (5/2)*(Te/T_ch) + &
+          !    cProtonMass*U**2/(2*SqrtZ*cBoltzMann*TeTrMin)
+          EnthalpyFlux_I(iTe) = uTr*(2.5*(SqrtZ + 1/SqrtZ)*TeSi_I(iTe) + &
+               cProtonMass*Vel_I(iTe)**2/(2*SqrtZ*cBoltzmann))/TeTrMin
+       end do
+       ! Energy equation divided by Pch reads:
+       ! (d/dx)(EnthalpyFlux - uHeat) = -Lambda*Z*Ni**2/Pch     (*),
+       ! where uHeat = |qHeat|/Pch, |qHeat| = kappa_0*Te**3.5*(d(log(Te))/dx)
+       ! On multiplying (*) by 2*uHeat we get equation for uHeat2=uHeat**2:
+       ! (d/dx)uHeat2 = 2*uHeat*(d/dx)EnthalpyFlux +  2*Lambda*(Pavr/Pch)**2*&
+       !         Te**1.5*(kappa_0/cBoltzmann**2)*(d(log(Te))/dx)
+       ! On multiplying by yet unknown dx we obtain FD equation
+       ! Delta(uHeat2) = 2*uHeat*Delta(EnthalpyFlux) + &
+       !     2*Lambda*(Pavr/Pch)**2*Te**1.5*DeltaLogTeCoef   (**)
+       ! where Delta(...) = ...(iTe) - ...(iTe-1)
+       uHeat_I(1) = max(uTr*(IonizationLoss/SqrtZ + 2.5*(SqrtZ + 1/SqrtZ) + &
+            cProtonMass*uTr**2/(2*SqrtZ*cBoltzmann*TeTrMin)), 0.0)
+       ! UHeat_I(1) = max(uTr*IonizationLoss/SqrtZ + EnthalpyFlux_I(1), 0.0)
+       uHeat2_I(1) = uHeat_I(1)**2
        do iTe = 2, nPointTe
-          ! Integrate \sqrt{2\int{\kappa_0\Lambda Te**1.5 d(log T)}}/k_B
-          ! Predictor at half step
-          SqrtOfU2 = sqrt(UHeat_I(iTe-1) )
-          SemiIntUheat_I(iTe-1) = sqrt( UHeat_I(iTe-1) + &
-               SqrtOfU2*(uOverTmin5*TeSi_I(iTe-1)      + &
+          SemiIntUheat_I(iTe-1) = sqrt( uHeat2_I(iTe-1) + &
+               uHeat_I(iTe-1)*(uOverTmin5*TeSi_I(iTe-1)      + &
                KinEnergyFlux*TeSi_I(iTe-1)**2)         + &
                LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50*DeltaLogTeCoef)
-          UHeat_I(iTe) = UHeat_I(iTe-1) + SemiIntUheat_I(iTe-1)*&
+          uHeat2_I(iTe) = uHeat2_I(iTe-1) + SemiIntUheat_I(iTe-1)*&
                (uOverTmin5*(TeSi_I(iTe-1) + TeSi_I(iTe)) +&
                KinEnergyFlux*(TeSi_I(iTe-1)**2 + TeSi_I(iTe)**2) ) &
                + (LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
                LambdaSi_I(iTe)*TeSi_I(iTe)**1.50)*DeltaLogTeCoef
-          UHeat_I(iTe-1) = SqrtOfU2
+          uHeat_I(iTe) = sqrt(uHeat2_I(iTe))
        end do
-       UHeat_I(nPointTe) = sqrt(UHeat_I(nPointTe))
-
+       LengthPavr_I(1) = 0
        do iTe = 2, nPointTe
           ! Integrate \int{\kappa_0\Lambda Te**3.5 d(log T)/UHeat}
-          LengthPe_I(iTe) = LengthPe_I(iTe-1) + 0.5*DeltaLogTe* &
+          LengthPavr_I(iTe) = LengthPavr_I(iTe-1) + 0.5*DeltaLogTe*&
                ( TeSi_I(iTe-1)**3.5 + TeSi_I(iTe)**3.5 )&
                /SemiIntUheat_I(iTe-1)
           ! Not multiplied by \kappa_0
        end do
-       dFluxXLengthOverDU_I(1) = &
-            (LengthPe_I(2)*UHeat_I(2) - &
-            LengthPe_I(1)*UHeat_I(1))/&
+       dHeatFluxXoverDcons_I(1) = &
+            (LengthPavr_I(2)*UHeat_I(2) - &
+            LengthPavr_I(1)*UHeat_I(1))/&
             (DeltaLogTe*TeSi_I(1)**3.5)
        do iTe = 2, nPointTe - 1
-          dFluxXLengthOverDU_I(iTe) = &
-               ( LengthPe_I(iTe+1)*UHeat_I(iTe+1)   &
-               - LengthPe_I(iTe-1)*UHeat_I(iTe-1) ) &
+          dHeatFluxXoverDcons_I(iTe) = &
+               ( LengthPavr_I(iTe+1)*UHeat_I(iTe+1)   &
+               - LengthPavr_I(iTe-1)*UHeat_I(iTe-1) ) &
                /(2*DeltaLogTe*TeSi_I(iTe)**3.5)
        end do
-       dFluxXLengthOverDU_I(nPointTe) = &
-            (LengthPe_I(nPointTe)*UHeat_I(nPointTe) - &
-            LengthPe_I(nPointTe-1)*UHeat_I(nPointTe-1))/&
+       dHeatFluxXoverDcons_I(nPointTe) = &
+            (LengthPavr_I(nPointTe)*UHeat_I(nPointTe) - &
+            LengthPavr_I(nPointTe-1)*UHeat_I(nPointTe-1))/&
             (DeltaLogTe*TeSi_I(nPointTe)**3.5)
 
-       LengthPe_I(:) = LengthPe_I(:)*HeatCondParSi
+       LengthPavr_I(:) = LengthPavr_I(:)*HeatCondParSi
        do iTe = 1, nPointTe
           Value_VII(LengthPAvrSi_:DlogLambdaOverDlogT_, iTe, iU) = &
-               [ LengthPe_I(iTe), UHeat_I(iTe), &
-               LengthPe_I(iTe)*UHeat_I(iTe), dFluxXLengthOverDU_I(iTe),   &
-               LambdaSi_I(iTe)/cBoltzmann**2, DLogLambdaOverDLogT_I(iTe)]
+               [ LengthPavr_I(iTe), &
+               UHeat_I(iTe),                 &
+               UHeat_I(iTe)*LengthPavr_I(iTe), &
+               dHeatFluxXoverDcons_I(iTe),    &
+               LambdaSi_I(iTe)/cBoltzmann**2,&
+               DLogLambdaOverDLogT_I(iTe)]
        end do
     end do
     ! Fill in the velocity derivative
     do iU = 2, nPointU - 1
        uTr = (iU - 1)*DeltaU + uMin
-       dHeatFluxOverVel_I = &
-            (Value_VII(Uheat_,:,iU+1)*Value_VII (LengthPavrSi_,:,iU+1) - &
-            Value_VII (Uheat_,:,iU-1)*Value_VII (LengthPavrSi_,:,iU-1))/ &
-            (2*DeltaU)
-       Value_VII(dHeatFluxXOverU_,:,iU) = Value_VII(dHeatFluxXOverU_,:,iU) - &
-            uTr*dHeatFluxOverVel_I/(HeatCondParSi*TeSi_I(:)**3.5)
+       do iTe = 1, nPointTe
+          dHeatFluxXoverDutr_I(iTe) = &
+               (Value_VII(Uheat_,iTe,iU+1)*Value_VII(LengthPavrSi_,iTe,iU+1) -&
+               Value_VII(Uheat_,iTe,iU-1)*Value_VII(LengthPavrSi_,iTe,iU-1))/ &
+               (2*DeltaU)
+          Value_VII(dHeatFluxXOverDcons_,iTe,iU) = &
+               Value_VII(dHeatFluxXOverDcons_,iTe,iU) - &
+               uTr*dHeatFluxXoverDutr_I(iTe)/(HeatCondParSi*TeSi_I(iTe)**3.5)
+       end do
     end do
     ! Shape the table using the filled in array
     call make_lookup_table(iTableTr, calc_tr_table, iComm)
@@ -1678,7 +1751,7 @@ contains
        end if
        ! New iteration:
        iCounter = iCounter + 1
-       dResdCons = DeltaS*TrTable_V(dHeatFluxXOverU_)/LengthTr + 1
+       dResdCons = DeltaS*TrTable_V(dHeatFluxXoverDcons_)/LengthTr + 1
        dConsFace = -Res/dResdCons
        ConsFace = ConsFace + dConsFace
        TeFace = (ConsFace*3.50/HeatCondParSi)**cTwoSevenths
@@ -1686,7 +1759,7 @@ contains
     if(present(TeFaceOut))TeFaceOut = TeFace
     if(present(HeatFluxOut))HeatFluxOut = HeatFluxFace
     if(present(dFluxOverdConsOut))then
-       dFluxOverdConsOut = TrTable_V(dHeatFluxXOverU_)/LengthTr
+       dFluxOverdConsOut = TrTable_V(dHeatFluxXoverDcons_)/LengthTr
        dFluxOverdConsOut = dFluxOverdConsOut/(1 + DeltaS*dFluxOverdConsOut)
     end if
     if(present(PeFaceOut))then
@@ -1871,7 +1944,7 @@ contains
     Ti_I = Ti_I - Z*ExchangeRate_I
   end subroutine advance_heat_conduction_ss
   !============================================================================
-    subroutine tridiag(n, Lower_I, Main_I, Upper_I, Res_I, W_I)
+  subroutine tridiag(n, Lower_I, Main_I, Upper_I, Res_I, W_I)
     ! Solve tri-diagonal system of equations:
     !  ||m_1 u_1  0....        || ||w_1|| ||r_1||
     !  ||l_2 m_2 u_2...        || ||w_2|| ||r_2||
