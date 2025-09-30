@@ -1884,10 +1884,10 @@ contains
                 DtInv_I(iPoint) = 1/Dt_I(iPoint)
              end if
           end if
-          ! linearized -dCooling/dTe and energy change are included             
-          ! into iteration-dependent part of the main diagonal. Ensure          
-          ! the positivity of their total, to guarantee the diagonal            
-          ! dominance property                                                  
+          ! linearized -dCooling/dTe and energy change are included
+          ! into iteration-dependent part of the main diagonal. Ensure
+          ! the positivity of their total, to guarantee the diagonal
+          ! dominance property
          dMain_I(iPoint) = max(0.0, &
               TrTable_V(DLogLambdaOverDLogT_)*Cooling/Te_I(iPoint) + &
               DtInv_I(iPoint)*Z*SpecHeat_I(iPoint))
@@ -1897,7 +1897,7 @@ contains
        DeltaEnergy_I(1:nPoint) = Z*SpecHeat_I(1:nPoint)*DtInv_I* &
             (Te_I(1:nPoint) - TeStart_I(1:nPoint))
        Res_I(1:nPoint) = Res_I(1:nPoint) - DeltaEnergy_I(1:nPoint)
-       ! Linearize left heat flux to the TR                                     
+       ! Linearize left heat flux to the TR
        dMain_I(1) = dMain_I(1) + dFluxOverdCons*HeatCondParSi*&
             Te_I(1)**2.5*BFaceInv_I(1)
        call tridiag(n=nPoint,  &
