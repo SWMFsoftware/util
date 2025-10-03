@@ -5,7 +5,7 @@ module ModTransitionRegion
 
   use ModExactRS
   use ModUtilities, ONLY: CON_stop
-  use ModConst,       ONLY: cBoltzmann, ceV, cProtonMass, cGravitation, mSun,&
+  use ModConst, ONLY: cBoltzmann, ceV, cProtonMass, cGravitation, mSun,&
        rSun, cMu
   implicit none
   SAVE
@@ -162,12 +162,12 @@ module ModTransitionRegion
   ! Parameters of the TR table:
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
-  integer, parameter :: nPointTe = 310, nPointU = 89
+  integer, parameter :: nPointTe = 310, nPointU = 17
   ! Global array used to fill in the table
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 2000.0, uMin = -200.0
+  real, parameter :: uMax = 40.0, uMin = -40.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Needed for initialization:
   logical :: DoInit = .true.
@@ -210,7 +210,7 @@ module ModTransitionRegion
 contains
   !============================================================================
   subroutine init_tr(zIn, TeChromoSi, iComm)
-    use ModConst,       ONLY: kappa_0_e, te_ti_exchange_rate
+    use ModConst, ONLY: kappa_0_e, te_ti_exchange_rate
     use ModLookupTable, ONLY: i_lookup_table
     !    use BATL_lib,       ONLY: test_start, test_stop, iProc
     ! INPUTS
@@ -438,8 +438,9 @@ contains
     real   :: LambdaSi_I(nPointTe)     ! 5th column of the table, rad. loss
     real   :: dLogLambdaOverDlogT_I(nPointTe) ! 6th column, derivative of 5th
     real   :: pOverPch_I(nPointTe)   ! Pressure ratio to Pch
-    real   :: Vel_I(nPointTe)        ! Velocity
-    real   :: dUoverDcons_I(nPointTe)! Its derivative over Te
+    real   :: U_I(nPointTe)          ! Velocity
+    real   :: dUoverDcons_I(nPointTe)! Velocity derivative over Te
+    real   :: dUoverDutr             ! Velocity derivative over uTr
     ! Misc:
     real :: FactorStep, DeltaLogTeCoef, LambdaCgs_V(1)
     real :: uOverTmin5, KinEnergyFlux
@@ -514,10 +515,10 @@ contains
        uOverTmin5 = 5*(uTr/TeTrMin)*DeltaLogTe
        KinEnergyFlux = (cProtonMass/cBoltzmann)*(uTr/TeTrMin)**3*DeltaLogTe
        do iTe = 1, nPointTe
-          Vel_I(iTe) = u_over_utr(TeSi_I(iTe), uTr)*uTr
+          U_I(iTe) = u_over_utr(TeSi_I(iTe), uTr)*uTr
           ! See above: Pavr/P_ch = 1 + Eps*(1 - U/uTr),
           ! where Eps = cProtonMass*uTr**2/(cBoltzmann*T_ch*(Z + 1)
-          pOverPch_I(iTe) = 1 + (uTr - Vel_I(iTe))*cProtonMass*uTr/&
+          pOverPch_I(iTe) = 1 + (uTr - U_I(iTe))*cProtonMass*uTr/&
                (cBoltzmann*TeTrMin*(Z + 1))
           ! Enthalpy Flux
           ! u*Ni*((Z+1)*(5/2)*cBoltzmann*Te + (1/2)*cProtonMass*U**2)
@@ -526,7 +527,7 @@ contains
           !    uTr*((SqrtZ+1/SqrtZ) (5/2)*(Te/T_ch) + &
           !    cProtonMass*U**2/(2*SqrtZ*cBoltzMann*TeTrMin)
           EnthalpyFlux_I(iTe) = uTr*(2.5*(SqrtZ + 1/SqrtZ)*TeSi_I(iTe) + &
-               cProtonMass*Vel_I(iTe)**2/(2*SqrtZ*cBoltzmann))/TeTrMin
+               cProtonMass*U_I(iTe)**2/(2*SqrtZ*cBoltzmann))/TeTrMin
        end do
        ! Energy equation divided by Pch reads:
        ! (d/dx)(EnthalpyFlux - uHeat) = -Lambda*Z*Ni**2/Pch     (*),
@@ -538,20 +539,20 @@ contains
        ! Delta(uHeat2) = 2*uHeat*Delta(EnthalpyFlux) + &
        !     2*Lambda*(Pavr/Pch)**2*Te**1.5*DeltaLogTeCoef   (**)
        ! where Delta(...) = ...(iTe) - ...(iTe-1)
-       uHeat_I(1) = max(uTr*(IonizationLoss/SqrtZ + 2.5*(SqrtZ + 1/SqrtZ) + &
-            cProtonMass*uTr**2/(2*SqrtZ*cBoltzmann*TeTrMin)), 0.0)
-       ! UHeat_I(1) = max(uTr*IonizationLoss/SqrtZ + EnthalpyFlux_I(1), 0.0)
+       ! uHeat_I(1) = max(uTr*(IonizationLoss/SqrtZ + 2.5*(SqrtZ + 1/SqrtZ) + &
+       !     cProtonMass*uTr**2/(2*SqrtZ*cBoltzmann*TeTrMin)), 0.0)
+       uHeat_I(1) = max(uTr*IonizationLoss/SqrtZ + EnthalpyFlux_I(1), 0.0)
        uHeat2_I(1) = uHeat_I(1)**2
        do iTe = 2, nPointTe
           SemiIntUheat_I(iTe-1) = sqrt( uHeat2_I(iTe-1) + &
-               uHeat_I(iTe-1)*(uOverTmin5*TeSi_I(iTe-1)      + &
-               KinEnergyFlux*TeSi_I(iTe-1)**2)         + &
-               LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50*DeltaLogTeCoef)
-          uHeat2_I(iTe) = uHeat2_I(iTe-1) + SemiIntUheat_I(iTe-1)*&
-               (uOverTmin5*(TeSi_I(iTe-1) + TeSi_I(iTe)) +&
-               KinEnergyFlux*(TeSi_I(iTe-1)**2 + TeSi_I(iTe)**2) ) &
-               + (LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
-               LambdaSi_I(iTe)*TeSi_I(iTe)**1.50)*DeltaLogTeCoef
+               uHeat_I(iTe-1)*(EnthalpyFlux_I(iTe) - EnthalpyFlux_I(iTe-1)) +&
+               pOverPch_I(iTe-1)**2*LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50    &
+               *DeltaLogTeCoef)
+          uHeat2_I(iTe) = uHeat2_I(iTe-1) + SemiIntUheat_I(iTe-1)*2*&
+               (EnthalpyFlux_I(iTe) - EnthalpyFlux_I(iTe-1)) + &
+               (pOverPch_I(iTe-1)**2*LambdaSi_I(iTe-1)*TeSi_I(iTe-1)**1.50 + &
+               pOverPch_I(iTe)**2*LambdaSi_I(iTe)*TeSi_I(iTe)**1.50)         &
+               *DeltaLogTeCoef
           uHeat_I(iTe) = sqrt(uHeat2_I(iTe))
        end do
        LengthPavr_I(1) = 0
@@ -566,26 +567,33 @@ contains
             (LengthPavr_I(2)*uHeat_I(2) - &
             LengthPavr_I(1)*uHeat_I(1))/&
             (DeltaLogTe*TeSi_I(1)**3.5)
+       dUoverDcons_I(1) = (U_I(2) - U_I(1))/&
+            (DeltaLogTe*HeatCondParSi*TeSi_I(1)**3.5)
        do iTe = 2, nPointTe - 1
           dHeatFluxXoverDcons_I(iTe) = &
                ( LengthPavr_I(iTe+1)*uHeat_I(iTe+1)   &
                - LengthPavr_I(iTe-1)*uHeat_I(iTe-1) ) &
                /(2*DeltaLogTe*TeSi_I(iTe)**3.5)
+          dUoverDcons_I(iTe) = (U_I(iTe+1) - U_I(iTe-1))/&
+               (2*DeltaLogTe*HeatCondParSi*TeSi_I(iTe)**3.5)
        end do
        dHeatFluxXoverDcons_I(nPointTe) = &
             (LengthPavr_I(nPointTe)*uHeat_I(nPointTe) - &
             LengthPavr_I(nPointTe-1)*uHeat_I(nPointTe-1))/&
             (DeltaLogTe*TeSi_I(nPointTe)**3.5)
-
+       dUoverDcons_I(nPointTe) = (U_I(nPointTe) - U_I(nPointTe-1))/&
+            (DeltaLogTe*HeatCondParSi*TeSi_I(nPointTe)**3.5)
        LengthPavr_I(:) = LengthPavr_I(:)*HeatCondParSi
        do iTe = 1, nPointTe
-          Value_VII(LengthPAvrSi_:DlogLambdaOverDlogT_, iTe, iU) = &
-               [ LengthPavr_I(iTe), &
+          Value_VII(LengthPAvrSi_:dUoverDcons_, iTe, iU) = &
+               [ LengthPavr_I(iTe)*pOverPch_I(iTe), &
                uHeat_I(iTe),                 &
                uHeat_I(iTe)*LengthPavr_I(iTe), &
                dHeatFluxXoverDcons_I(iTe),    &
                LambdaSi_I(iTe)/cBoltzmann**2,&
-               DLogLambdaOverDLogT_I(iTe)]
+               DLogLambdaOverDLogT_I(iTe), &
+               U_I(iTe), &
+               dUoverDcons_I(iTe)]
        end do
     end do
     ! Fill in the velocity derivative
@@ -593,12 +601,14 @@ contains
        uTr = (iU - 1)*DeltaU + uMin
        do iTe = 1, nPointTe
           dHeatFluxXoverDutr = &
-               (Value_VII(Uheat_,iTe,iU+1)*Value_VII(LengthPavrSi_,iTe,iU+1) -&
-               Value_VII(Uheat_,iTe,iU-1)*Value_VII(LengthPavrSi_,iTe,iU-1))/ &
+               (Value_VII(HeatFluxLength_,iTe,iU+1) -&
+               Value_VII(HeatFluxLength_,iTe,iU-1))/ &
+               (2*DeltaU)
+          dUoverDutr = (Value_VII(Vel_,iTe,iU+1) - Value_VII(Vel_,iTe,iU-1))/&
                (2*DeltaU)
           Value_VII(dHeatFluxXoverDcons_,iTe,iU) = &
                Value_VII(dHeatFluxXoverDcons_,iTe,iU) - &
-               uTr*dHeatFluxXoverDutr/(HeatCondParSi*TeSi_I(iTe)**3.5)
+               Value_VII(DuOverDcons_,iTe,iU)*dHeatFluxXoverDutr/dUoverDutr
        end do
     end do
     ! Shape the table using the filled in array
@@ -629,7 +639,7 @@ contains
     ! calculated with the value uMin < uTr < uMax at the bottom of
     ! transition region.
     ! All inputs and outputs are in SI units
-    use ModLookupTable,  ONLY: interpolate_lookup_table
+    use ModLookupTable, ONLY: interpolate_lookup_table
     real, intent(in) :: Te  ! Temperature on top of the transition region
     ! Speed on top of the transition region
     real, OPTIONAL, intent(inout) :: uFace
@@ -852,7 +862,7 @@ contains
     !==========================================================================
     subroutine init_thread_variables(OpenThread1)
 
-      use ModConst,only : cBoltzmann, cProtonMass
+      use ModConst, ONLY: cBoltzmann, cProtonMass
 
       type(OpenThread),intent(inout) :: OpenThread1
 
@@ -992,7 +1002,7 @@ contains
   end subroutine deallocate_thread_arr
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
-    use ModLookupTable,  ONLY: interpolate_lookup_table
+    use ModLookupTable, ONLY: interpolate_lookup_table
     ! INPUTS:
     ! The plasma parameters on top of the transition region:
     real,    intent(in)  :: TeSi, PeSi
@@ -1157,7 +1167,7 @@ contains
     real :: GravitySource = 0.0
     real :: WavePress, Pperp, Pe, PeSource
     real :: Un_F(-OpenThread1%nCell:0), Rho_F(-OpenThread1%nCell:0),&
-         B_F(-OpenThread1%nCell:0)
+         pTot_F(-OpenThread1%nCell:0), B_F(-OpenThread1%nCell:0)
     real :: Cleft_F(-OpenThread1%nCell:0)
     real :: Cright_F(-OpenThread1%nCell:0)
     real :: VaFace_F(-OpenThread1%nCell:0)
@@ -1349,7 +1359,7 @@ contains
     do iFace = -nCell, 0
        call get_thread_flux(pLeft_VF(:,iFace), pRight_VF(:,iFace), &
             Flux_VF(:,iFace), Cleft_F(iFace), Cright_F(iFace), &
-            Un_F(iFace), Rho_F(iFace))
+            Un_F(iFace), Rho_F(iFace), pTot_F(iFace))
        VaFace_F(iFace) = B_F(iFace)/sqrt(cMu*Rho_F(iFace))
     end do
     ! Set the speed on top of the transition region from the RS:
@@ -1456,7 +1466,8 @@ contains
        ! Get full source vector
        !
        Source_V(Rho_:Energy_)     = [0.0, &  ! No density source
-            (Pperp + Pe + WavePress)*NablaHatB_C(iCell) +&
+            ((Pperp - Primitive_VG(Ppar_,iCell)) + 0.5*(pTot_F(iCell)&
+            + pTot_F(iCell+1)))*NablaHatB_C(iCell) +&
             GravitySource,                                & ! Momentum
             PeSource + WavePress*DivU_C(iCell) + GravitySource*&
             Primitive_VG(U_,iCell) + PparHeating + PperpHeating] ! Energy
@@ -1534,14 +1545,14 @@ contains
     end subroutine set_thread_inner_bc
     !==========================================================================
     subroutine get_thread_flux(pLeft_V, pRight_V, &
-         Flux_V, Cleft, Cright, UnFace, RhoFace)
+         Flux_V, Cleft, Cright, UnFace, RhoFace, PtotFace)
 
       real,   intent(in) :: pLeft_V(Rho_:Wminor_), pRight_V(Rho_:Wminor_)
       real,  intent(out) :: Flux_V(Rho_:Wminor_)
-      real,  intent(out) :: Cleft, Cright, UnFace, RhoFace
+      real,  intent(out) :: Cleft, Cright, UnFace, RhoFace, PtotFace
 
       real    :: UpwindState_V(Rho_:Wminor_), PeL, PeR, CsL, CsR, &
-           TotalP, DensityRatio, PparFace, ExtraP, ExtraPright, ExtraPleft
+           DensityRatio, PparFace, ExtraP, ExtraPright, ExtraPleft
       ! To calculate AW flux, if needed
       logical :: UseArtificialWind = .false.
       real, dimension(Rho_:Wminor_) :: ConsL_V, ConsR_V, FluxL_V, FluxR_V
@@ -1608,9 +1619,10 @@ contains
              Diffusion*(ConsL_V - ConsR_V)
          UnFace  = UnL* WeightL + UnR* WeightR
          RhoFace = RhoL*WeightL + RhoR*WeightR
+         PtotFace = pL*WeightL + pR*WeightR
          RETURN
       end if
-      call exact_rs_sample(0.0, RhoFace, UnFace, TotalP)
+      call exact_rs_sample(0.0, RhoFace, UnFace, PtotFace)
       if (UnStar  >  0) then
          ! Factor for variable scaling with density
          DensityRatio = RhoFace / pLeft_V(Rho_)
@@ -1627,13 +1639,13 @@ contains
       ! get the flux
 
       Flux_V(Rho_) = RhoFace * UnFace
-      Flux_V(RhoU_) = RhoFace*UnFace**2 + TotalP
+      Flux_V(RhoU_) = RhoFace*UnFace**2 + PtotFace
       ! All contributions to pressure except for ion one are assumed
       ! to scale adiabatically with density:
-      PparFace = TotalP - ExtraP*DensityRatio**Gamma
+      PparFace = PtotFace - ExtraP*DensityRatio**Gamma
       Flux_V(Pe_) = 1.50*Pe*(DensityRatio**Gamma)*UnFace
       Flux_V(Energy_) = (0.50*RhoFace*UnFace**2 + 1.5*PparFace + &
-           TotalP)*UnFace
+           PtotFace)*UnFace
       Flux_V(Wmajor_:Wminor_) = (DensityRatio**(Gamma-0.50))*&
            UpwindState_V(Wmajor_:Wminor_)*UnFace
     end subroutine get_thread_flux
@@ -1734,33 +1746,18 @@ contains
           HeatFluxFace = (ConsCell - ConsSiMax)/DeltaS
           if(present(HeatFluxOut))HeatFluxOut = HeatFluxFace
           if(present(dFluxOverdConsOut))dFluxOverdConsOut = 1/DeltaS
-          if(present(PeFaceOut))then
-             PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
-             ! Correction coefficient, based on the algorithm used in OldTr
-             EnthalpyFlux = 2.50* & ! this is 1/(Gamma - 1) + 1
-                  uFace* & ! this is Ucell*(PeCell + PiCell)*Z/(1 + Z)/PeFace
-                  PeFaceOut*(1/Z +1) ! Approximate the enthalpy flux in the Cell
-             PressureTRCoef = sqrt(max(&
-                  1 - EnthalpyFlux/HeatFluxFace,1.0e-8))
-             PeFaceOut = PressureTRCoef*PeFaceOut
-          end if
+          if(present(PeFaceOut))&
+               PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
           RETURN
-       elseif(TeFace<=TeSiMin)then
+       elseif(TeFace <= TeSiMin)then
           TeFace = TeSiMin
           call get_trtable_value(TeFace,uFace)
+          if(present(TeFaceOut))TeFaceOut = TeFace
           HeatFluxFace = TrTable_V(HeatFluxLength_)/LengthTr
           if(present(HeatFluxOut))HeatFluxOut = HeatFluxFace
           if(present(dFluxOverdConsOut))dFluxOverdConsOut = 0.0
-          if(present(PeFaceOut))then
-             PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
-             ! Correction coefficient, based on the algorithm used in OldTr
-             EnthalpyFlux = 2.50* & ! this is 1/(Gamma - 1) + 1
-                  uFace* & ! this is Ucell*(PeCell + PiCell)*Z/(1 + Z)/PeFace
-                  PeFaceOut*(1/Z +1) ! Approximate the enthalpy flux in the Cell
-             PressureTRCoef = sqrt(max(&
-                  1 - EnthalpyFlux/HeatFluxFace,1.0e-8))
-             PeFaceOut = PressureTRCoef*PeFaceOut
-          end if
+          if(present(PeFaceOut))&
+               PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
           RETURN
        end if
        call get_trtable_value(TeFace,uFace)
@@ -2129,10 +2126,10 @@ contains
   !============================================================================
   subroutine plot_tr(NamePlotFile, nGrid, TeSi, PeSi, iTable)
 
-    use ModPlotFile,    ONLY: save_plot_file
+    use ModPlotFile, ONLY: save_plot_file
     use ModLookupTable, ONLY: interpolate_lookup_table, get_lookup_table
-    use ModConst,       ONLY: cBoltzmann
-    use ModUtilities,   ONLY: split_string, join_string
+    use ModConst, ONLY: cBoltzmann
+    use ModUtilities, ONLY: split_string, join_string
 
     character(LEN=*), intent(in) :: NamePlotFile
 
@@ -2304,15 +2301,16 @@ contains
   end subroutine save_plot_thread
   !============================================================================
   subroutine test
-    use ModConst, ONLY: Rsun, cBoltzmann
     real :: PeFace, TeFace, HeatFluxFace
     real :: Te_I(100) = 1.0e5  ! K
     real :: Ni_I(99) = 3.0e14 ! m-3
     real :: Ti_I(99) = 1.0e5  ! K
-    real :: uFace = 0.0
+    real :: Pi_I(99), Pe_I(99), Ptot_I(99), Rho_I(99)
+    real :: uFace = 0.0, RhoFace, PtotFace, Misc
     real :: Ds_I(0:100) = 1.0e-3*Rsun
     real :: B_I(100) = 5.0e-4      ! T
     integer :: iPoint, iTime
+    real :: rFace = 1.001, rInv_I(99) ! Both dimensionless
     !--------------------------------------------------------------------------
     call solve_tr_face(TeCell = 1.0e6, &
          uFace = uFace,                   & ! cell-centered, in SI
@@ -2326,15 +2324,70 @@ contains
     write(*,'(a,es13.6)')'uFace  = ',uFace
     write(*,'(a,es13.6)')'Heat flux = ', HeatFluxFace
     Te_I(100) = 2.0e6
+    write(*,*)'1/rFace=',1/rFace
+    do iPoint = 1, 99
+       rInv_I(iPoint) = Rsun/(Rsun + sum(Ds_I(0:iPoint-1)) + 0.5*Ds_I(iPoint))
+    end do
     do iTime = 1,36
        call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I, Ni_I, Ds_I, &
-            uFace, B_I, PeFaceOut = PeFace, DoLimitTimestep=.true.)
-       Ni_I = PeFace/(cBoltzmann*Te_I(1:99))
+            uFace, B_I, PeFaceOut = PeFace, TeFaceOut=TeFace, &
+            DoLimitTimestep=.true.)
+       RhoFace = cProtonMass*PeFace/(cBoltzmann*TeFace)
+       PtotFace = 0.5*PoyntingFluxPerBSi*sqrt(cMu*RhoFace) + 2*PeFace
+
+       ! Predictor
+       Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*RhoFace/PtotFace*&
+            (1.0/rFace - rInv_I(1)))
+       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(1)))
+       Rho_I(1) = Ptot_I(1)/(Misc + sqrt(Misc**2 + cBoltzmann*&
+            (Te_I(1) + Ti_I(1))/cProtonMass))**2
+       ! Corrector
+       Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*0.50*&
+            (RhoFace/PtotFace +  Rho_I(1)/Ptot_I(1))*&
+            (1.0/rFace - rInv_I(1)))
+       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(1)))
+       Rho_I(1) = Ptot_I(1)/(Misc + sqrt(Misc**2 + cBoltzmann*&
+            (Te_I(1) + Ti_I(1))/cProtonMass))**2
+       Ni_I(1) = Rho_I(1)/cProtonMass
+       Pi_I(1) = cBoltzmann*Ni_I(1)*Ti_I(1)
+       Pe_I(1) = cBoltzmann*Ni_I(1)*Te_I(1)
+       do iPoint = 2, 99
+          ! Predictor
+          Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
+               Rho_I(iPoint-1)/Ptot_I(iPoint-1)*&
+               (rInv_I(iPoint-1) - rInv_I(iPoint)))
+          Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(iPoint)))
+          Rho_I(iPoint) = Ptot_I(iPoint)/(Misc + sqrt(Misc**2 + cBoltzmann*&
+               (Te_I(iPoint) + Ti_I(iPoint))/cProtonMass))**2
+          ! Corrector
+          Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*0.5*(&
+               Rho_I(iPoint-1)/Ptot_I(iPoint-1) + Rho_I(iPoint)/Ptot_I(iPoint)&
+               )*(rInv_I(iPoint-1) - rInv_I(iPoint)))
+          Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(iPoint)))
+          Rho_I(iPoint) = Ptot_I(iPoint)/(Misc + sqrt(Misc**2 + cBoltzmann*&
+               (Te_I(iPoint) + Ti_I(iPoint))/cProtonMass))**2
+          Ni_I(iPoint) = Rho_I(iPoint)/cProtonMass
+          Pi_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Ti_I(iPoint)
+          Pe_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Te_I(iPoint)
+       end do
     end do
-    write(*,'(a,es13.6)')'PeFace = ',PeFace,' PeFace*Length=', PeFace*0.1*Rsun
-    write(*,'(a)')'iPoint   Te     Ti    Ni'
+    write(*,'(a,es13.6,a,es13.6,a,es13.6)')'PeFace = ',PeFace,' PtotFace=',&
+         PtotFace,' Pwave=',PtotFace - 2*PeFace
+    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*PtotFace))
+    write(*,'(a,es13.6)')'Cross-check: RhoFace=',RhoFace,&
+         ' in terms of Ptot=', PtotFace/(Misc + sqrt(Misc**2 + cBoltzmann*2*&
+            TeFace/cProtonMass))**2
+
+    write(*,'(a)')'iPoint   Te    Ti    Ni   Pi'
     do iPoint = 1,99
-       write(*,'(i2,3es13.6)')iPoint, Te_I(iPoint), Ti_I(iPoint), Ni_I(iPoint)
+       write(*,'(i2,4es14.6)')iPoint, Te_I(iPoint), Ti_I(iPoint), Ni_I(iPoint),&
+            Pi_I(iPoint)
+    end do
+    write(*,'(a)')'iPoint  GravForce  GradP'
+    do iPoint = 2,98
+       write(*,'(i2,2es14.6)')iPoint, Ni_I(iPoint)*cProtonMass*    &
+            cGravityPotAt1Rs*(rInv_I(iPoint-1) - rInv_I(iPoint+1)),&
+            Ptot_I(iPoint-1) - Ptot_I(iPoint+1)
     end do
   end subroutine test
   !============================================================================
