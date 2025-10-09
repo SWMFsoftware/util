@@ -443,7 +443,6 @@ contains
     real   :: dUoverDutr             ! Velocity derivative over uTr
     ! Misc:
     real :: FactorStep, DeltaLogTeCoef, LambdaCgs_V(1)
-    real :: uOverTmin5, KinEnergyFlux
 
     character(len=*), parameter:: NameSub = 'check_tr_table'
     !--------------------------------------------------------------------------
@@ -512,8 +511,6 @@ contains
     DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
     do iU = 1, nPointU
        uTr = (iU - 1)*DeltaU + uMin
-       uOverTmin5 = 5*(uTr/TeTrMin)*DeltaLogTe
-       KinEnergyFlux = (cProtonMass/cBoltzmann)*(uTr/TeTrMin)**3*DeltaLogTe
        do iTe = 1, nPointTe
           U_I(iTe) = u_over_utr(TeSi_I(iTe), uTr)*uTr
           ! See above: Pavr/P_ch = 1 + Eps*(1 - U/uTr),
@@ -539,8 +536,6 @@ contains
        ! Delta(uHeat2) = 2*uHeat*Delta(EnthalpyFlux) + &
        !     2*Lambda*(Pavr/Pch)**2*Te**1.5*DeltaLogTeCoef   (**)
        ! where Delta(...) = ...(iTe) - ...(iTe-1)
-       ! uHeat_I(1) = max(uTr*(IonizationLoss/SqrtZ + 2.5*(SqrtZ + 1/SqrtZ) + &
-       !     cProtonMass*uTr**2/(2*SqrtZ*cBoltzmann*TeTrMin)), 0.0)
        uHeat_I(1) = max(uTr*IonizationLoss/SqrtZ + EnthalpyFlux_I(1), 0.0)
        uHeat2_I(1) = uHeat_I(1)**2
        do iTe = 2, nPointTe
