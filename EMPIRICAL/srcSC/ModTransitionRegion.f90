@@ -167,7 +167,7 @@ module ModTransitionRegion
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 40.0, uMin = -40.0
+  real, parameter :: uMax = 40.0, uMin = 0.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Needed for initialization:
   logical :: DoInit = .true.
@@ -177,7 +177,7 @@ module ModTransitionRegion
   end interface advance_heat_conduction
   ! Inner boundary
   ! To be read from the parameter file
-  real :: TempInner = 2.0e6, PressInner = 4.0e-3
+  real :: tCorona = 2.0e6, pCorona = 4.0e-3
   ! Dimensionless parameters for stochastic heating
   logical :: UseStochasticHeating = .true.
   real :: StochasticExponent   = 0.21
@@ -304,8 +304,8 @@ contains
        call read_var("LperpTimesSqrtBSi",LperpTimesSqrtBSi)
        call read_var("rMinReflectionTr", rMinReflectionTr)
     case("#INNERBOUNDARY")
-       call read_var('TempInner', TempInner)
-       call read_var('PressInner', PressInner)
+       call read_var('tCorona', tCorona)
+       call read_var('pCorona', pCorona)
     case("#MINPRESSTR")
        call read_var('MinPress', MinPress)
     case("#MINRHOTR")
@@ -323,13 +323,13 @@ contains
   end subroutine read_tr_param
   !============================================================================
   subroutine check_tr_param(rMaxIn, rMinReflectionTrIn, &
-       TempInnerIn, PressInnerIn,                       &
+       tCoronaIn, pCoronaIn,                       &
        UseStochasticHeatingIn,                          &
        StochasticExponentIn, StochasticAmplitudeIn,     &
        StochasticExponent2In, StochasticAmplitude2In,   &
        QparPerQtotalIn, QperpPerQtotalIn)
     real, intent(in) :: rMaxIn, rMinReflectionTrIn
-    real, intent(in) :: TempInnerIn, PressInnerIn ! Coronal base parameters SI
+    real, intent(in) :: tCoronaIn, pCoronaIn ! Coronal base parameters SI
     ! Dimensionless parameters for turbulent heating
     logical, intent(in) :: UseStochasticHeatingIn
     ! If UseStochastic heating, assign the following:
@@ -343,8 +343,8 @@ contains
     !--------------------------------------------------------------------------
     rMax = rMaxIn
     rMinReflectionTr = rMinReflectionTrIn
-    TempInner = TempInnerIn
-    PressInner = PressInnerIn
+    tCorona = tCoronaIn
+    pCorona = pCoronaIn
     UseStochasticHeating = UseStochasticHeatingIn
     if(UseStochasticHeating)then
        if(present(StochasticExponentIn))&
@@ -857,45 +857,54 @@ contains
     !==========================================================================
     subroutine init_thread_variables(OpenThread1)
 
-      use ModConst, ONLY: cBoltzmann, cProtonMass
-
       type(OpenThread),intent(inout) :: OpenThread1
 
-      real :: RInvCenter_I(-OpenThread1%nCell:-1)
-      integer :: nCell
+      real :: rInv_I(-OpenThread1%nCell:0), rFaceInv
+      real :: PeFace, TeFace, uFace = 0.0
+      real :: Te_I(-OpenThread1%nCell:0)
+      real :: Ni_I(-OpenThread1%nCell:0)
+      real :: Ti_I(-OpenThread1%nCell:0)
+      real :: Pi_I(-OpenThread1%nCell:0), Pe_I(-OpenThread1%nCell:0)
+      real :: Ds_I(-OpenThread1%nCell-1:0)
+      real :: B_I(-OpenThread1%nCell:0)
+      integer :: iTime, nCell
 
       !------------------------------------------------------------------------
       nCell = OpenThread1%nCell
-      RInvCenter_I(-nCell:-1) = &
+      B_I = OpenThread1%B_F(-OpenThread1%nCell:0)
+      Ds_I =  OpenThread1%Ds_G(-OpenThread1%nCell-1:0)
+      rFaceInv = 1/OpenThread1%R_F(-nCell)
+      rInv_I(-nCell:-1) = &
            (1/OpenThread1%R_F(-nCell:-1) + &
            1/OpenThread1%R_F(-nCell+1: 0))*0.50
-
+      rInv_I(0) = 1/(OpenThread1%R_F(0) + (OpenThread1%R_F(0) - &
+           OpenThread1%R_F(-1))*min(0.50, Ds_I(0)/Ds_I(-1)) )
       ! initial velocity is zero
 
       OpenThread1%State_VG(U_,-nCell:-1) = 0.0
 
-      ! exponential pressure
+      Te_I = tCorona; Ti_I = tCorona
+      Ni_I = 0.50*pCorona/(cBoltzmann*tCorona)
+      do iTime = 1,nCell
+         call advance_heat_conduction_ta(nCell, 100.0, Te_I, Ti_I(-nCell:-1),&
+              Ni_I(-nCell:-1), Ds_I, uFace, B_I, PeFaceOut = PeFace, &
+              TeFaceOut=TeFace, DoLimitTimestep=.true.)
+         call barometric_equilibrium(nCell, Te_I, Ti_I, Ds_I, rInv_I, &
+              rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
+      end do
 
-      OpenThread1%State_VG(P_,-nCell:-1) = PressInner*0.5*exp(  &
-           cProtonMass*cGravityPotAt1Rs /(cBoltzmann*TempInner)*&
-           (1.0/rMin - RInvCenter_I) )
+      OpenThread1%State_VG(P_,-nCell:-1) = Pi_I(-nCell:-1)
       if(UseAnisoPressure)OpenThread1%State_VG(Ppar_,-nCell:-1) = &
            OpenThread1%State_VG(P_,-nCell:-1)
-      OpenThread1%State_VG(Pe_,-nCell:-1) = &
-           OpenThread1%State_VG(P_,-nCell:-1)
+      OpenThread1%State_VG(Pe_,-nCell:-1) = Pe_I(-nCell:-1)
 
       OpenThread1%State_VG(Wmajor_,-nCell:-1) = 1.0
       OpenThread1%State_VG(Wminor_,-nCell:-1) = 1.0e-8
-      OpenThread1%Te_G(1-nCell:-1) = TempInner
-      OpenThread1%Te_G(-nCell) = 0.5*TempInner
-      ! Pi = n * kB * T, n = Rho / Mp
-      ! -> Rho = Mp * Pi / (kB * T)
-      OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass*     &
-           OpenThread1%State_VG(P_,-nCell:-1)/(cBoltzmann*&
-           OpenThread1%Te_G(-nCell:-1))
-      OpenThread1%TeTr = 0.50*TempInner
+      OpenThread1%Te_G(-nCell:-1) = Te_I(-nCell:-1)
+      OpenThread1%State_VG(Rho_,-nCell:-1) = cProtonMass*Ni_I(-nCell:-1)
+      OpenThread1%TeTr = TeFace
       OpenThread1%uTr  = 0.0
-      OpenThread1%PeTr = 0.50*PressInner
+      OpenThread1%PeTr = PeFace
 
     end subroutine init_thread_variables
     !==========================================================================
@@ -917,6 +926,65 @@ contains
     end subroutine limit_cosbr
     !==========================================================================
   end subroutine set_thread
+  !============================================================================
+  subroutine barometric_equilibrium(nPoint, Te_I, Ti_I, Ds_I, rInv_I, &
+       rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
+
+    integer, intent(in)    :: nPoint
+    real,    intent(in)    :: Te_I(nPoint+1), Ti_I(nPoint+1)
+    real,    intent(in)    :: Ds_I(0:nPoint+1), rInv_I(nPoint+1)
+    real,    intent(in)    :: rFaceInv, PeFace, TeFace
+    real,    intent(out)   :: Ni_I(nPoint+1), Pe_I(nPoint+1), Pi_I(nPoint+1)
+
+    real :: uFace = 0.0, RhoFace, PtotFace, Misc
+    ! Predicted vars at the midpoint
+    real :: PredTe, PredTi, PredRho, PredPtot
+    ! total pressure and mass density
+    real :: Ptot_I(nPoint+1), Rho_I(nPoint+1)
+    ! Loop variable
+    integer :: iPoint
+    !--------------------------------------------------------------------------
+
+    RhoFace = cProtonMass*PeFace/(Z*cBoltzmann*TeFace)
+    PtotFace = 0.5*PoyntingFluxPerBSi*sqrt(cMu*RhoFace) + (1 + 1/Z)*PeFace
+    ! Predictor
+    PredPtot = PtotFace*exp(cGravityPotAt1Rs*RhoFace/PtotFace*0.5*&
+         (rFaceInv - rInv_I(1)))
+    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*PredPtot))
+    PredTe = 0.5*(TeFace + Te_I(1))
+    PredTi = 0.5*(TeFace + Ti_I(1))
+    PredRho = PredPtot/(Misc + sqrt(Misc**2 + cBoltzmann*&
+         (PredTe + PredTi)/cProtonMass))**2
+    ! Corrector
+    Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*&
+         PredRho/PredPtot*(rFaceInv - rInv_I(1)))
+    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(1)))
+    Rho_I(1) = Ptot_I(1)/(Misc + sqrt(Misc**2 + cBoltzmann*&
+         (Te_I(1) + Ti_I(1))/cProtonMass))**2
+    Ni_I(1) = Rho_I(1)/cProtonMass
+    Pi_I(1) = cBoltzmann*Ni_I(1)*Ti_I(1)
+    Pe_I(1) = cBoltzmann*Ni_I(1)*Te_I(1)*Z
+    do iPoint = 2, nPoint + 1
+       ! Predictor
+       PredPtot = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
+            Rho_I(iPoint-1)/Ptot_I(iPoint-1)*0.5*&
+            (rInv_I(iPoint-1) - rInv_I(iPoint)))
+       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*PredPtot))
+       PredTe = 0.50*(Te_I(iPoint-1) + Te_I(iPoint))
+       PredTi = 0.50*(Ti_I(iPoint-1) + Ti_I(iPoint))
+       PredRho = PredPtot/(Misc + sqrt(Misc**2 + cBoltzmann*&
+            (PredTe + PredTi)/cProtonMass))**2
+       ! Corrector
+       Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
+            PredRho/PredPtot*(rInv_I(iPoint-1) - rInv_I(iPoint)))
+       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(iPoint)))
+       Rho_I(iPoint) = Ptot_I(iPoint)/(Misc + sqrt(Misc**2 + cBoltzmann*&
+            (Te_I(iPoint) + Ti_I(iPoint))/cProtonMass))**2
+       Ni_I(iPoint) = Rho_I(iPoint)/cProtonMass
+       Pi_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Ti_I(iPoint)
+       Pe_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Te_I(iPoint)*Z
+    end do
+  end subroutine barometric_equilibrium
   !============================================================================
   subroutine allocate_thread_arr(Threads_II, nI, nJ)
     type(OpenThread), allocatable, intent(inout) :: Threads_II(:,:)
@@ -997,6 +1065,7 @@ contains
   end subroutine deallocate_thread_arr
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
+
     use ModLookupTable, ONLY: interpolate_lookup_table
     ! INPUTS:
     ! The plasma parameters on top of the transition region:
@@ -2123,7 +2192,6 @@ contains
 
     use ModPlotFile, ONLY: save_plot_file
     use ModLookupTable, ONLY: interpolate_lookup_table, get_lookup_table
-    use ModConst, ONLY: cBoltzmann
     use ModUtilities, ONLY: split_string, join_string
 
     character(LEN=*), intent(in) :: NamePlotFile
@@ -2296,16 +2364,15 @@ contains
   end subroutine save_plot_thread
   !============================================================================
   subroutine test
-    real :: PeFace, TeFace, HeatFluxFace
+    real :: PeFace, TeFace, HeatFluxFace, uFace = 0.0
     real :: Te_I(100) = 1.0e5  ! K
-    real :: Ni_I(99) = 3.0e14 ! m-3
-    real :: Ti_I(99) = 1.0e5  ! K
-    real :: Pi_I(99), Pe_I(99), Ptot_I(99), Rho_I(99)
-    real :: uFace = 0.0, RhoFace, PtotFace, Misc
+    real :: Ni_I(100) = 3.0e14 ! m-3
+    real :: Ti_I(100) = 1.0e5  ! K
+    real :: Pi_I(100), Pe_I(100)
     real :: Ds_I(0:100) = 1.0e-3*Rsun
     real :: B_I(100) = 5.0e-4      ! T
     integer :: iPoint, iTime
-    real :: rFace = 1.001, rInv_I(99) ! Both dimensionless
+    real :: rFaceInv = 1/1.001, rInv_I(100) ! Both dimensionless
     !--------------------------------------------------------------------------
     call solve_tr_face(TeCell = 1.0e6, &
          uFace = uFace,                   & ! cell-centered, in SI
@@ -2318,71 +2385,27 @@ contains
     write(*,'(a,es13.6)')'PeFace = ',PeFace
     write(*,'(a,es13.6)')'uFace  = ',uFace
     write(*,'(a,es13.6)')'Heat flux = ', HeatFluxFace
-    Te_I(100) = 2.0e6
-    write(*,*)'1/rFace=',1/rFace
+    Te_I(100) = tCorona; Ti_I(100) = tCorona
+    Ds_I(100) = 0.5*Ds_I(100)
+    write(*,*)'1/rFace=',rFaceInv
     do iPoint = 1, 99
        rInv_I(iPoint) = Rsun/(Rsun + sum(Ds_I(0:iPoint-1)) + 0.5*Ds_I(iPoint))
     end do
-    do iTime = 1,36
-       call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I, Ni_I, Ds_I, &
-            uFace, B_I, PeFaceOut = PeFace, TeFaceOut=TeFace, &
-            DoLimitTimestep=.true.)
-       RhoFace = cProtonMass*PeFace/(cBoltzmann*TeFace)
-       PtotFace = 0.5*PoyntingFluxPerBSi*sqrt(cMu*RhoFace) + 2*PeFace
-
-       ! Predictor
-       Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*RhoFace/PtotFace*&
-            (1.0/rFace - rInv_I(1)))
-       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(1)))
-       Rho_I(1) = Ptot_I(1)/(Misc + sqrt(Misc**2 + cBoltzmann*&
-            (Te_I(1) + Ti_I(1))/cProtonMass))**2
-       ! Corrector
-       Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*0.50*&
-            (RhoFace/PtotFace +  Rho_I(1)/Ptot_I(1))*&
-            (1.0/rFace - rInv_I(1)))
-       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(1)))
-       Rho_I(1) = Ptot_I(1)/(Misc + sqrt(Misc**2 + cBoltzmann*&
-            (Te_I(1) + Ti_I(1))/cProtonMass))**2
-       Ni_I(1) = Rho_I(1)/cProtonMass
-       Pi_I(1) = cBoltzmann*Ni_I(1)*Ti_I(1)
-       Pe_I(1) = cBoltzmann*Ni_I(1)*Te_I(1)
-       do iPoint = 2, 99
-          ! Predictor
-          Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
-               Rho_I(iPoint-1)/Ptot_I(iPoint-1)*&
-               (rInv_I(iPoint-1) - rInv_I(iPoint)))
-          Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(iPoint)))
-          Rho_I(iPoint) = Ptot_I(iPoint)/(Misc + sqrt(Misc**2 + cBoltzmann*&
-               (Te_I(iPoint) + Ti_I(iPoint))/cProtonMass))**2
-          ! Corrector
-          Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*0.5*(&
-               Rho_I(iPoint-1)/Ptot_I(iPoint-1) + Rho_I(iPoint)/Ptot_I(iPoint)&
-               )*(rInv_I(iPoint-1) - rInv_I(iPoint)))
-          Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(iPoint)))
-          Rho_I(iPoint) = Ptot_I(iPoint)/(Misc + sqrt(Misc**2 + cBoltzmann*&
-               (Te_I(iPoint) + Ti_I(iPoint))/cProtonMass))**2
-          Ni_I(iPoint) = Rho_I(iPoint)/cProtonMass
-          Pi_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Ti_I(iPoint)
-          Pe_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Te_I(iPoint)
-       end do
+    rInv_I(100) = Rsun/(Rsun + sum(Ds_I))
+    do iTime = 1,100
+       call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I(1:99), &
+            Ni_I(1:99), Ds_I, uFace, B_I, PeFaceOut = PeFace, &
+            TeFaceOut=TeFace, DoLimitTimestep=.true.)
+       call barometric_equilibrium(99, Te_I, Ti_I, Ds_I, rInv_I, &
+       rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
     end do
-    write(*,'(a,es13.6,a,es13.6,a,es13.6)')'PeFace = ',PeFace,' PtotFace=',&
-         PtotFace,' Pwave=',PtotFace - 2*PeFace
-    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*PtotFace))
-    write(*,'(a,es13.6)')'Cross-check: RhoFace=',RhoFace,&
-         ' in terms of Ptot=', PtotFace/(Misc + sqrt(Misc**2 + cBoltzmann*2*&
-            TeFace/cProtonMass))**2
 
-    write(*,'(a)')'iPoint   Te    Ti    Ni   Pi'
-    do iPoint = 1,99
-       write(*,'(i2,4es14.6)')iPoint, Te_I(iPoint), Ti_I(iPoint), Ni_I(iPoint),&
-            Pi_I(iPoint)
-    end do
-    write(*,'(a)')'iPoint  GravForce  GradP'
-    do iPoint = 2,98
-       write(*,'(i2,2es14.6)')iPoint, Ni_I(iPoint)*cProtonMass*    &
-            cGravityPotAt1Rs*(rInv_I(iPoint-1) - rInv_I(iPoint+1)),&
-            Ptot_I(iPoint-1) - Ptot_I(iPoint+1)
+    write(*,'(a)')'iPoint   Te   Ti    Ni   Pi   Pe   1/R'
+    write(*,'(i3,6es14.6)')0, TeFace, TeFace, PeFace/(cBoltzmann*TeFace), &
+         PeFace/Z, PeFace, rFaceInv
+    do iPoint = 1,100
+       write(*,'(i3,6es14.6)')iPoint, Te_I(iPoint), Ti_I(iPoint), &
+            Ni_I(iPoint), Pi_I(iPoint), Pe_I(iPoint), rInv_I(iPoint)
     end do
   end subroutine test
   !============================================================================
