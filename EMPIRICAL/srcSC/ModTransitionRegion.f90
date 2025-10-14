@@ -897,7 +897,7 @@ contains
       OpenThread1%TeTr = TeFace
       OpenThread1%uTr  = 0.0
       OpenThread1%PeTr = PeFace
-
+      OpenThread1%LimiterState_V = OpenThread1%State_VG(:,0)
     end subroutine init_thread_variables
     !==========================================================================
     subroutine limit_cosbr(Xyz_D, B_D)
@@ -1870,7 +1870,7 @@ contains
   !============================================================================
   subroutine advance_heat_conduction_ss(nPoint, Dt_I, Te_I, Ti_I, Ni_I, Ds_I,&
        uFace, B_I, BCellIn_I, PeFaceOut, TeFaceOut, DoLimitTimestep)
-    use ModConst, ONLY: cBoltzmann
+
     integer, intent(in)    :: nPoint
     real,    intent(in)    :: Dt_I(nPoint)
     real,    intent(inout) :: Te_I(nPoint+1), Ti_I(nPoint)
@@ -2055,7 +2055,7 @@ contains
        ! Outputs:
        QparPerQtotal, QperpPerQtotal, QePerQtotal)
 
-    use ModConst, ONLY: cMu, cProtonMass, cElectronCharge
+    use ModConst, ONLY: cElectronCharge
     ! Input pressures
     real, intent(in) :: PparIn, PperpIn, PeIn
     ! Input density and magnetic field
