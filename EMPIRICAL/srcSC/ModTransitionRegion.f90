@@ -154,12 +154,12 @@ module ModTransitionRegion
   ! Parameters of the TR table:
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
-  integer, parameter :: nPointTe = 310, nPointU = 17
+  integer, parameter :: nPointTe = 310, nPointU = 11
   ! Global array used to fill in the table
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 40.0, uMin = 0.0
+  real, parameter :: uMax = 500.0, uMin = 0.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Needed for initialization:
   logical :: DoInit = .true.
@@ -447,11 +447,10 @@ contains
     call init_lookup_table(                                      &
          NameTable = 'TR',                                       &
          NameCommand = 'save',                                   &
-         Param_I = [1.0, uMin, uMax],                            &
+         Param_I = [uMin, uMax],                                 &
          NameVar =                                               &
          'logTe u LPe UHeat FluxXLength '//                      &
-         'dFluxXLegthOverDU Lambda dLogLambdaOverDLogT '//&
-         'EnergyEff uMin uMax',                                  &
+         'dFluxXLengthOverDU Lambda dLogLambdaOverDLogT uMin uMax',&
          nIndex_I = [nPointTe,nPointU],                          &
          IndexMin_I = [TeTrMin, uMin],                           &
          IndexMax_I = [TeTrMax, uMax],                           &
@@ -460,7 +459,7 @@ contains
          StringDescription =                                     &
          'Model for transition region: '//                       &
          '[K] [m/s] [N/m] [m/s] [W/m] [1] [W*m3/(k_B2)] [1] [W/m]'//&
-         ' [1] [m/s] [m/s]')
+         ' [m/s] [m/s]')
 
     ! The table is now initialized.
     iTableTr = i_lookup_table('TR')
@@ -509,6 +508,13 @@ contains
           ! where Eps = cProtonMass*uTr**2/(cBoltzmann*T_ch*(Z + 1)
           pOverPch_I(iTe) = 1 + (uTr - U_I(iTe))*cProtonMass*uTr/&
                (cBoltzmann*TeTrMin*(Z + 1))
+          if(pOverPch_I(iTe) < 0.0)then
+             write(*,*)'TeSi=',TeSi_I(iTe)
+             write(*,*)'uTr=', uTr
+             write(*,*)'iU=',iU
+             write(*,*)'U_I=',U_I(iTe)
+             call CON_stop('Negative pressure')
+          end if
           ! Enthalpy Flux
           ! u*Ni*((Z+1)*(5/2)*cBoltzmann*Te + (1/2)*cProtonMass*U**2)
           ! Its ratio to P_ch=SqrtZ*cBoltzmann*Tch*Nch equals
@@ -1241,6 +1247,8 @@ contains
     real :: Reflection_C(-OpenThread1%nCell:-1)
     ! Calculated using the constants above or by applying apportion_heating
     real :: PparHeating, PperpHeating, PeHeating, pLimit
+    ! To calculate %PeTr
+    real :: PtotR
     ! Loop variables:
     integer :: iCell, iFace
     ! Vector of primitives used in limiting
@@ -1307,6 +1315,8 @@ contains
          uIn  = OpenThread1%uTr,  &
          pIn  = OpenThread1%PeTr, &
          State_V= State_VG(:,-nCell-1))
+    State_VG(Wmajor_,-nCell-1) = min(max(1.0, 5e-4/B_F(-nCell)), &
+         1.1e6/PoyntingFluxPerbSi)
     !
     ! limited interpolation procedure:
     ! 1. logarithm of density/pressure is better to be limited
@@ -1405,6 +1415,14 @@ contains
        pLeft_VF(iLogVar_V,-nCell:0) = exp(&
             pLeft_VF(iLogVar_V,-nCell:0))
     end if
+    ! Fix left BC to avoid inflow to the TR from low SC
+    PtotR = pRight_VF(P_,-nCell) + pRight_VF(Pe_,-nCell)
+    ! Velocity dependent correction
+    PtotR = (PtotR - sqrt(Gamma*PtotR*pRight_VF(Rho_,-nCell))*&
+         pRight_VF(U_,-nCell))*0.50
+    ! Floor inner boundary pressure
+    pLeft_VF(P_:Pe_,-nCell) = max(PtotR,pLeft_VF(P_:Pe_,-nCell))
+    OpenThread1%PeTr = max(PtotR, OpenThread1%PeTr)
     ! 2. Apply right BC on the external boundary (# = 0)
     if(present(RightFace0_V))then
        pRight_VF(:,0) = RightFace0_V
@@ -1417,18 +1435,22 @@ contains
     ! Get fluxes
     ! Loop over faces:
     do iFace = -nCell, 0
-       call get_thread_flux(pLeft_VF(:,iFace), pRight_VF(:,iFace), &
+       call get_thread_flux(iFace,pLeft_VF(:,iFace), pRight_VF(:,iFace), &
             Flux_VF(:,iFace), Cleft_F(iFace), Cright_F(iFace), &
             Un_F(iFace), Rho_F(iFace), pTot_F(iFace))
        VaFace_F(iFace) = B_F(iFace)/sqrt(cMu*Rho_F(iFace))
     end do
-    ! Set the speed on top of the transition region from the RS:
-    OpenThread1%uTr = Un_F(-nCell)*min(1.0,Rho_F(-nCell)/(&
-         OpenThread1%PeTr*cProtonMass/(Z*OpenThread1%TeTr*cBoltzmann)))
-    call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
-    ! Correct pressure for updated plasma speed
-    OpenThread1%PeTr = TrTable_V(LengthPavrSi_)*SqrtZ/Ds_G(-nCell-1)
-    ! du/ds, dV_A/ds, V_A
+    if(Un_F(-nCell) <=0)then
+       Un_F(-nCell) = 0.0
+       Flux_VF(Rho_,-nCell) = 0.0
+       Flux_VF(P_:,-nCell) = 0.0
+       OpenThread1%uTr = 0.5*OpenThread1%uTr
+    else
+       OpenThread1%uTr = 0.5*Un_F(-nCell) + 0.5*OpenThread1%uTr
+       call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
+       ! Correct pressure for updated plasma speed
+       OpenThread1%PeTr = TrTable_V(LengthPavrSi_)*SqrtZ/Ds_G(-nCell-1)
+    end if
     do iCell = -nCell,-1
        DuDs_C(iCell)  = (Un_F(iCell+1) - Un_F(iCell)) / &
             Ds_G(iCell)
@@ -1582,9 +1604,10 @@ contains
     end do
   contains
     !==========================================================================
-    subroutine get_thread_flux(pLeft_V, pRight_V, &
+    subroutine get_thread_flux(iFace,pLeft_V, pRight_V, &
          Flux_V, Cleft, Cright, UnFace, RhoFace, PtotFace)
 
+      integer, intent(in):: iFace
       real,   intent(in) :: pLeft_V(Rho_:Wminor_), pRight_V(Rho_:Wminor_)
       real,  intent(out) :: Flux_V(Rho_:Wminor_)
       real,  intent(out) :: Cleft, Cright, UnFace, RhoFace, PtotFace
@@ -1764,8 +1787,6 @@ contains
     real    :: ConsFace, dConsFace, ConsCell, Tolerance
     ! Newton-Rapson coefficients: dConsFace = -Res/dResdCons
     real    :: Res, dResdCons
-    ! Pressure correction accounting for the hydro enthalpy flux
-    real :: PressureTrCoef, EnthalpyFlux
     integer :: iCounter
     integer, parameter :: iCounterMax=20
     character(len=*), parameter:: NameSub = 'solve_tr_face'
@@ -1823,16 +1844,8 @@ contains
        dFluxOverdConsOut = TrTable_V(dHeatFluxXoverDcons_)/LengthTr
        dFluxOverdConsOut = dFluxOverdConsOut/(1 + DeltaS*dFluxOverdConsOut)
     end if
-    if(present(PeFaceOut))then
-       PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
-       ! Correction coefficient, based on the algorithm used in OldTr
-       EnthalpyFlux = 2.50* & ! this is 1/(Gamma - 1) + 1
-            uFace* & ! this is Ucell*(PeCell + PiCell)*Z/(1 + Z)/PeFace
-            PeFaceOut*(1/Z +1) ! Approximate the enthalpy flux in the Cell
-       PressureTRCoef = sqrt(max(&
-            1 - EnthalpyFlux/HeatFluxFace,1.0e-8))
-       PeFaceOut = PressureTRCoef*PeFaceOut
-    end if
+    if(present(PeFaceOut))&
+         PeFaceOut = TrTable_V(LengthPavrSi_)*SqrtZ/LengthTr
   end subroutine solve_tr_face
   !============================================================================
   real function cooling_rate(RhoSi, PeSi)
