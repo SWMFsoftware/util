@@ -940,6 +940,24 @@ contains
     !==========================================================================
   end subroutine set_thread
   !============================================================================
+  subroutine convert_p_tot_to_rho(Ptot, Te, Ti, Rho, wRepresentative)
+
+    ! Solve Rho from quadratic equation
+    ! Rho/cProtonMass*cBoltzmann*(Ti + Z*Te) + &
+    ! 0.5*PoyntingFluxPerBSi*sqrt(cMu*Rho)*wRepresentative - Ptot = 0
+    real, intent(in)  :: Ptot, Te, Ti
+    real, intent(out) :: Rho
+    real, optional, intent(in) :: wRepresentative
+
+    real :: Misc
+    character(LEN=*), parameter :: NameSub = 'convert_p_tot_to_rho'
+    !--------------------------------------------------------------------------
+
+    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot))
+    if(present(wRepresentative))Misc = Misc*wRepresentative
+    Rho = Ptot/(Misc + sqrt(Misc**2 + cBoltzmann*(Z*Te + Ti)/cProtonMass))**2
+  end subroutine convert_p_tot_to_rho
+  !============================================================================
   subroutine barometric_equilibrium(nPoint, Te_I, Ti_I, Ds_I, rInv_I, &
        rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
 
@@ -949,7 +967,7 @@ contains
     real,    intent(in)    :: rFaceInv, PeFace, TeFace
     real,    intent(out)   :: Ni_I(nPoint+1), Pe_I(nPoint+1), Pi_I(nPoint+1)
 
-    real :: uFace = 0.0, RhoFace, PtotFace, Misc
+    real :: uFace = 0.0, RhoFace, PtotFace
     ! Predicted vars at the midpoint
     real :: PredTe, PredTi, PredRho, PredPtot
     ! total pressure and mass density
@@ -963,17 +981,13 @@ contains
     ! Predictor
     PredPtot = PtotFace*exp(cGravityPotAt1Rs*RhoFace/PtotFace*0.5*&
          (rFaceInv - rInv_I(1)))
-    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*PredPtot))
     PredTe = 0.5*(TeFace + Te_I(1))
     PredTi = 0.5*(TeFace + Ti_I(1))
-    PredRho = PredPtot/(Misc + sqrt(Misc**2 + cBoltzmann*&
-         (PredTe + PredTi)/cProtonMass))**2
+    call convert_p_tot_to_rho(PredPtot, PredTe, PredTi, PredRho)
     ! Corrector
     Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*&
          PredRho/PredPtot*(rFaceInv - rInv_I(1)))
-    Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(1)))
-    Rho_I(1) = Ptot_I(1)/(Misc + sqrt(Misc**2 + cBoltzmann*&
-         (Te_I(1) + Ti_I(1))/cProtonMass))**2
+    call convert_p_tot_to_rho(Ptot_I(1), Te_I(1), Ti_I(1), Rho_I(1))
     Ni_I(1) = Rho_I(1)/cProtonMass
     Pi_I(1) = cBoltzmann*Ni_I(1)*Ti_I(1)
     Pe_I(1) = cBoltzmann*Ni_I(1)*Te_I(1)*Z
@@ -982,17 +996,14 @@ contains
        PredPtot = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
             Rho_I(iPoint-1)/Ptot_I(iPoint-1)*0.5*&
             (rInv_I(iPoint-1) - rInv_I(iPoint)))
-       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*PredPtot))
        PredTe = 0.50*(Te_I(iPoint-1) + Te_I(iPoint))
        PredTi = 0.50*(Ti_I(iPoint-1) + Ti_I(iPoint))
-       PredRho = PredPtot/(Misc + sqrt(Misc**2 + cBoltzmann*&
-            (PredTe + PredTi)/cProtonMass))**2
+       call convert_p_tot_to_rho(PredPtot, PredTe, PredTi, PredRho)
        ! Corrector
        Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
             PredRho/PredPtot*(rInv_I(iPoint-1) - rInv_I(iPoint)))
-       Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot_I(iPoint)))
-       Rho_I(iPoint) = Ptot_I(iPoint)/(Misc + sqrt(Misc**2 + cBoltzmann*&
-            (Te_I(iPoint) + Ti_I(iPoint))/cProtonMass))**2
+       call convert_p_tot_to_rho(Ptot_I(iPoint), &
+            Te_I(iPoint), Ti_I(iPoint), Rho_I(iPoint))
        Ni_I(iPoint) = Rho_I(iPoint)/cProtonMass
        Pi_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Ti_I(iPoint)
        Pe_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Te_I(iPoint)*Z
@@ -1223,17 +1234,11 @@ contains
     !
     ! What we need for the source calculation:
     !
-    ! Face area difference divided per control volume, needed to calculate
-    ! the contributions from the perp pressures (Xianyu, why is it called like
-    ! this?)
-    real :: NablaHatB_C(-OpenThread1%nCell:-1)
-    ! Projection of the gravity acceleration, onto the field direction
-    real :: GravityAcc_C(-OpenThread1%nCell:-1)
     ! Velocity divergence
     real :: DivU_C(-OpenThread1%nCell:-1)
     ! Pseudo-divergence of velocity, needed to calculate contributions from
-    ! parallel pressures
-    real :: DuDs_C(-OpenThread1%nCell:-1)
+    ! parallel pressures and similar total pressure gradient
+    real :: DuDs
     ! Interpolated left and right states at the face
     real    :: pLeft_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
     real    :: pRight_VF(Rho_:Wminor_,-OpenThread1%nCell:0)
@@ -1246,8 +1251,8 @@ contains
     real    :: StageCoef
     ! Misc:
     real :: Source_V(Rho_:Wminor_)
-    real :: GravitySource = 0.0
-    real :: WavePress, Pperp, Pe, PeSource
+    real :: GravitySource, WavePress, Pperp
+    ! Face-centered velocity, densiry and total pressure, from the exct RS
     real :: Un_F(-OpenThread1%nCell:0), Rho_F(-OpenThread1%nCell:0),&
          pTot_F(-OpenThread1%nCell:0), B_F(-OpenThread1%nCell:0)
     real :: Cleft_F(-OpenThread1%nCell:0)
@@ -1255,15 +1260,13 @@ contains
     real :: VaFace_F(-OpenThread1%nCell:0)
     real :: VaCell_C(-OpenThread1%nCell:-1)
     real :: VaDtOverDs_C(-OpenThread1%nCell:-1)
-    real :: DvaDs_C(-OpenThread1%nCell:-1)
     real :: DissMajor_C(-OpenThread1%nCell:-1)
     real :: DissMinor_C(-OpenThread1%nCell:-1)
-    real :: Heating_C(-OpenThread1%nCell:-1)
-    real :: Reflection_C(-OpenThread1%nCell:-1)
+    real :: Heating, DvaDs, Reflection_C(-OpenThread1%nCell:-1)
     ! Calculated using the constants above or by applying apportion_heating
     real :: PparHeating, PperpHeating, PeHeating, pLimit
-    ! To calculate %PeTr
-    real :: PtotR
+    ! To fix pTotal
+    real :: DeltaPtot
     ! Loop variables:
     integer :: iCell, iFace
     ! Vector of primitives used in limiting
@@ -1281,23 +1284,12 @@ contains
     Ds_G => OpenThread1%Ds_G
     ! Face centered field, in Si
     B_F = OpenThread1%B_F(-nCell:0)
-    ! Face area
-    FaceArea_F(-nCell:0) = 1/B_F
-    do iCell = -nCell, -1
-       ! Control volume (the inverse of): 1/(dS*0.5*(FaceLeft + FaceRight))
-       vInv_C(iCell) = 2/(Ds_G(iCell)*&
-            (FaceArea_F(iCell) + FaceArea_F(iCell+1)) )
-       ! B d(1/B)/ds, in m^{-1}
-       NablaHatB_C(iCell) = vInv_C(iCell)* &
-            (FaceArea_F(iCell+1) - FaceArea_F(iCell) )
-       ! Gravity force projection onto the field direction
-       ! Is calculated as the negative of increment in gravity potential
-       ! divided by the mesh length.
-       GravityAcc_C(iCell) =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
-            (1/OpenThread1%R_F(iCell) -    &
-            1/OpenThread1%R_F(iCell+1)) /  &
-            OpenThread1%Ds_G(iCell)  ! Divide by \delta s
-    end do
+    ! Face area, in Rsun**2
+    FaceArea_F(-nCell:0) = abs(OpenThread1%OpenFlux)/B_F
+    ! Control volume (the inverse of) in 1/(m*Rsun**2)
+    ! =1/(dS*0.5*(FaceLeft + FaceRight))
+    vInv_C(-nCell:-1) = 2/(Ds_G(-nCell:-1)*&
+         (FaceArea_F(-nCell:-1) + FaceArea_F(-nCell+1:0)) )
     if(iStage==1)then
        do iCell = -nCell, -1
           !
@@ -1330,8 +1322,8 @@ contains
          uIn  = OpenThread1%uTr,  &
          pIn  = OpenThread1%PeTr, &
          State_V= State_VG(:,-nCell-1))
-    State_VG(Wmajor_,-nCell-1) = min(max(1.0, 5e-4/B_F(-nCell)), &
-         1.1e6/PoyntingFluxPerbSi)
+    !State_VG(Wmajor_,-nCell-1) = min(max(1.0, 5e-4/B_F(-nCell)), &
+    !     1.1e6/PoyntingFluxPerbSi)
     !
     ! limited interpolation procedure:
     ! 1. logarithm of density/pressure is better to be limited
@@ -1360,18 +1352,18 @@ contains
     pLeft_VF(:,-nCell) = State_VG(:,-nCell-1)
     ! Calculate leftmost unlimited slope. The half of this (as assumed in
     ! the limiter function) approximates the face value
-    dVarDown_V = State_VG(:,-nCell) - State_VG(:,-nCell-1)
+    dVarDown_V = 2*(State_VG(:,-nCell) - State_VG(:,-nCell-1))
     ! Calculate the up slope
     dVarUp_V = State_VG(:,-nCell+1) - State_VG(:,-nCell)
     ! Calculate and apply the limited slopes, to get the limited
     ! reconstructed values:
     pRight_VF(:,-nCell) = State_VG(:,-nCell) - &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(Beta*abs(dVarUp_V), Beta*abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V), abs(dVarDown_V), &
          cThird*abs(2*dVarDown_V+dVarUp_V))
     pLeft_VF(:,-nCell+1) = State_VG(:,-nCell) + &
          (sign(0.25, dVarUp_V) + sign(0.25, dVarDown_V))* &
-         min(Beta*abs(dVarUp_V), Beta*abs(dVarDown_V), &
+         min(Beta*abs(dVarUp_V), abs(dVarDown_V), &
          cThird*abs(dVarDown_V+2*dVarUp_V))
     ! Pass through all cells, limit slopes
     do iCell = -nCell+1, -2
@@ -1430,14 +1422,19 @@ contains
        pLeft_VF(iLogVar_V,-nCell:0) = exp(&
             pLeft_VF(iLogVar_V,-nCell:0))
     end if
-    ! Fix left BC to avoid inflow to the TR from low SC
-    PtotR = pRight_VF(P_,-nCell) + pRight_VF(Pe_,-nCell)
-    ! Velocity dependent correction
-    PtotR = (PtotR - sqrt(Gamma*PtotR*pRight_VF(Rho_,-nCell))*&
-         pRight_VF(U_,-nCell))*0.50
-    ! Floor inner boundary pressure
-    pLeft_VF(P_:Pe_,-nCell) = max(PtotR,pLeft_VF(P_:Pe_,-nCell))
-    OpenThread1%PeTr = max(PtotR, OpenThread1%PeTr)
+    do iCell = -nCell, -nCell
+       ! Slope of the total pressure should balance the gravity
+       ! Calc -\delta Grav.Pot.
+       GravitySource = State_VG(Rho_,iCell)*cGravityPotAt1Rs* & 
+            (1/OpenThread1%R_F(iCell) - 1/OpenThread1%R_F(iCell+1))
+       ! For each cell, calculate the increment in the total
+       ! pressure at the left boundary, such that DeltaPtot + &
+       ! p_tot(pRight_VF(iCell)) - p_tot(pLeft_VF(iCell+1)) &
+       ! + GravitySource = 0
+       DeltaPtot = p_tot(pLeft_VF(:,iCell+1)) - GravitySource &
+            - p_tot(pRight_VF(:,iCell))
+       call fix_p_tot(pRight_VF(:,iCell), DeltaPtot)
+    end do
     ! 2. Apply right BC on the external boundary (# = 0)
     if(present(RightFace0_V))then
        pRight_VF(:,0) = RightFace0_V
@@ -1467,24 +1464,18 @@ contains
        OpenThread1%PeTr = TrTable_V(PavrL_)*SqrtZ/Ds_G(-nCell-1)
     end if
     do iCell = -nCell,-1
-       DuDs_C(iCell)  = (Un_F(iCell+1) - Un_F(iCell)) / &
-            Ds_G(iCell)
        DivU_C(iCell)  = vInv_C(iCell)*(Un_F(iCell+1)*FaceArea_F(iCell+1) &
             - Un_F(iCell)*FaceArea_F(iCell))
-       DvaDs_C(iCell) = (VaFace_F(iCell+1) - VaFace_F(iCell)) / &
-            Ds_G(iCell)
        VaCell_C(iCell) = 0.50*(VaFace_F(iCell+1) + VaFace_F(iCell))
        DissMajor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
             State_VG(Wminor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
        DissMinor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
             State_VG(Wmajor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
-       Reflection_C(iCell) = sign(min(abs(DvaDs_C(iCell)),0.50*abs(&
+       DvaDs = (VaFace_F(iCell+1) - VaFace_F(iCell))/Ds_G(iCell)
+       Reflection_C(iCell) = sign(min(abs(DvaDs),0.50*abs(&
             DissMajor_C(iCell) - DissMinor_C(iCell))),&
-            State_VG(Wmajor_,iCell) - State_VG(Wminor_,iCell))
-       Heating_C(iCell) = &
-            (DissMajor_C(iCell)*State_VG(Wmajor_,iCell)&
-            + DissMinor_C(iCell)*State_VG(Wminor_,iCell))*&
-            PoyntingFluxPerBsi*sqrt(cMu*State_VG(Rho_,iCell))
+            State_VG(Wmajor_,iCell) - State_VG(Wminor_,iCell))*&
+            sqrt(State_VG(Wmajor_,iCell)*State_VG(Wminor_,iCell))
     end do
     where(OpenThread1%R_F(-nCell:-1)<rMinReflectionTr)&
          Reflection_C = 0.0
@@ -1495,15 +1486,12 @@ contains
           ! Cmax is the maximum of the right wave
           ! speed from the left face and the left wave speed
           ! from the right face
-          Dt_C(iCell) = CflLocal/max(&
-               vInv_C(iCell)* &
+          Dt_C(iCell) = CflLocal/max(vInv_C(iCell)* &
                abs(max(Cright_F(iCell)*FaceArea_F(iCell),&
-               -Cleft_F(iCell+1)*FaceArea_F(iCell+1)))&
-               + &  ! CFL
-               max(DissMajor_C(iCell),DissMinor_C(iCell))&
-               ,& ! + diss rate
+               -Cleft_F(iCell+1)*FaceArea_F(iCell+1))) + & ! CFL
+               max(DissMajor_C(iCell),DissMinor_C(iCell)),&! diss rate
                cooling_rate(RhoSi=State_VG(Rho_,iCell),&  ! or cooling
-               PeSi=State_VG(Pe_,iCell)))              ! rate
+               PeSi=State_VG(Pe_,iCell)))                 ! rate
        end do
        if(present(DtIn))then
           Dt_C(-nCell:-1) = min(Dt_C(-nCell:-1), DtIn)
@@ -1519,22 +1507,19 @@ contains
     !
     do iCell = -nCell, -1
        ! Calculate source terms
-       Pperp = State_VG(P_,iCell) + 0.50*(State_VG(P_,iCell) -&
-            State_VG(Ppar_,iCell))
        ! Wave pressure, convert from the representative functions
        WavePress = 0.50*&
             sum(State_VG(Wmajor_:Wminor_,iCell))*PoyntingFluxPerBsi*&
             sqrt(cMu*State_VG(Rho_,iCell))
-       ! Pe source term
-       Pe = State_VG(Pe_,iCell)
-       PeSource = Pe*DivU_C(iCell)
+       Pperp = State_VG(P_,iCell) + 0.50*(State_VG(P_,iCell) -&
+            State_VG(Ppar_,iCell))
        ! Heating and partitioning
        if(UseStochasticHeating)then
           call apportion_heating(&
                ! Inputs, all in SI:
                PparIn = State_VG(Ppar_,iCell)          ,&
                PperpIn= Pperp                          ,&
-               PeIn   = Pe                             ,&
+               PeIn   = State_VG(Pe_,iCell)            ,&
                RhoIn  = State_VG(Rho_,iCell)           ,&
                BIn    = 0.50*(B_F(iCell) + B_F(iCell+1)),&
                WmajorIn = State_VG(Wmajor_,iCell)       ,&
@@ -1546,29 +1531,42 @@ contains
                QperpPerQtotal    = QperpPerQtotal       ,&
                QePerQtotal       = QePerQtotal)
        end if
-       PparHeating  = QparPerQtotal *Heating_C(iCell)
-       PperpHeating = QperpPerQtotal*Heating_C(iCell)
-       PeHeating    = QePerQtotal   *Heating_C(iCell)
-       ! Gravity force density, rho*g:
-       GravitySource = State_VG(Rho_,iCell)*GravityAcc_C(iCell)
+       Heating = &
+            (DissMajor_C(iCell)*State_VG(Wmajor_,iCell)&
+            + DissMinor_C(iCell)*State_VG(Wminor_,iCell))*&
+            PoyntingFluxPerBsi*sqrt(cMu*State_VG(Rho_,iCell))
+       PparHeating  = QparPerQtotal *Heating
+       PperpHeating = QperpPerQtotal*Heating
+       PeHeating    = QePerQtotal   *Heating
+       ! Gravity force acceleration, g, projected onto the field direction
+       ! Is calculated as the negative of increment in gravity potential
+       ! divided by the mesh length.
+       GravitySource =  cGravityPotAt1Rs* & ! Calc -\delta Grav.Pot.
+            (1/OpenThread1%R_F(iCell) - 1/OpenThread1%R_F(iCell+1))&
+            /OpenThread1%Ds_G(iCell)&  ! Divide by \delta s
+            *State_VG(Rho_,iCell)      ! Gravity force density, rho*g:
        !
        ! Get full source vector
        !
        Source_V(Rho_:Energy_)     = [0.0, &  ! No density source
-            ((Pperp - State_VG(Ppar_,iCell)) + 0.5*(pTot_F(iCell)&
-            + pTot_F(iCell+1)))*NablaHatB_C(iCell) +&
-            GravitySource,                                & ! Momentum
-            PeSource + WavePress*DivU_C(iCell) + GravitySource*&
+            (pTot_F(iCell) - pTot_F(iCell+1))/Ds_G(iCell)  &
+            + GravitySource,                               & ! Momentum
+            (State_VG(Pe_,iCell) + WavePress)*DivU_C(iCell) + GravitySource*&
             State_VG(U_,iCell) + PparHeating + PperpHeating] ! Energy
-       if(UseAnisoPressure)Source_V(Ppar_)= &
-            -State_VG(Ppar_,iCell)*DuDs_C(iCell) + PparHeating ! Ppar
-       Source_V(Pe_:) = [-PeSource + PeHeating                 , & ! Electrons
-            -DissMajor_C(iCell)*State_VG(Wmajor_,iCell) - &
-            Reflection_C(iCell)*sqrt(State_VG(Wmajor_,iCell)*&
-            State_VG(Wminor_,iCell)),               & ! Wmajor
-            -DissMinor_C(iCell)*State_VG(Wminor_,iCell) + &
-            Reflection_C(iCell)*sqrt(State_VG(Wmajor_,iCell)*&
-            State_VG(Wminor_,iCell))                 ] ! Wminor
+       if(UseAnisoPressure)then
+          ! Face area difference divided per control volume, is used
+          ! the contribution to momentum source  from the pressure anisotropy
+          DuDs = (Un_F(iCell+1) - Un_F(iCell))/Ds_G(iCell)
+          Source_V(Ppar_)= -State_VG(Ppar_,iCell)*DuDs + PparHeating ! Ppar
+          Source_V(RhoU_) = Source_V(RhoU_) + Pperp*vInv_C(iCell)* &
+            (FaceArea_F(iCell+1) - FaceArea_F(iCell) )
+       end if
+       Source_V(Pe_:) = [&
+            -State_VG(Pe_,iCell)*DivU_C(iCell) + PeHeating, & ! Electrons
+            -DissMajor_C(iCell)*State_VG(Wmajor_,iCell) &
+            - Reflection_C(iCell),               & ! Wmajor
+            -DissMinor_C(iCell)*State_VG(Wminor_,iCell) &
+            + Reflection_C(iCell)]                 ! Wminor
        ! Add fluxes to source
        ! dU = dt / Volume * (F_{i-1/2}*FaceArea_{i-1/2} &
        !      -F_{i+1/2}*FaceArea_{i+1/2}) + Dt*Source
@@ -1619,6 +1617,46 @@ contains
     end do
   contains
     !==========================================================================
+    real function p_tot(State_V)
+
+      real, intent(in) :: State_V(Rho_:Wminor_)
+      !------------------------------------------------------------------------
+      p_tot = State_V(Ppar_) + State_V(Pe_) + 0.50*sqrt(cMu*State_V(Rho_))*&
+           sum(State_V(Wmajor_:Wminor_))*PoyntingFluxPerBsi
+    end function p_tot
+    !==========================================================================
+    subroutine fix_p_tot(State_V, DeltaPtot)
+
+      real, intent(inout) :: State_V(Rho_:Wminor_) ! State to fix
+      real, intent(in)    :: DeltaPtot             ! Increment in pTotal
+      ! Contributions to the speed of sound
+      real :: C2i, C2e, C2Wmajor, C2Wminor
+      ! Misc
+      real :: DeltaRho, RhoInv, SqrtMuRho, pWaveMajor, pWaveMinor
+      !------------------------------------------------------------------------
+      RhoInv = 1/State_V(Rho_)
+      SqrtMuRho = sqrt(cMu*State_V(Rho_))*PoyntingFluxPerBsi
+      ! The contributions to the speed of sound, from electrons and ions
+      C2i = Gamma*State_V(Ppar_)*RhoInv
+      C2e = Gamma*State_V(Pe_)  *RhoInv
+      ! Contributions from wave pressure
+      pWaveMajor = 0.50*State_V(Wmajor_)*SqrtMuRho
+      C2Wmajor = 0.50*pWaveMajor*SqrtMuRho
+      pWaveMinor = 0.50*State_V(Wminor_)*SqrtMuRho
+      C2Wminor = 0.50*pWaveMinor*SqrtMuRho
+      ! Calculate DeltaRho assuming adiabaticity
+      DeltaRho = DeltaPtot/(C2i + C2e + C2Wmajor + C2Wminor)
+      ! Modify pressures to increase the total pressure by DeltaPtot
+      State_V(Rho_) = State_V(Rho_) + DeltaRho
+      State_V(Ppar_) = State_V(Ppar_) + DeltaRho*C2i
+      State_V(Pe_)   = State_V(Pe_) + DeltaRho*C2e
+      pWaveMajor = pWaveMajor + DeltaRho*C2Wmajor
+      pWaveMinor = pWaveMinor + DeltaRho*C2Wminor
+      SqrtMuRho = sqrt(cMu*State_V(Rho_))*PoyntingFluxPerBsi
+      State_V(Wmajor_) = 2*pWaveMajor/SqrtMuRho
+      State_V(Wminor_) = 2*pWaveMinor/SqrtMuRho
+    end subroutine fix_p_tot
+    !==========================================================================
     subroutine get_thread_flux(iFace,pLeft_V, pRight_V, &
          Flux_V, Cleft, Cright, UnFace, RhoFace, PtotFace)
 
@@ -1627,12 +1665,18 @@ contains
       real,  intent(out) :: Flux_V(Rho_:Wminor_)
       real,  intent(out) :: Cleft, Cright, UnFace, RhoFace, PtotFace
 
-      real    :: UpwindState_V(Rho_:Wminor_), PeL, PeR, CsL, CsR, &
+      real    :: UpwindState_V(Wmajor_:Wminor_), Pe, PeL, PeR, CsL, CsR, &
            DensityRatio, PparFace, ExtraP, ExtraPright, ExtraPleft
       ! To calculate AW flux, if needed
       logical :: UseArtificialWind = .false.
       real, dimension(Rho_:Wminor_) :: ConsL_V, ConsR_V, FluxL_V, FluxR_V
       real :: WeightL, WeightR, Diffusion
+      real :: FL, FLD, FR, FRD ! Pressure (F)unctions and its (D)erivatives
+      real :: POld, Pstar, Pavr, Utr   ! Iterative values for pressure
+      integer,parameter::nIterMax=10
+      integer :: iIter
+      real, parameter :: TolP=0.0010, ChangeStart=2.0*TolP
+      real :: Change
       !------------------------------------------------------------------------
       RhoL = pLeft_V(Rho_ )
       PeL  = pLeft_V(Pe_)
@@ -1671,7 +1715,7 @@ contains
          ! "Conserved" electron energy density is a 1.50*Pe
          ConsL_V(Pe_)  = 1.50*pLeft_V(Pe_)
          FluxL_V          = UnL*ConsL_V
-         FluxL_V(RhoU_)   = FluxL_V(RhoU_) + PL
+         FluxL_V(RhoU_)   = FluxL_V(RhoU_)
          FluxL_V(Energy_) = FluxL_V(Energy_) + PL*UnL
 
          ConsR_V = pRight_V
@@ -1685,7 +1729,7 @@ contains
          ConsR_V(Pe_)  = 1.50*pRight_V(Pe_)
          if(UseAnisoPressure)ConsL_V(Ppar_) = 0.5*ConsL_V(Ppar_)
          FluxR_V          = UnR*ConsR_V
-         FluxR_V(RhoU_)   = FluxR_V(RhoU_)   + PR
+         FluxR_V(RhoU_)   = FluxR_V(RhoU_)
          FluxR_V(Energy_) = FluxR_V(Energy_) + PR*UnR
          WeightL   = Cright/(Cright - Cleft)
          WeightR   = 1.0 - WeightL
@@ -1702,27 +1746,29 @@ contains
       if (UnStar  >  0) then
          ! Factor for variable scaling with density
          DensityRatio = RhoFace / pLeft_V(Rho_)
-         UpwindState_V = pLeft_V
+         UpwindState_V = (DensityRatio**(Gamma-0.50))*&
+              pLeft_V(Wmajor_:Wminor_)
          ExtraP = ExtraPleft
-         Pe = PeL
+         Pe = PeL*(DensityRatio**Gamma)
       else
          DensityRatio = RhoFace / pRight_V(Rho_)
-         UpwindState_V = pRight_V
+         UpwindState_V = (DensityRatio**(Gamma-0.50))*&
+              pRight_V(Wmajor_:Wminor_)
          ExtraP = ExtraPright
-         Pe = PeR
+         Pe = PeR*(DensityRatio**Gamma)
       end if
-
-      ! get the flux
-
-      Flux_V(Rho_) = RhoFace * UnFace
-      Flux_V(RhoU_) = RhoFace*UnFace**2 + PtotFace
       ! All contributions to pressure except for ion one are assumed
       ! to scale adiabatically with density:
       PparFace = PtotFace - ExtraP*DensityRatio**Gamma
-      Flux_V(Pe_) = 1.50*Pe*(DensityRatio**Gamma)*UnFace
+
+      ! get the flux
+
+      Flux_V(Rho_) = RhoFace*UnFace
+      Flux_V(RhoU_) = RhoFace*UnFace**2
+      Flux_V(Pe_) = 1.50*Pe*UnFace
       Flux_V(Energy_) = (0.50*RhoFace*UnFace**2 + 1.5*PparFace + &
            PtotFace)*UnFace
-      Flux_V(Wmajor_:Wminor_) = (DensityRatio**(Gamma-0.50))*&
+      Flux_V(Wmajor_:Wminor_) = &
            UpwindState_V(Wmajor_:Wminor_)*UnFace
     end subroutine get_thread_flux
     !==========================================================================
