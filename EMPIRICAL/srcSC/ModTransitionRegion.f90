@@ -148,7 +148,7 @@ module ModTransitionRegion
 
   ! By default, this logical is .false. If logical set is true, the energy
   ! flux to/from the first control volume on the thread is accounted for.
-  logical, public :: UseChromoEvap  = .true.
+  logical, public :: UseChromoEvap  = .false.
   ! To apply CromoEvaporation, the factor below is non-zero.
   real            :: ChromoEvapCoef = 0.0
   ! Parameters of the TR table:
@@ -454,7 +454,7 @@ contains
          nIndex_I = [nPointTe,nPointU],                          &
          IndexMin_I = [TeTrMin, uMin],                           &
          IndexMax_I = [TeTrMax, uMax],                           &
-         NameFile = 'TR8.dat',                                    &
+         NameFile = 'TR8.dat',                                   &
          TypeFile = TypeFile,                                    &
          StringDescription =                                     &
          'Model for transition region: '//                       &
@@ -2368,28 +2368,26 @@ contains
     !--------------------------------------------------------------------------
     nCell = OpenThread1%nCell
     State_VG => OpenThread1%State_VG
-    Value_VI(Rho_:sWminus_,-nCell:0) = State_VG(iPlotVar_V,-nCell:0)
+    Value_VI(Rho_:sWminus_,-nCell-1:0) = State_VG(iPlotVar_V,-nCell-1:0)
     if(sign(1.0, OpenThread1%OpenFlux) > 0)then
-       Value_VI(sWplus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:0))*State_VG(Wmajor_,-nCell:0)
-       Value_VI(sWminus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:0))*State_VG(Wminor_,-nCell:0)
-
+       Value_VI(sWplus_,-nCell-1:0) = State_VG(Wmajor_,-nCell-1:0)
+       Value_VI(sWminus_,-nCell-1:0) = State_VG(Wminor_,-nCell-1:0)
     else
-       Value_VI(sWplus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:0))*State_VG(Wminor_,-nCell:0)
-       Value_VI(sWminus_,-nCell:0) = PoyntingFluxPerBsi*sqrt(cMu*&
-            State_VG(Rho_,-nCell:0))*State_VG(Wmajor_,-nCell:0)
+       Value_VI(sWplus_,-nCell-1:0) = State_VG(Wminor_,-nCell-1:0)
+       Value_VI(sWminus_,-nCell-1:0) = State_VG(Wmajor_,-nCell-1:0)
     end if
-    Value_VI(sTi_,-nCell:0) = State_VG(P_,-nCell:0)*cProtonMass/&
-         (cBoltzmann*State_VG(Rho_,-nCell:0))
+    Value_VI(sTi_,-nCell-1:0) = State_VG(P_,-nCell-1:0)*cProtonMass/&
+         (cBoltzmann*State_VG(Rho_,-nCell-1:0))
     Value_VI(sTe_,-nCell:0) = OpenThread1%Te_G(-nCell:0)
-    Value_VI(sTe_+1,-nCell:-1) = &
-         OpenThread1%B_F(-nCell:-1)*Si2Gs
-    Value_VI(sTe_+1,0) = Value_VI(sTe_+1,-1)
+    Value_VI(sTe_,-nCell-1) = OpenThread1%TeTr
+    Value_VI(sTe_+1,-nCell:-1) = 0.50*Si2Gs*&
+         (OpenThread1%B_F(-nCell:-1) + OpenThread1%B_F(-nCell+1:0))
+    Value_VI(sTe_+1,0) = Si2Gs*OpenThread1%B_F(0)
+    Value_VI(sTe_+1,-nCell-1) = Si2Gs*OpenThread1%B_F(-nCell)
     Coord_I(-nCell:-1) = 0.5*(OpenThread1%R_F(-nCell:-1) +&
          OpenThread1%R_F(-nCell+1:0))
     Coord_I(0) = OpenThread1%R_F(0)
+    Coord_I(-nCell-1) = OpenThread1%R_F(-nCell)
     call save_plot_file(NameFile = NameFile,  &
          nDimIn  = 1,                       &
          ParamIn_I= [OpenThread1%TeTr,&
@@ -2398,9 +2396,9 @@ contains
          OpenThread1%TMax,&
          sign(1.0,OpenThread1%OpenFlux),&
          OpenThread1%Dt],&
-         VarIn_VI= Value_VI(:,-nCell:0), &
+         VarIn_VI= Value_VI(:,-nCell-1:0), &
          TypeFileIn    = 'ascii',           &
-         CoordIn_I  = Coord_I(-nCell:0), &
+         CoordIn_I  = Coord_I(-nCell-1:0), &
          StringHeaderIn  = 'Thread file ', &
          NameUnitsIn  = &
          '[Rsun] '//&
