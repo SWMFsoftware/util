@@ -710,7 +710,7 @@ contains
     real :: CosBrMin = -1.0
     integer :: iRefine ! Factor of step refinement near null point
     real :: BLength
-    real :: HeatFluxL, Value_V(PavrL_:DlogLambdaOverDlogT_)
+    real :: HeatFluxL
     ! Trace the open thread with the given origin point
     character(len=*), parameter:: NameSub = 'set_thread'
     !--------------------------------------------------------------------------
@@ -833,7 +833,7 @@ contains
     call interpolate_lookup_table(iTable=iTableTR, Arg2In=0.0, &
          iVal=HeatFluxL_, &
          ValIn=HeatFluxL,&
-         Value_V=Value_V,      &
+         Value_V=TrTable_V,      &
          Arg1Out=OpenThread1%TMax,  &
          DoExtrapolate=.false.)
   contains
@@ -884,8 +884,8 @@ contains
 
       !------------------------------------------------------------------------
       nCell = OpenThread1%nCell
-      B_I = OpenThread1%B_F(-OpenThread1%nCell:0)
-      Ds_I =  OpenThread1%Ds_G(-OpenThread1%nCell-1:0)
+      B_I = OpenThread1%B_F(-nCell:0)
+      Ds_I =  OpenThread1%Ds_G(-nCell-1:0)
       rFaceInv = 1/OpenThread1%R_F(-nCell)
       rInv_I(-nCell:-1) = &
            (1/OpenThread1%R_F(-nCell:-1) + &
@@ -912,7 +912,7 @@ contains
       OpenThread1%State_VG(Pe_,-nCell:0) = Pe_I(-nCell:0)
 
       OpenThread1%State_VG(Wmajor_,-nCell:0) = 1.0
-      OpenThread1%State_VG(Wminor_,-nCell:0) = 1.0e-8
+      OpenThread1%State_VG(Wminor_,-nCell:0) = 1.0e-3
       OpenThread1%Te_G(-nCell:0) = Te_I(-nCell:0)
       OpenThread1%State_VG(Rho_,-nCell:0) = cProtonMass*Ni_I(-nCell:0)
       OpenThread1%TeTr = TeFace
@@ -1101,7 +1101,7 @@ contains
     State_V(Pe_:) = [&
          pIn, & ! Pe
          1.0, & ! Wmajor
-         1e-8]  ! Wminor
+         1e-3]  ! Wminor
   end subroutine set_thread_inner_bc
   !============================================================================
   subroutine integrate_emission(TeSi, PeSi, iTable, nVar, Integral_V)
@@ -1452,21 +1452,23 @@ contains
             Un_F(iFace), Rho_F(iFace), pTot_F(iFace))
        VaFace_F(iFace) = B_F(iFace)/sqrt(cMu*Rho_F(iFace))
     end do
-    if(Un_F(-nCell) <=0)then
-       Un_F(-nCell) = 0.0
-       Flux_VF(Rho_,-nCell) = 0.0
-       Flux_VF(P_:,-nCell) = 0.0
-       OpenThread1%uTr = 0.5*OpenThread1%uTr
-    else
-       OpenThread1%uTr = 0.5*Un_F(-nCell) + 0.5*OpenThread1%uTr
-       call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
-       ! Correct pressure for updated plasma speed
-       OpenThread1%PeTr = TrTable_V(PavrL_)*SqrtZ/Ds_G(-nCell-1)
-    end if
+    !if(Un_F(-nCell) <=0)then
+    !   Un_F(-nCell) = 0.0
+    !   Flux_VF(Rho_,-nCell) = 0.0
+    !   Flux_VF(P_:,-nCell) = 0.0
+    !   OpenThread1%uTr = 0.5*OpenThread1%uTr
+    !else
+    !   OpenThread1%uTr = 0.5*Un_F(-nCell) + 0.5*OpenThread1%uTr
+    !   call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
+    !   ! Correct pressure for updated plasma speed
+    !   OpenThread1%PeTr = TrTable_V(PavrL_)*SqrtZ/Ds_G(-nCell-1)
+    !end if
     do iCell = -nCell,-1
        DivU_C(iCell)  = vInv_C(iCell)*(Un_F(iCell+1)*FaceArea_F(iCell+1) &
             - Un_F(iCell)*FaceArea_F(iCell))
        VaCell_C(iCell) = 0.50*(VaFace_F(iCell+1) + VaFace_F(iCell))
+       !write(*,*)iCell, nCell, State_VG(Wmajor_:Wminor_,iCell), &
+       !     VaCell_C(iCell), LperpTimesSqrtBsi
        DissMajor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
             State_VG(Wminor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
        DissMinor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
@@ -1660,6 +1662,8 @@ contains
     subroutine get_thread_flux(iFace,pLeft_V, pRight_V, &
          Flux_V, Cleft, Cright, UnFace, RhoFace, PtotFace)
 
+      use ModExactRS, ONLY: pressure_function
+      use ModLookupTable, ONLY: interpolate_lookup_table
       integer, intent(in):: iFace
       real,   intent(in) :: pLeft_V(Rho_:Wminor_), pRight_V(Rho_:Wminor_)
       real,  intent(out) :: Flux_V(Rho_:Wminor_)
@@ -1672,11 +1676,12 @@ contains
       real, dimension(Rho_:Wminor_) :: ConsL_V, ConsR_V, FluxL_V, FluxR_V
       real :: WeightL, WeightR, Diffusion
       real :: FL, FLD, FR, FRD ! Pressure (F)unctions and its (D)erivatives
-      real :: POld, Pstar, Pavr, Utr   ! Iterative values for pressure
+      real :: POld, Pavr, Utr   ! Iterative values for pressure
       integer,parameter::nIterMax=10
       integer :: iIter
       real, parameter :: TolP=0.0010, ChangeStart=2.0*TolP
       real :: Change
+      character(LEN=*), parameter :: NameSub = 'get_thread_flux'
       !------------------------------------------------------------------------
       RhoL = pLeft_V(Rho_ )
       PeL  = pLeft_V(Pe_)
@@ -1697,6 +1702,51 @@ contains
          CsL = sqrt(Gamma*pL/RhoL); CsR = sqrt(Gamma*pR/RhoR)
          Cleft  = min(UnL - CsL, UnR - CsR, 0.0)
          Cright = max(UnL + CsL, UnR + CsR, 0.0)
+      elseif(iFace == -nCell)then
+         POld = p_tot(pLeft_V)
+         CsR = sqrt(Gamma*pR/RhoR)
+         ! Initialize loop:
+         Change = ChangeStart; iIter = 0
+         do while(Change > TolP .and. iIter < nIterMax)
+            call convert_p_tot_to_rho(Pold, OpenThread1%TeTr, &
+                 OpenThread1%TeTr, RhoFace, sum(pLeft_V(Wmajor_:Wminor_)))
+            Pavr = (RhoFace/cProtonMass)*cBoltzmann*OpenThread1%TeTr*SqrtZ
+            call interpolate_lookup_table(iTable=iTableTR, &
+                 Arg1In=OpenThread1%TeTr  ,&
+                 iVal=PavrL_              ,&
+                 ValIn=Pavr*Ds_G(-nCell-1),&
+                 Value_V=TrTable_V        ,&
+                 Arg2Out=uTr              ,&
+                 DoExtrapolate=.false.)
+            UnFace = u_over_utr(OpenThread1%TeTr, uTr)*uTr
+            WavePress = 0.50*PoyntingFluxPerBsi*&
+                 sum(pLeft_V(Wmajor_:Wminor_))*sqrt(cMu*RhoFace)
+            FLD = TrTable_V(DuOverDpL_)*Ds_G(-nCell-1)/(& !/(dPtot/dPavr)
+                 SqrtZ            + & ! dPe/dPavr
+                 1/SqrtZ          + & ! dPi/dPavr
+                 0.50*WavePress/Pavr) ! dWavePress/dPavr
+            call pressure_function(FR, FRD, POLD, RhoR, PR, CsR, Cright)
+            PtotFace  = POld - (FR + UnR - UnFace)/(-FLD + FRD)
+            if(PtotFace<=0.0)PtotFace = 0.10*pOld
+            Change = 2.0*abs((PtotFace - POld)/(PtotFace + POld))
+            POLD   = PtotFace; iIter=iIter+1
+         end do
+         if(iIter==nIterMax)then
+            write(*,*)'iFace =',iFace,' nCell=',nCell
+            write(*,*)'Change=',Change
+            write(*,*)'Ptot=',PtotFace,' PL=', PL, ' PR=', PR
+            write(*,*)'U=',UnFace,' FR+UnR=',FR+UnR
+            write(*,*)'FLD=',FLD,' FRD=',FRD
+            call CON_stop('No convergence in '//NameSub)
+         end if
+         Cright = UnR + Cright
+         Cleft = UnFace - sqrt(Gamma*PtotFace/RhoFace)
+         OpenThread1%uTr = UnFace
+         Pe = Pavr*SqrtZ
+         OpenThread1%PeTr = Pe
+         PparFace = Pavr/SqrtZ
+         UpwindState_V = pLeft_V(Wmajor_:Wminor_)
+         UseArtificialWind = .false.
       else
          call exact_rs_pu_star(UseAnotherRS=UseArtificialWind)
          ! Store WL WR
@@ -1741,26 +1791,26 @@ contains
          RhoFace = RhoL*WeightL + RhoR*WeightR
          PtotFace = pL*WeightL + pR*WeightR
          RETURN
+      elseif(iFace /= -nCell)then
+         call exact_rs_sample(0.0, RhoFace, UnFace, PtotFace)
+         if (UnStar  >  0) then
+            ! Factor for variable scaling with density
+            DensityRatio = RhoFace / pLeft_V(Rho_)
+            UpwindState_V = (DensityRatio**(Gamma-0.50))*&
+                 pLeft_V(Wmajor_:Wminor_)
+            ExtraP = ExtraPleft
+            Pe = PeL*(DensityRatio**Gamma)
+         else
+            DensityRatio = RhoFace / pRight_V(Rho_)
+            UpwindState_V = (DensityRatio**(Gamma-0.50))*&
+                 pRight_V(Wmajor_:Wminor_)
+            ExtraP = ExtraPright
+            Pe = PeR*(DensityRatio**Gamma)
+         end if
+         ! All contributions to pressure except for ion one are assumed
+         ! to scale adiabatically with density:
+         PparFace = PtotFace - ExtraP*DensityRatio**Gamma
       end if
-      call exact_rs_sample(0.0, RhoFace, UnFace, PtotFace)
-      if (UnStar  >  0) then
-         ! Factor for variable scaling with density
-         DensityRatio = RhoFace / pLeft_V(Rho_)
-         UpwindState_V = (DensityRatio**(Gamma-0.50))*&
-              pLeft_V(Wmajor_:Wminor_)
-         ExtraP = ExtraPleft
-         Pe = PeL*(DensityRatio**Gamma)
-      else
-         DensityRatio = RhoFace / pRight_V(Rho_)
-         UpwindState_V = (DensityRatio**(Gamma-0.50))*&
-              pRight_V(Wmajor_:Wminor_)
-         ExtraP = ExtraPright
-         Pe = PeR*(DensityRatio**Gamma)
-      end if
-      ! All contributions to pressure except for ion one are assumed
-      ! to scale adiabatically with density:
-      PparFace = PtotFace - ExtraP*DensityRatio**Gamma
-
       ! get the flux
 
       Flux_V(Rho_) = RhoFace*UnFace
