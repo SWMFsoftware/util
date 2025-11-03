@@ -159,7 +159,7 @@ module ModTransitionRegion
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 500.0, uMin = 0.0
+  real, parameter :: uMax = 100.0, uMin = 0.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Needed for initialization:
   logical :: DoInit = .true.
