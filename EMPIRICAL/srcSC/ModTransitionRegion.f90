@@ -364,41 +364,41 @@ contains
   ! 5. No wave pressure and wave heating
   ! ------------------------------
   ! From the mass conservation law:
-  ! cProtonMass*uTr*N_ch = cProtonMass*U*N
+  ! cProtonMass*uCh*N_ch = cProtonMass*U*N
   ! Combining this with the momentum conservation law, in which
-  ! (SqrtZ + 1/SqrtZ)*Pavr + cProtonMass*N_ch*uTr**2*(U/uTr) = &
-  !           (SqrtZ + 1/SqrtZ)*P_ch + cProtonMass*N_ch*uTr**2
-  ! we have: Pavr/P_ch = 1 + Eps*(1 - U/uTr),
-  ! where Eps = cProtonMass*uTr**2/(cBoltzmann*T_ch*(Z + 1)
-  ! is the dimensionless coefficient known for given uTr
-  ! and, since Pavr/P_ch = (T/T_ch)/(U/uTr),
-  ! we have an equation relating U, uTr and T/T_ch
-  ! T/T_ch = (1 + Eps) (U/uTr) - Eps*(U/uTr)**2,
+  ! (SqrtZ + 1/SqrtZ)*Pavr + cProtonMass*N_ch*uCh**2*(U/uCh) = &
+  !           (SqrtZ + 1/SqrtZ)*P_ch + cProtonMass*N_ch*uCh**2
+  ! we have: Pavr/P_ch = 1 + Eps*(1 - U/uCh),
+  ! where Eps = cProtonMass*uCh**2/(cBoltzmann*T_ch*(Z + 1)
+  ! is the dimensionless coefficient known for given uCh
+  ! and, since Pavr/P_ch = (T/T_ch)/(U/uCh),
+  ! we have an equation relating U, uCh and T/T_ch
+  ! T/T_ch = (1 + Eps) (U/uCh) - Eps*(U/uCh)**2,
   ! from which U can be solved
-  ! U/uTr = (T/T_ch)/( (1+Eps)/2 +sqrt( (1+Eps)**2/4 - Eps*(T/T_ch)))
-  real function u_over_utr(Te, uTr)
-    real, intent(in) :: Te, uTr
+  ! U/uCh = (T/T_ch)/( (1+Eps)/2 +sqrt( (1+Eps)**2/4 - Eps*(T/T_ch)))
+  real function u_over_uch(Te, uCh)
+    real, intent(in) :: Te, uCh
     real :: Eps, ToverTtr
     !--------------------------------------------------------------------------
-    Eps = cProtonMass*uTr**2/(cBoltzmann*TeTrMin*(Z + 1))
+    Eps = cProtonMass*uCh**2/(cBoltzmann*TeTrMin*(Z + 1))
     ToverTtr = Te/TeTrMin
-    u_Over_Utr = ToverTtr/(0.5*(1 + Eps) + &
+    u_Over_uCh = ToverTtr/(0.5*(1 + Eps) + &
          sqrt(max(0.0, 0.25*(1 + Eps)**2 - Eps*ToverTtr) ) )
-  end function u_over_utr
+  end function u_over_uch
   !============================================================================
-  ! Similarly, we can rewrite an equation relating U, uTr and T/T_ch
-  !  (U/uTr) + Eps1*(uTr/U)  - Eps1 - T/T_ch = 0,
+  ! Similarly, we can rewrite an equation relating U, uCh and T/T_ch
+  !  (U/uCh) + Eps1*(uCh/U)  - Eps1 - T/T_ch = 0,
   ! in terms of Eps1 = cProtonMass*U**2/(cBoltzmann*T_ch*(Z + 1),
-  ! expressed in terms of U. From this quadratic equation uTr can be solved
-  real function utr_over_u(Te, U)
+  ! expressed in terms of U. From this quadratic equation uCh can be solved
+  real function uch_over_u(Te, U)
     real, intent(in) :: Te, U
     real :: Eps1Ttr
     !--------------------------------------------------------------------------
     Eps1Ttr = cProtonMass*U**2/(cBoltzmann*(Z + 1))
     ! if(UseChromoEvap)ChromoEvapCoef = TeTrMin; else ChromoEvapCoef = 0
-    uTr_Over_U = ChromoEvapCoef/( 0.5*(Te + Eps1Ttr) + sqrt(&
+    uCh_Over_U = ChromoEvapCoef/( 0.5*(Te + Eps1Ttr) + sqrt(&
          max(0.0, 0.25*(Te + Eps1Ttr)**2 - Eps1Ttr*TeTrMin) ) )
-  end function utr_over_u
+  end function uch_over_u
   !============================================================================
   subroutine check_tr_table(TypeFileIn,iComm)
     use ModLookupTable, ONLY: i_lookup_table, &
@@ -411,14 +411,14 @@ contains
     ! Ionization potential for hydrogen
     ! cPotential_II(1,1) from util/CRASH/src/ModIonizPotential.f90:
     real, parameter :: cIonizPotentialH =  13.59844*ceV
-    ! Ratio of the ionization energy flux to (uTr*Pch):
+    ! Ratio of the ionization energy flux to (uCh*Pch):
     real, parameter :: IonizationLoss = cIonizPotentialH/&
          (cBoltzmann*TeTrMin)
     ! Misc:
     ! Loop variables
     integer            :: iTe, iU
     ! Arguments corresponding to these indexes:
-    real   :: TeSi_I(nPointTe), uTr
+    real   :: TeSi_I(nPointTe), uCh
     integer, parameter :: Vel_ = 8, DuOverDcons_ = 7
     real   :: PavrL_I(nPointTe) ! 1st column of the table, Pavr*length
     real   :: uHeat_I(nPointTe)      ! 2nd column of the table, qHeat/Pch
@@ -426,13 +426,13 @@ contains
     real   :: uHeat2_I(nPointTe)     ! uHeat**2 (present in energy equation)
     real   :: EnthalpyFlux_I(nPointTe) ! (present in energy equation)
     real   :: dHeatFluxLoverDcons_I(nPointTe) ! 4th column, derivative of 3rd
-    real   :: dHeatFluxLoverDutr     ! derivative of 3rd column over uTr
+    real   :: dHeatFluxLoverDuCh     ! derivative of 3rd column over uCh
     real   :: Lambda_I(nPointTe)     ! 5th column of the table, rad. loss
     real   :: dLogLambdaOverDlogT_I(nPointTe) ! 6th column, derivative of 5th
     real   :: pOverPch_I(nPointTe)   ! Pressure ratio to Pch
     real   :: U_I(nPointTe)          ! Velocity
     real   :: dUoverDcons_I(nPointTe)! Velocity derivative over Te
-    real   :: dUoverDutr             ! Velocity derivative over uTr
+    real   :: dUoverDuCh             ! Velocity derivative over uCh
     ! Misc:
     real :: FactorStep, DeltaLogTeCoef, LambdaCgs_V(1)
 
@@ -501,19 +501,19 @@ contains
     DeltaLogTeCoef = DeltaLogTe*HeatCondParSi/cBoltzmann**2
     do iU = 1, nPointU
        if(UseChromoEvap)then
-          uTr = (iU - 1)*DeltaU + uMin
+          uCh = (iU - 1)*DeltaU + uMin
        else
-          uTr = 0.0
+          uCh = 0.0
        end if
        do iTe = 1, nPointTe
-          U_I(iTe) = u_over_utr(TeSi_I(iTe), uTr)*uTr
-          ! See above: Pavr/P_ch = 1 + Eps*(1 - U/uTr),
-          ! where Eps = cProtonMass*uTr**2/(cBoltzmann*T_ch*(Z + 1)
-          pOverPch_I(iTe) = 1 + (uTr - U_I(iTe))*cProtonMass*uTr/&
+          U_I(iTe) = u_over_uch(TeSi_I(iTe), uCh)*uCh
+          ! See above: Pavr/P_ch = 1 + Eps*(1 - U/uCh),
+          ! where Eps = cProtonMass*uCh**2/(cBoltzmann*T_ch*(Z + 1)
+          pOverPch_I(iTe) = 1 + (uCh - U_I(iTe))*cProtonMass*uCh/&
                (cBoltzmann*TeTrMin*(Z + 1))
           if(pOverPch_I(iTe) < 0.0)then
              write(*,*)'TeSi=',TeSi_I(iTe)
-             write(*,*)'uTr=', uTr
+             write(*,*)'uCh=', uCh
              write(*,*)'iU=',iU
              write(*,*)'U_I=',U_I(iTe)
              call CON_stop('Negative pressure')
@@ -522,9 +522,9 @@ contains
           ! u*Ni*((Z+1)*(5/2)*cBoltzmann*Te + (1/2)*cProtonMass*U**2)
           ! Its ratio to P_ch=SqrtZ*cBoltzmann*Tch*Nch equals
           ! Enthalpy Flux / P_ch = &
-          !    uTr*((SqrtZ+1/SqrtZ) (5/2)*(Te/T_ch) + &
+          !    uCh*((SqrtZ+1/SqrtZ) (5/2)*(Te/T_ch) + &
           !    cProtonMass*U**2/(2*SqrtZ*cBoltzMann*TeTrMin)
-          EnthalpyFlux_I(iTe) = uTr*(2.5*(SqrtZ + 1/SqrtZ)*TeSi_I(iTe) + &
+          EnthalpyFlux_I(iTe) = uCh*(2.5*(SqrtZ + 1/SqrtZ)*TeSi_I(iTe) + &
                cProtonMass*U_I(iTe)**2/(2*SqrtZ*cBoltzmann))/TeTrMin
        end do
        ! Energy equation divided by Pch reads:
@@ -537,7 +537,7 @@ contains
        ! Delta(uHeat2) = 2*uHeat*Delta(EnthalpyFlux) + &
        !     2*Lambda*(Pavr/Pch)**2*Te**1.5*DeltaLogTeCoef   (**)
        ! where Delta(...) = ...(iTe) - ...(iTe-1)
-       uHeat_I(1) = max(uTr*IonizationLoss/SqrtZ + EnthalpyFlux_I(1), 0.0)
+       uHeat_I(1) = max(uCh*IonizationLoss/SqrtZ + EnthalpyFlux_I(1), 0.0)
        uHeat2_I(1) = uHeat_I(1)**2
        do iTe = 2, nPointTe
           SemiIntUheat_I(iTe-1) = sqrt( uHeat2_I(iTe-1) + &
@@ -595,19 +595,19 @@ contains
     if(UseChromoEvap)then
        ! Fill in the velocity derivative
        do iU = 2, nPointU - 1
-          uTr = (iU - 1)*DeltaU + uMin
+          uCh = (iU - 1)*DeltaU + uMin
           do iTe = 1, nPointTe
-             dHeatFluxLoverDutr = &
+             dHeatFluxLoverDuCh = &
                   (Value_VII(HeatFluxL_,iTe,iU+1) -&
                   Value_VII(HeatFluxL_,iTe,iU-1))/ &
                   (2*DeltaU)
-             dUoverDutr = &
+             dUoverDuCh = &
                   (Value_VII(Vel_,iTe,iU+1) - Value_VII(Vel_,iTe,iU-1))/&
                   (2*DeltaU)
              Value_VII(dHeatFluxLoverDcons_,iTe,iU) = &
                   Value_VII(dHeatFluxLoverDcons_,iTe,iU) - &
-                  Value_VII(DuOverDcons_,iTe,iU)*dHeatFluxLoverDutr/&
-                  dUoverDutr
+                  Value_VII(DuOverDcons_,iTe,iU)*dHeatFluxLoverDuCh/&
+                  dUoverDuCh
              if(iTe/=1)Value_VII(DuOverDpL_,iTe,iU) = &
                   (Value_VII(Vel_,iTe,iU+1) - Value_VII(Vel_,iTe,iU-1))/&
                   (Value_VII(PavrL_,iTe,iU+1) - Value_VII(PavrL_,iTe,iU-1))
@@ -644,7 +644,7 @@ contains
     ! the routine calculates TrTable_V array of the tabulated values
     ! If uIn is not provided, it is taken to be 0.
     ! If optional uOut is requested, the limited value of u is provided
-    ! calculated with the value uMin < uTr < uMax at the bottom of
+    ! calculated with the value uMin < uCh < uMax at the bottom of
     ! transition region.
     ! All inputs and outputs are in SI units
     use ModLookupTable, ONLY: interpolate_lookup_table
@@ -653,15 +653,16 @@ contains
     real, OPTIONAL, intent(inout) :: uFace
     ! Misc:
     ! Actual table entry, speed at the bottom of TR:
-    real :: uTr
+    real :: uCh
     !--------------------------------------------------------------------------
     if(present(uFace))then
-       uTr = min(uMax, max(ChromoEvapCoef*uFace/Te, uMin))
-       uFace = uTr*Te/TeTrMin
+       uCh = uch_over_u(Te, uFace)*uFace
+       uCh = min(uMax, max(uCh, uMin))
+       uFace = uCh*u_over_uch(Te, uCh)
     else
-       uTr = 0.0
+       uCh = 0.0
     end if
-    call interpolate_lookup_table(iTableTr, Te, uTr, TrTable_V, &
+    call interpolate_lookup_table(iTableTr, Te, uCh, TrTable_V, &
          DoExtrapolate=.false.)
   end subroutine get_trtable_value
   !============================================================================
@@ -1271,6 +1272,8 @@ contains
     integer :: iCell, iFace
     ! Vector of primitives used in limiting
     real :: LimiterState_V(Rho_:Wminor_), DeltaLtd_V(Rho_:Wminor_)
+    ! Variables used to limit velocity and mass flux
+    real :: uLim, MassFluxLim
     character(len=*), parameter:: NameSub = 'advance_thread_expl'
     !--------------------------------------------------------------------------
     if(present(DtIn).and.(.not.IsTimeAccurate))call CON_stop(&
@@ -1313,6 +1316,18 @@ contains
     ! Start the 2-stage advance procedure
     !
     StageCoef = 0.50*iStage ! Half time step is applied at first stage
+    ! Limit mass flux. If mass flux does not exceed MasFluxLim, then
+    ! in steady state the plasma local speed doesn't exceed 0.1*Cs
+    MassFluxLim = huge(1.0)
+    do iCell = -nCell, -1
+       MassFluxLim = min(MassFluxLim, 0.1*State_VG(Rho_,iCell)*&
+            speed_of_sound(State_VG(:,iCell))*&
+            min(FaceArea_F(iCell), FaceArea_F(iCell+1)))
+    end do
+    ! Limit the speed at the lower boundary
+    OpenThread1%uTr = min( OpenThread1%uTr, MassFluxLim/&
+         (FaceArea_F(-nCell)*cProtonMass*OpenThread1%PeTr/&
+         (Z*cBoltzmann*OpenThread1%TeTr) ) )
     !
     ! Boundary conditions:
     !
@@ -1627,6 +1642,28 @@ contains
            sum(State_V(Wmajor_:Wminor_))*PoyntingFluxPerBsi
     end function p_tot
     !==========================================================================
+    real function speed_of_sound(State_V)
+
+      real, intent(in) :: State_V(Rho_:Wminor_)
+      ! Contributions to the speed of sound
+      real :: C2i, C2e, C2Wmajor, C2Wminor
+      ! Misc
+      real :: RhoInv, SqrtMuRho, pWaveMajor, pWaveMinor
+
+      !------------------------------------------------------------------------
+      RhoInv = 1/State_V(Rho_)
+      SqrtMuRho = sqrt(cMu*State_V(Rho_))*PoyntingFluxPerBsi
+      ! The contributions to the speed of sound, from electrons and ions
+      C2i = Gamma*State_V(Ppar_)*RhoInv
+      C2e = Gamma*State_V(Pe_)  *RhoInv
+      ! Contributions from wave pressure
+      pWaveMajor = 0.50*State_V(Wmajor_)*SqrtMuRho
+      C2Wmajor = 0.50*pWaveMajor*RhoInv
+      pWaveMinor = 0.50*State_V(Wminor_)*SqrtMuRho
+      C2Wminor = 0.50*pWaveMinor*RhoInv
+      speed_of_sound = sqrt(C2i + C2e + C2Wmajor + C2WMinor)
+    end function speed_of_sound
+    !==========================================================================
     subroutine fix_p_tot(State_V, DeltaPtot)
 
       real, intent(inout) :: State_V(Rho_:Wminor_) ! State to fix
@@ -1643,9 +1680,9 @@ contains
       C2e = Gamma*State_V(Pe_)  *RhoInv
       ! Contributions from wave pressure
       pWaveMajor = 0.50*State_V(Wmajor_)*SqrtMuRho
-      C2Wmajor = 0.50*pWaveMajor*SqrtMuRho
+      C2Wmajor = 0.50*pWaveMajor*RhoInv
       pWaveMinor = 0.50*State_V(Wminor_)*SqrtMuRho
-      C2Wminor = 0.50*pWaveMinor*SqrtMuRho
+      C2Wminor = 0.50*pWaveMinor*RhoInv
       ! Calculate DeltaRho assuming adiabaticity
       DeltaRho = DeltaPtot/(C2i + C2e + C2Wmajor + C2Wminor)
       ! Modify pressures to increase the total pressure by DeltaPtot
@@ -1676,7 +1713,7 @@ contains
       real, dimension(Rho_:Wminor_) :: ConsL_V, ConsR_V, FluxL_V, FluxR_V
       real :: WeightL, WeightR, Diffusion
       real :: FL, FLD, FR, FRD ! Pressure (F)unctions and its (D)erivatives
-      real :: POld, Pavr, Utr   ! Iterative values for pressure
+      real :: POld, Pavr, UCh   ! Iterative values for pressure
       integer,parameter::nIterMax=10
       integer :: iIter
       real, parameter :: TolP=0.0010, ChangeStart=2.0*TolP
@@ -1716,9 +1753,9 @@ contains
                  iVal=PavrL_              ,&
                  ValIn=Pavr*Ds_G(-nCell-1),&
                  Value_V=TrTable_V        ,&
-                 Arg2Out=uTr              ,&
+                 Arg2Out=uCh              ,&
                  DoExtrapolate=.false.)
-            UnFace = u_over_utr(OpenThread1%TeTr, uTr)*uTr
+            UnFace = u_over_uCh(OpenThread1%TeTr, uCh)*uCh
             WavePress = 0.50*PoyntingFluxPerBsi*&
                  sum(pLeft_V(Wmajor_:Wminor_))*sqrt(cMu*RhoFace)
             FLD = TrTable_V(DuOverDpL_)*Ds_G(-nCell-1)/(& !/(dPtot/dPavr)
@@ -2456,7 +2493,7 @@ contains
          '[K] [m/s] [J/m3] [K] [1] [s]',&
          NameVarIn = 'R '//&
          'Rho U Ppar P Pe Wp Wm Ti Te B'//&
-         ' TeTR UTR PeTR TMax SignB Dt' )
+         ' TeTR Utr PeTR TMax SignB Dt' )
   end subroutine save_plot_thread
   !============================================================================
   subroutine test
