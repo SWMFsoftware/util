@@ -154,12 +154,12 @@ module ModTransitionRegion
   ! Parameters of the TR table:
   real, parameter :: TeTrMin = 1.0e4
   real, parameter :: TeTrMax = real(2.9988442312309672D+06)
-  integer, parameter :: nPointTe = 310, nPointU = 11
+  integer, parameter :: nPointTe = 310, nPointU = 15
   ! Global array used to fill in the table
   real, allocatable :: Value_VII(:,:,:)
   real            :: DeltaLogTe
   ! Max speed
-  real, parameter :: uMax = 100.0, uMin = 0.0
+  real, parameter :: uMax = 100.0, uMin = -40.0
   real, parameter :: DeltaU = (uMax - uMin)/(nPointU - 1)
   ! Needed for initialization:
   logical :: DoInit = .true.
@@ -820,10 +820,10 @@ contains
     OpenThread1%B1_DG(:,0) = B1_DF(:,0)
     OpenThread1%DirB_DG(:,-nCell:0) = DirB_DG(:,-nCell:0)
     ! Re-initialize state vector if needed
-    if(nCell /= OpenThread1%nCell)then
+    ! if(nCell /= OpenThread1%nCell)then
        OpenThread1%nCell = nCell
        call init_thread_variables(OpenThread1)
-    end if
+    ! end if
     ! TMax [K], such that the ingoing heat flux to the TR at this
     ! temperature equals the Poynting flux (which is not realistic and means
     ! that the input temperature exceeding TMax assumes that something is
@@ -903,7 +903,7 @@ contains
          call advance_heat_conduction_ta(nCell, 100.0, Te_I, Ti_I(-nCell:-1),&
               Ni_I(-nCell:-1), Ds_I, uFace, B_I, PeFaceOut = PeFace, &
               TeFaceOut=TeFace, DoLimitTimestep=.true.)
-         call barometric_equilibrium(nCell, Te_I, Ti_I, Ds_I, rInv_I, &
+         call barometric_equilibrium(nCell, Te_I, Ti_I, rInv_I, &
               rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
       end do
 
@@ -951,44 +951,53 @@ contains
     real, optional, intent(in) :: wRepresentative
 
     real :: Misc
-    character(LEN=*), parameter :: NameSub = 'convert_p_tot_to_rho'
-    !--------------------------------------------------------------------------
 
+    character(len=*), parameter:: NameSub = 'convert_p_tot_to_rho'
+    !--------------------------------------------------------------------------
     Misc = PoyntingFluxPerBSi*sqrt(cMu/(16*Ptot))
     if(present(wRepresentative))Misc = Misc*wRepresentative
     Rho = Ptot/(Misc + sqrt(Misc**2 + cBoltzmann*(Z*Te + Ti)/cProtonMass))**2
   end subroutine convert_p_tot_to_rho
   !============================================================================
-  subroutine barometric_equilibrium(nPoint, Te_I, Ti_I, Ds_I, rInv_I, &
-       rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
+  subroutine barometric_equilibrium(nPoint, Te_I, Ti_I, rInv_I, &
+       rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I, WaveIn_VI)
 
     integer, intent(in)    :: nPoint
     real,    intent(in)    :: Te_I(nPoint+1), Ti_I(nPoint+1)
-    real,    intent(in)    :: Ds_I(0:nPoint+1), rInv_I(nPoint+1)
+    real,    intent(in)    :: rInv_I(nPoint+1)
     real,    intent(in)    :: rFaceInv, PeFace, TeFace
     real,    intent(out)   :: Ni_I(nPoint+1), Pe_I(nPoint+1), Pi_I(nPoint+1)
-
+    real, optional, intent(in) :: WaveIn_VI(Wmajor_:Wminor_,0:nPoint+1)
     real :: uFace = 0.0, RhoFace, PtotFace
     ! Predicted vars at the midpoint
-    real :: PredTe, PredTi, PredRho, PredPtot
+    real :: PredTe, PredTi, PredRho, PredPtot, PredWave
     ! total pressure and mass density
     real :: Ptot_I(nPoint+1), Rho_I(nPoint+1)
+    !  wave intensities
+    real :: Wave_VI(Wmajor_:Wminor_,0:nPoint+1)
     ! Loop variable
     integer :: iPoint
     !--------------------------------------------------------------------------
-
+    if(present(WaveIn_VI))then
+       Wave_VI = WaveIn_VI
+    else
+       Wave_VI(Wmajor_,:) = 1.0; Wave_VI(Wminor_,:) = 1.0e-3
+    end if
     RhoFace = cProtonMass*PeFace/(Z*cBoltzmann*TeFace)
-    PtotFace = 0.5*PoyntingFluxPerBSi*sqrt(cMu*RhoFace) + (1 + 1/Z)*PeFace
+    PtotFace = 0.5*sum(Wave_VI(:,0))*PoyntingFluxPerBSi*sqrt(cMu*RhoFace) &
+         + (1 + 1/Z)*PeFace
     ! Predictor
     PredPtot = PtotFace*exp(cGravityPotAt1Rs*RhoFace/PtotFace*0.5*&
          (rFaceInv - rInv_I(1)))
     PredTe = 0.5*(TeFace + Te_I(1))
     PredTi = 0.5*(TeFace + Ti_I(1))
-    call convert_p_tot_to_rho(PredPtot, PredTe, PredTi, PredRho)
+    PredWave = 0.5*sum(Wave_VI(:,0:1))
+    call convert_p_tot_to_rho(PredPtot, PredTe, PredTi, PredRho, PredWave)
     ! Corrector
     Ptot_I(1) = PtotFace*exp(cGravityPotAt1Rs*&
          PredRho/PredPtot*(rFaceInv - rInv_I(1)))
-    call convert_p_tot_to_rho(Ptot_I(1), Te_I(1), Ti_I(1), Rho_I(1))
+    call convert_p_tot_to_rho(Ptot_I(1), Te_I(1), Ti_I(1), Rho_I(1), &
+         sum(Wave_VI(:,1)))
     Ni_I(1) = Rho_I(1)/cProtonMass
     Pi_I(1) = cBoltzmann*Ni_I(1)*Ti_I(1)
     Pe_I(1) = cBoltzmann*Ni_I(1)*Te_I(1)*Z
@@ -999,12 +1008,14 @@ contains
             (rInv_I(iPoint-1) - rInv_I(iPoint)))
        PredTe = 0.50*(Te_I(iPoint-1) + Te_I(iPoint))
        PredTi = 0.50*(Ti_I(iPoint-1) + Ti_I(iPoint))
-       call convert_p_tot_to_rho(PredPtot, PredTe, PredTi, PredRho)
+       PredWave = 0.5*sum(Wave_VI(:,iPoint-1:iPoint))
+       call convert_p_tot_to_rho(PredPtot, PredTe, PredTi, PredRho, &
+            PredWave)
        ! Corrector
        Ptot_I(iPoint) = Ptot_I(iPoint-1)*exp(cGravityPotAt1Rs*&
             PredRho/PredPtot*(rInv_I(iPoint-1) - rInv_I(iPoint)))
        call convert_p_tot_to_rho(Ptot_I(iPoint), &
-            Te_I(iPoint), Ti_I(iPoint), Rho_I(iPoint))
+            Te_I(iPoint), Ti_I(iPoint), Rho_I(iPoint),sum(Wave_VI(:,iPoint)))
        Ni_I(iPoint) = Rho_I(iPoint)/cProtonMass
        Pi_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Ti_I(iPoint)
        Pe_I(iPoint) = cBoltzmann*Ni_I(iPoint)*Te_I(iPoint)*Z
@@ -1090,7 +1101,7 @@ contains
   end subroutine deallocate_thread_arr
   !============================================================================
   subroutine set_thread_inner_bc(TeIn, uIn, pIn, State_V)
-    
+
     real, intent(in) :: TeIn, uIn, pIn
     real, intent(out):: State_V(Rho_:Wminor_)
     !--------------------------------------------------------------------------
@@ -1273,7 +1284,8 @@ contains
     ! Vector of primitives used in limiting
     real :: LimiterState_V(Rho_:Wminor_), DeltaLtd_V(Rho_:Wminor_)
     ! Variables used to limit velocity and mass flux
-    real :: uLim, MassFluxLim
+    real :: uLim, MassFluxLim, pViscous_C(-OpenThread1%nCell:-1)
+    real :: PtotLim
     character(len=*), parameter:: NameSub = 'advance_thread_expl'
     !--------------------------------------------------------------------------
     if(present(DtIn).and.(.not.IsTimeAccurate))call CON_stop(&
@@ -1318,7 +1330,10 @@ contains
     StageCoef = 0.50*iStage ! Half time step is applied at first stage
     ! Limit mass flux. If mass flux does not exceed MasFluxLim, then
     ! in steady state the plasma local speed doesn't exceed 0.1*Cs
-    MassFluxLim = huge(1.0)
+    ! Limit flux across the low boundary
+    call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
+    MassFluxLim = 0.1*TrTable_V(uHeat_)*FaceArea_F(-nCell)*cProtonMass*&
+         OpenThread1%PeTr/(Z*cBoltzmann*OpenThread1%TeTr)
     do iCell = -nCell, -1
        MassFluxLim = min(MassFluxLim, 0.1*State_VG(Rho_,iCell)*&
             speed_of_sound(State_VG(:,iCell))*&
@@ -1332,14 +1347,34 @@ contains
     ! Boundary conditions:
     !
     ! Apply left BC in the ghostcell #=-nCell-1
+    !
     call set_thread_inner_bc(&
          TeIn = OpenThread1%TeTr, &
          uIn  = OpenThread1%uTr,  &
          pIn  = OpenThread1%PeTr, &
          State_V= State_VG(:,-nCell-1))
-    !State_VG(Wmajor_,-nCell-1) = min(max(1.0, 5e-4/B_F(-nCell)), &
+    ! State_VG(Wmajor_,-nCell-1) = min(max(1.0, 5e-4/B_F(-nCell)), &
     !     1.1e6/PoyntingFluxPerbSi)
-    !
+    call get_trtable_value(Te_G(0))
+    uLim = 0.1*min(TrTable_V(UHeat_), &
+         sqrt(cBoltzmann*Te_G(0)/cProtonMass))
+    PtotLim = p_tot(State_VG(:,-1)) + cGravityPotAt1Rs*State_VG(Rho_,-1)*&
+         0.50*(1/OpenThread1%R_F(-1) - 1/OpenThread1%R_F(0))
+    call limit_p_tot(State_VG(:,0), PtotLim)
+    if(State_VG(U_,0) > 0.0)then
+       State_VG(U_,0) = min(State_VG(U_,0), uLim)
+    else
+       State_VG(U_,0) = 0.0
+    end if
+    if(present(LeftFace0_V))then
+       LimiterState_V = OpenThread1%LimiterState_V
+       call limit_p_tot(LimiterState_V, PtotLim)
+       if(LimiterState_V(U_) > 0.0)then
+          LimiterState_V(U_) = min(LimiterState_V(U_), uLim)
+       else
+          LimiterState_V(U_) = 0.0
+       end if
+    end if
     ! limited interpolation procedure:
     ! 1. logarithm of density/pressure is better to be limited
     if(DoLimitLogVar.and.any(State_VG(iLogVar_V,-nCell-1:0)<=0.0))then
@@ -1404,7 +1439,6 @@ contains
     dVarUp_V = min(Ds_G(-1)/(0.50*Ds_G(-1) + Ds_G(0)),1.0)*&
          (State_VG(:,0) - State_VG(:,-1))
     if(present(LeftFace0_V))then
-       LimiterState_V = OpenThread1%LimiterState_V
        if(DoLimitLogVar)then
           if(any(LimiterState_V(iLogVar_V)<=0.0))&
                call CON_stop('Negative pressure/density in the limiter state')
@@ -1414,6 +1448,7 @@ contains
        ! on the thread, State_VG(:,-1), and the leftmost state in the
        ! physical cell in the SC, which is passed here as LimiterState_V
        DeltaLtd_V = LimiterState_V - State_VG(:,-1)
+
        ! Now, we limit dVarUp_V to get the limited-slope-interpolated
        ! value at the boundary face lay between the said two physical states
        dVarUp_V = (sign(0.5, dVarUp_V) + sign(0.5, DeltaLtd_V))*&
@@ -1437,22 +1472,15 @@ contains
        pLeft_VF(iLogVar_V,-nCell:0) = exp(&
             pLeft_VF(iLogVar_V,-nCell:0))
     end if
-    do iCell = -nCell, -nCell
-       ! Slope of the total pressure should balance the gravity
-       ! Calc -\delta Grav.Pot.
-       GravitySource = State_VG(Rho_,iCell)*cGravityPotAt1Rs* & 
-            (1/OpenThread1%R_F(iCell) - 1/OpenThread1%R_F(iCell+1))
-       ! For each cell, calculate the increment in the total
-       ! pressure at the left boundary, such that DeltaPtot + &
-       ! p_tot(pRight_VF(iCell)) - p_tot(pLeft_VF(iCell+1)) &
-       ! + GravitySource = 0
-       DeltaPtot = p_tot(pLeft_VF(:,iCell+1)) - GravitySource &
-            - p_tot(pRight_VF(:,iCell))
-       call fix_p_tot(pRight_VF(:,iCell), DeltaPtot)
-    end do
     ! 2. Apply right BC on the external boundary (# = 0)
     if(present(RightFace0_V))then
        pRight_VF(:,0) = RightFace0_V
+       call limit_p_tot(pRight_VF(:,0), PtotLim)
+       if(pRight_VF(U_,0) > 0.0)then
+          pRight_VF(U_,0) = min(pRight_VF(U_,0), uLim)
+       else
+          pRight_VF(U_,0) = 0.0
+       end if
     else
        ! First order BC
        pRight_VF(:,0) = State_VG(:,0)
@@ -1462,28 +1490,18 @@ contains
     ! Get fluxes
     ! Loop over faces:
     do iFace = -nCell, 0
-       call get_thread_flux(iFace,pLeft_VF(:,iFace), pRight_VF(:,iFace), &
+       call get_thread_flux(iFace, &
+            pLeft_VF(:,iFace), pRight_VF(:,iFace), &
             Flux_VF(:,iFace), Cleft_F(iFace), Cright_F(iFace), &
             Un_F(iFace), Rho_F(iFace), pTot_F(iFace))
        VaFace_F(iFace) = B_F(iFace)/sqrt(cMu*Rho_F(iFace))
     end do
-    !if(Un_F(-nCell) <=0)then
-    !   Un_F(-nCell) = 0.0
-    !   Flux_VF(Rho_,-nCell) = 0.0
-    !   Flux_VF(P_:,-nCell) = 0.0
-    !   OpenThread1%uTr = 0.5*OpenThread1%uTr
-    !else
-    !   OpenThread1%uTr = 0.5*Un_F(-nCell) + 0.5*OpenThread1%uTr
-    !   call get_trtable_value(OpenThread1%TeTr, OpenThread1%uTr)
-    !   ! Correct pressure for updated plasma speed
-    !   OpenThread1%PeTr = TrTable_V(PavrL_)*SqrtZ/Ds_G(-nCell-1)
-    !end if
+    Un_F(0) = max(Un_F(0), -min(uLim, MassFluxLim/&
+         (FaceArea_F(0)*Rho_F(0))))
     do iCell = -nCell,-1
        DivU_C(iCell)  = vInv_C(iCell)*(Un_F(iCell+1)*FaceArea_F(iCell+1) &
             - Un_F(iCell)*FaceArea_F(iCell))
        VaCell_C(iCell) = 0.50*(VaFace_F(iCell+1) + VaFace_F(iCell))
-       !write(*,*)iCell, nCell, State_VG(Wmajor_:Wminor_,iCell), &
-       !     VaCell_C(iCell), LperpTimesSqrtBsi
        DissMajor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
             State_VG(Wminor_,iCell)*VaCell_C(iCell))/LperpTimesSqrtBsi
        DissMinor_C(iCell) = 2.0*sqrt(PoyntingFluxPerBsi*cMu*&
@@ -1505,18 +1523,14 @@ contains
           ! from the right face
           Dt_C(iCell) = CflLocal/max(vInv_C(iCell)* &
                abs(max(Cright_F(iCell)*FaceArea_F(iCell),&
-               -Cleft_F(iCell+1)*FaceArea_F(iCell+1))) + & ! CFL
+               -Cleft_F(iCell+1)*FaceArea_F(iCell+1))) + & ! CFL +
                max(DissMajor_C(iCell),DissMinor_C(iCell)),&! diss rate
                cooling_rate(RhoSi=State_VG(Rho_,iCell),&  ! or cooling
                PeSi=State_VG(Pe_,iCell)))                 ! rate
        end do
-       if(present(DtIn))then
-          Dt_C(-nCell:-1) = min(Dt_C(-nCell:-1), DtIn)
-          OpenThread1%Dt = DtIn
-       else
-          OpenThread1%Dt = minval(Dt_C(-nCell:-1))
-          if(IsTimeAccurate)Dt_C(-nCell:-1) = OpenThread1%Dt
-       end if
+       OpenThread1%Dt = minval(Dt_C(-nCell:-1))
+       if(present(DtIn))OpenThread1%Dt = min(OpenThread1%Dt, DtIn)
+       if(IsTimeAccurate)Dt_C(-nCell:-1) = OpenThread1%Dt
     end if
     !
     ! Advance the conserved variables to the half or full time step,
@@ -1613,8 +1627,13 @@ contains
        ! Convert electron internal energy, 3/2*Pe, to pressure
        State_VG(Pe_,iCell)  = max(Z*pLimit, cTwoThird*State_VG(Pe_,iCell))
        Te_G(iCell) = State_VG(Pe_,iCell)*cProtonMass/&
-         (Z*cBoltzmann*State_VG(Rho_,iCell))
+            (Z*cBoltzmann*State_VG(Rho_,iCell))
     end do
+    ! Apply artificial viscosity
+    pViscous_C(-nCell:-1) = 0.25*(State_VG(U_,-nCell-1:-2) + &
+         State_VG(U_,-nCell+1:0)) - 0.5*State_VG(U_,-nCell:-1)
+    where(State_VG(U_,-nCell:-1) < 0.0) State_VG(U_,-nCell:-1) = &
+         State_VG(U_,-nCell:-1) + pViscous_C
     if(iStage==1)RETURN
     ! Semi-implicit stage
     ! First, solve implicit equation
@@ -1632,12 +1651,20 @@ contains
             State_VG(Wminor_,iCell+1)*VaDtOverDs_C(iCell)) / &
             (1 + VaDtOverDs_C(iCell))
     end do
+    if(any(State_VG(U_,-nCell:-1) < -1.3e5))then
+       call save_plot_thread(OpenThread1,'high_downstream_speed.out')
+       call CON_stop('See file high_downstream_speed.out')
+    end if
   contains
     !==========================================================================
     real function p_tot(State_V)
 
       real, intent(in) :: State_V(Rho_:Wminor_)
       !------------------------------------------------------------------------
+      if(State_V(Rho_)<0.0)then
+         write(*,*)'Rho=',State_V(Rho_)
+         call CON_stop('Negative density')
+      end if
       p_tot = State_V(Ppar_) + State_V(Pe_) + 0.50*sqrt(cMu*State_V(Rho_))*&
            sum(State_V(Wmajor_:Wminor_))*PoyntingFluxPerBsi
     end function p_tot
@@ -1664,37 +1691,21 @@ contains
       speed_of_sound = sqrt(C2i + C2e + C2Wmajor + C2WMinor)
     end function speed_of_sound
     !==========================================================================
-    subroutine fix_p_tot(State_V, DeltaPtot)
+    subroutine limit_p_tot(State_V, PtotLim)
 
-      real, intent(inout) :: State_V(Rho_:Wminor_) ! State to fix
-      real, intent(in)    :: DeltaPtot             ! Increment in pTotal
-      ! Contributions to the speed of sound
-      real :: C2i, C2e, C2Wmajor, C2Wminor
-      ! Misc
-      real :: DeltaRho, RhoInv, SqrtMuRho, pWaveMajor, pWaveMinor
+      real, intent(inout) :: State_V(Rho_:Wminor_) ! State in which to limit P
+      real, intent(in)    :: PtotLim ! Limiting value for Ptot
+      real :: Ptot                   ! Ptot in State_V
+      real :: PtotFactor             ! Increment in pTotal
+      real, parameter :: Beta = 1.01 ! Ptot is limited to be below Beta*PtotLim
       !------------------------------------------------------------------------
-      RhoInv = 1/State_V(Rho_)
-      SqrtMuRho = sqrt(cMu*State_V(Rho_))*PoyntingFluxPerBsi
-      ! The contributions to the speed of sound, from electrons and ions
-      C2i = Gamma*State_V(Ppar_)*RhoInv
-      C2e = Gamma*State_V(Pe_)  *RhoInv
-      ! Contributions from wave pressure
-      pWaveMajor = 0.50*State_V(Wmajor_)*SqrtMuRho
-      C2Wmajor = 0.50*pWaveMajor*RhoInv
-      pWaveMinor = 0.50*State_V(Wminor_)*SqrtMuRho
-      C2Wminor = 0.50*pWaveMinor*RhoInv
-      ! Calculate DeltaRho assuming adiabaticity
-      DeltaRho = DeltaPtot/(C2i + C2e + C2Wmajor + C2Wminor)
-      ! Modify pressures to increase the total pressure by DeltaPtot
-      State_V(Rho_) = State_V(Rho_) + DeltaRho
-      State_V(Ppar_) = State_V(Ppar_) + DeltaRho*C2i
-      State_V(Pe_)   = State_V(Pe_) + DeltaRho*C2e
-      pWaveMajor = pWaveMajor + DeltaRho*C2Wmajor
-      pWaveMinor = pWaveMinor + DeltaRho*C2Wminor
-      SqrtMuRho = sqrt(cMu*State_V(Rho_))*PoyntingFluxPerBsi
-      State_V(Wmajor_) = 2*pWaveMajor/SqrtMuRho
-      State_V(Wminor_) = 2*pWaveMinor/SqrtMuRho
-    end subroutine fix_p_tot
+      Ptot = p_tot(State_V)
+      if(Ptot <= Beta*PtotLim) RETURN
+      PtotFactor = Beta*PtotLim/Ptot
+      State_V(Rho_) = PtotFactor*State_V(Rho_)
+      State_V(p_:Pe_)   = PtotFactor*State_V(p_:Pe_)
+      State_V(Wmajor_:Wminor_) = sqrt(PtotFactor)*State_V(Wmajor_:Wminor_)
+    end subroutine limit_p_tot
     !==========================================================================
     subroutine get_thread_flux(iFace,pLeft_V, pRight_V, &
          Flux_V, Cleft, Cright, UnFace, RhoFace, PtotFace)
@@ -1712,13 +1723,17 @@ contains
       logical :: UseArtificialWind = .false.
       real, dimension(Rho_:Wminor_) :: ConsL_V, ConsR_V, FluxL_V, FluxR_V
       real :: WeightL, WeightR, Diffusion
-      real :: FL, FLD, FR, FRD ! Pressure (F)unctions and its (D)erivatives
-      real :: POld, Pavr, UCh   ! Iterative values for pressure
+      real :: FLD, FR, FRD ! Pressure (F)unctions and its (D)erivatives
+      real :: POld, Pavr, uCh   ! Iterative values for pressure
       integer,parameter::nIterMax=10
       integer :: iIter
       real, parameter :: TolP=0.0010, ChangeStart=2.0*TolP
-      real :: Change
-      character(LEN=*), parameter :: NameSub = 'get_thread_flux'
+      real :: Change, MaxRhoU
+      logical :: UseLimU
+      ! Variables from routine guess_p in ModExactRS
+      real::ImpedanceL, ImpedanceR, ImpedanceTotalInv
+      real, parameter :: cTinyFractionOf=1.0e-8
+      character(len=*), parameter:: NameSub = 'get_thread_flux'
       !------------------------------------------------------------------------
       RhoL = pLeft_V(Rho_ )
       PeL  = pLeft_V(Pe_)
@@ -1740,35 +1755,63 @@ contains
          Cleft  = min(UnL - CsL, UnR - CsR, 0.0)
          Cright = max(UnL + CsL, UnR + CsR, 0.0)
       elseif(iFace == -nCell)then
-         POld = p_tot(pLeft_V)
-         CsR = sqrt(Gamma*pR/RhoR)
+         CsR = sqrt(Gamma*pR/RhoR); CsL = sqrt(Gamma*pL/RhoL)
+         ! subroutine guess_p from ModExactRS
+         ImpedanceL = RhoL*CsL; ImpedanceR = RhoR*CsR
+         ImpedanceTotalInv = 1.0/(ImpedanceL+ImpedanceR)
+         ! Here, Pavr is the weighted average of the left and right Ptot
+         PAvr = ImpedanceTotalInv*(PL*ImpedanceR + PR*ImpedanceL)
+         POld = max(cTinyFractionOf*PAvr,  PAvr + &
+              (UnL - UnR)*ImpedanceTotalInv*ImpedanceL*ImpedanceR)
+         MaxRhoU = MassFluxLim/FaceArea_F(-nCell)
+         UseLimU = .false.
          ! Initialize loop:
          Change = ChangeStart; iIter = 0
          do while(Change > TolP .and. iIter < nIterMax)
-            call convert_p_tot_to_rho(Pold, OpenThread1%TeTr, &
-                 OpenThread1%TeTr, RhoFace, sum(pLeft_V(Wmajor_:Wminor_)))
-            Pavr = (RhoFace/cProtonMass)*cBoltzmann*OpenThread1%TeTr*SqrtZ
-            call interpolate_lookup_table(iTable=iTableTR, &
-                 Arg1In=OpenThread1%TeTr  ,&
-                 iVal=PavrL_              ,&
-                 ValIn=Pavr*Ds_G(-nCell-1),&
-                 Value_V=TrTable_V        ,&
-                 Arg2Out=uCh              ,&
-                 DoExtrapolate=.false.)
-            UnFace = u_over_uCh(OpenThread1%TeTr, uCh)*uCh
-            WavePress = 0.50*PoyntingFluxPerBsi*&
-                 sum(pLeft_V(Wmajor_:Wminor_))*sqrt(cMu*RhoFace)
-            FLD = TrTable_V(DuOverDpL_)*Ds_G(-nCell-1)/(& !/(dPtot/dPavr)
-                 SqrtZ            + & ! dPe/dPavr
-                 1/SqrtZ          + & ! dPi/dPavr
-                 0.50*WavePress/Pavr) ! dWavePress/dPavr
+            if(.not.UseLimU)then
+               ! Calculate velocity of the outflow from TR
+               call convert_p_tot_to_rho(Pold, OpenThread1%TeTr, &
+                    OpenThread1%TeTr, RhoFace, &
+                    sum(pLeft_V(Wmajor_:Wminor_)))
+               Pavr = (RhoFace/cProtonMass)*cBoltzmann*&
+                    OpenThread1%TeTr*SqrtZ
+               call interpolate_lookup_table(iTable=iTableTR, &
+                    Arg1In=OpenThread1%TeTr  ,&
+                    iVal=PavrL_              ,&
+                    ValIn=Pavr*Ds_G(-nCell-1),&
+                    Value_V=TrTable_V        ,&
+                    Arg2Out=uCh              ,&
+                    DoExtrapolate=.false.)
+               UnFace = u_over_uch(OpenThread1%TeTr, uCh)*uCh
+               if(uCh > 0.9999*uMax.or.uCh < uMin + 0.0001*uMax)then
+                  call get_trtable_value(OpenThread1%TeTr, UnFace)
+                  Pavr = TrTable_V(PavrL_)/Ds_G(-nCell-1)
+                  RhoFace = cProtonMass*Pavr/&
+                       (cBoltzmann*OpenThread1%TeTr*SqrtZ)
+                  UseLimU = .true.
+                  FLD = 0.0
+               end if
+               if(abs(UnFace)*RhoFace > MaxRhoU)then
+                  UnFace = sign(MaxRhoU/RhoFace, UnFace)
+                  UseLimU = .true.
+                  FLD = 0.0
+               end if
+            end if
+            if(.not.UseLimU)then
+               WavePress = 0.50*PoyntingFluxPerBsi*&
+                    sum(pLeft_V(Wmajor_:Wminor_))*sqrt(cMu*RhoFace)
+               FLD = TrTable_V(DuOverDpL_)*Ds_G(-nCell-1)/(& !/(dPtot/dPavr)
+                    SqrtZ            + & ! dPe/dPavr
+                    1/SqrtZ          + & ! dPi/dPavr
+                    0.50*WavePress/Pavr) ! dWavePress/dPavr
+            end if
             call pressure_function(FR, FRD, POLD, RhoR, PR, CsR, Cright)
             PtotFace  = POld - (FR + UnR - UnFace)/(-FLD + FRD)
             if(PtotFace<=0.0)PtotFace = 0.10*pOld
             Change = 2.0*abs((PtotFace - POld)/(PtotFace + POld))
-            POLD   = PtotFace; iIter=iIter+1
+            POld   = PtotFace; iIter = iIter + 1
          end do
-         if(iIter==nIterMax)then
+         if(iIter==nIterMax.and.Change > TolP)then
             write(*,*)'iFace =',iFace,' nCell=',nCell
             write(*,*)'Change=',Change
             write(*,*)'Ptot=',PtotFace,' PL=', PL, ' PR=', PR
@@ -1802,7 +1845,6 @@ contains
          ! "Conserved" electron energy density is a 1.50*Pe
          ConsL_V(Pe_)  = 1.50*pLeft_V(Pe_)
          FluxL_V          = UnL*ConsL_V
-         FluxL_V(RhoU_)   = FluxL_V(RhoU_)
          FluxL_V(Energy_) = FluxL_V(Energy_) + PL*UnL
 
          ConsR_V = pRight_V
@@ -1816,7 +1858,6 @@ contains
          ConsR_V(Pe_)  = 1.50*pRight_V(Pe_)
          if(UseAnisoPressure)ConsL_V(Ppar_) = 0.5*ConsL_V(Ppar_)
          FluxR_V          = UnR*ConsR_V
-         FluxR_V(RhoU_)   = FluxR_V(RhoU_)
          FluxR_V(Energy_) = FluxR_V(Energy_) + PR*UnR
          WeightL   = Cright/(Cright - Cleft)
          WeightR   = 1.0 - WeightL
@@ -2493,7 +2534,7 @@ contains
          '[K] [m/s] [J/m3] [K] [1] [s]',&
          NameVarIn = 'R '//&
          'Rho U Ppar P Pe Wp Wm Ti Te B'//&
-         ' TeTR Utr PeTR TMax SignB Dt' )
+         ' TeTr uTr PeTr TMax SignB Dt' )
   end subroutine save_plot_thread
   !============================================================================
   subroutine test
@@ -2529,7 +2570,7 @@ contains
        call advance_heat_conduction_ta(99, 100.0, Te_I, Ti_I(1:99), &
             Ni_I(1:99), Ds_I, uFace, B_I, PeFaceOut = PeFace, &
             TeFaceOut=TeFace, DoLimitTimestep=.true.)
-       call barometric_equilibrium(99, Te_I, Ti_I, Ds_I, rInv_I, &
+       call barometric_equilibrium(99, Te_I, Ti_I, rInv_I, &
        rFaceInv, PeFace, TeFace, Ni_I, Pe_I, Pi_I)
     end do
 
