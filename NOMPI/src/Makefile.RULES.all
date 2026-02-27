@@ -2,4 +2,4 @@
 # uses variable type casting. 
 
 $Compiler eq "nagfor"
-	${COMPILE.f90} ${SEARCH} -c -w -Wc=`which gcc` -kind=byte ${PRECISION} -O0 NOMPI.f90
+	${COMPILE.f90} ${SEARCH} -c -w -Wc=`which gcc` -Wc,-std=gnu89 -kind=byte ${PRECISION} -O0 NOMPI.f90
