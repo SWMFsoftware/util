@@ -19,9 +19,13 @@ module ModErrors
   integer, parameter :: ecSWNNotSet_       = 15
 
   integer, parameter :: nErrorsMax = 1000
+  integer, parameter :: nWarningsMax = 1000
+
+  logical:: isOk = .true.
 
   character (len=100), dimension(nErrorsMax) :: cErrorCodes
-
+  character (len=100), dimension(nWarningsMax) :: cWarningCodes
+  
 contains
 
   subroutine set_error_codes
