@@ -39,8 +39,6 @@ module msis_constants
   real(kind=rp), parameter   :: deg2rad = pi / 180.0_rp
   real(kind=rp), parameter   :: doy2rad = 2.0_rp*pi / 365.0_rp
   real(kind=rp), parameter   :: lst2rad = pi / 12.0_rp
-  !real(kind=rp), parameter   :: tanh1 = 0.761594155955765485_rp  ! tanh(1.0)
-  real(kind=rp), parameter   :: tanh1 = tanh(1.0_rp)
 
   ! Thermodynamic constants
   ! Boltzmann constant (CODATA 2018) (J/kg)
@@ -1837,7 +1835,7 @@ module msis_dfn
   !==================================================================================================
   subroutine dfnparm(ispec,gf,tpro,dpro)
 
-    use msis_constants, only   : tanh1, specmass, lnvmr, Mbar, g0divkB, &
+    use msis_constants, only   : specmass, lnvmr, Mbar, g0divkB, &
                                  nd, zetaF, zetaB, zetaA, nodesTN, &
                                  nodesO1, zetarefO1, c1o1, c1o1adj, &
                                  nodesNO, zetarefNO, c1NO, c1NOadj, &
@@ -2083,7 +2081,7 @@ module msis_dfn
     dpro%Mi(0) = Mbar
     dpro%Mi(4) = specmass(ispec)
     dpro%Mi(2) = (dpro%Mi(0) + dpro%Mi(4)) / 2.0_rp
-    delM = tanh1 * (dpro%Mi(4) - dpro%Mi(0)) / 2.0_rp
+    delM = tanh(1.0_rp) * (dpro%Mi(4) - dpro%Mi(0)) / 2.0_rp
     dpro%Mi(1) = dpro%Mi(2) - delM
     dpro%Mi(3) = dpro%Mi(2) + delM
     do i = 0, 3
