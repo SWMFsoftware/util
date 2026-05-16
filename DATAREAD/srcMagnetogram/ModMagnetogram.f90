@@ -221,8 +221,14 @@ contains
     iTableB0local    = i_lookup_table('B0local')
     if(iTableB0local > 0) then
        call get_lookup_table(iTableB0local, nParam=nParam, Param_I=Param_I, &
-            IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I)
-       rMinB0local = IndexMin_I(1); rMaxB0local = IndexMax_I(1)
+            IndexMin_I=IndexMin_I, IndexMax_I=IndexMax_I, &
+            IsLogIndex_I=IsLogIndex_I)
+
+       if(IsLogIndex_I(1))then
+          rMinB0local = 10**IndexMin_I(1); rMaxB0local = 10**IndexMax_I(1)
+       else
+          rMinB0local = IndexMin_I(1); rMaxB0local = IndexMax_I(1)
+       end if
        LonMinB0local = IndexMin_I(2); LonMaxB0local = IndexMax_I(2)
        LatMinB0local = IndexMin_I(3); LatMaxB0local = IndexMax_I(3)
        if(iProc == 0)then
