@@ -54,7 +54,8 @@ module EEE_ModCommonVariables
   !$acc declare create(UseCme)
 
   ! Use Gibbson-Law, Titov-Demoulin, spheromak flux ropes
-  logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false.
+  logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false., &
+       UseMagCone
   !$acc declare create(UseGL, UseTD, UseSpheromak)
 
   ! Use Titov-Demoulin 2014 or 2022
@@ -62,8 +63,9 @@ module EEE_ModCommonVariables
   !$acc declare create(UseTD14, UseTD22)
 
   ! Logicals to add the CMEs
-  logical:: DoAddGL = .false., DoAddTD = .false., DoAddSpheromak = .false.
-  !$acc declare create(DoAddGL, DoAddTD, DoAddSpheromak)
+  logical:: DoAddGL = .false., DoAddTD = .false., DoAddSpheromak = .false., &
+       DoAddMagCone = .false.
+  !$acc declare create(DoAddGL, DoAddTD, DoAddSpheromak, DoAddMagCone)
 
   ! Use shear-flow boundary condition, use arcade magnetic field
   logical:: UseShearFlow = .false., UseArch = .false.
