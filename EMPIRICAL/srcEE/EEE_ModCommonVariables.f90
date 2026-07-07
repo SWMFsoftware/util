@@ -55,7 +55,7 @@ module EEE_ModCommonVariables
 
   ! Use Gibbson-Law, Titov-Demoulin, spheromak flux ropes
   logical:: UseGL  = .false., UseTD = .false., UseSpheromak = .false., &
-       UseMagCone
+       UseMagCone = .false.
   !$acc declare create(UseGL, UseTD, UseSpheromak)
 
   ! Use Titov-Demoulin 2014 or 2022

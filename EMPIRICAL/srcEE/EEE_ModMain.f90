@@ -127,6 +127,7 @@ contains
 
     use ModReadParam,     ONLY: read_var
     use EEE_ModGL98,      ONLY: set_parameters_GL98
+    use EEE_ModMc18,      ONLY: set_parameters_mc18
     use EEE_ModTD99,      ONLY: set_parameters_TD99
     use EEE_ModArch,      ONLY: set_parameters_arch
     use EEE_ModShearFlow, ONLY: set_parameters_shearflow
@@ -135,7 +136,7 @@ contains
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
          UseTD22, LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, &
-         tStartCme, tDecayCmeDim
+         UseMagCone, DoAddMagCone, tStartCme, tDecayCmeDim
     use ModNumConst,      ONLY: cDegToRad
     use ModCoordTransform, ONLY: lonlat_to_xyz
     use CON_axes,          ONLY: dLongitudeHgrDeg
@@ -188,6 +189,9 @@ contains
              UseSpheromak = .true.
              DoAddSpheromak = DoAddFluxRope
              call set_parameters_GL98("#SPHEROMAK")
+          case("MAGCONE")
+             UseMagCone = .true.
+             DoAddMagCone = DoAddFluxRope
           case("BREAKOUT")
              UseShearFlow = .true.
              call set_parameters_shearflow(NameCommand)
@@ -203,6 +207,7 @@ contains
           UseSpheromak = .false.
           UseShearFlow = .false.
           UseArch      = .false.
+          UseMagCone   = .false.
        end if
 
        ! The remaining commands are preserved for backwards compatibility

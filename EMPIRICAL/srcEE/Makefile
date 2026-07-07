@@ -18,6 +18,7 @@ OBJECTS = \
 	EEE_ModMain.o \
 	EEE_ModTD99.o \
 	EEE_ModGL98.o \
+	EEE_ModMc18.o \
 	EEE_ModArch.o \
 	EEE_ModGetB0.o \
 	EEE_ModShearFlow.o \
