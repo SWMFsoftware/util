@@ -98,6 +98,7 @@ contains
     real :: Rotate_DD(3,3)
 
     !--------------------------------------------------------------------------
+    call CON_stop('Work in progress, do not use now')
     alpha0 = Alpha0R0/Radius
     Beta0 = (sin(Alpha0R0) - Alpha0R0*cos(Alpha0R0))/Alpha0R0**3
 
@@ -189,6 +190,7 @@ contains
     integer:: iHelicity
     character(len=*), parameter:: NameSub = 'set_parameters_mc18'
     !--------------------------------------------------------------------------
+    call CON_stop('Work in progress, do not use now')
     select case(NameCommand)
     case("#CME","#MAGCONE")
        call read_var('BStrength',   B0Dim)         ![Gauss]
@@ -318,7 +320,7 @@ contains
     real :: Phi     ! 1 + Time*(U/r)
     real :: PhiInv  ! 1/Phi
     !--------------------------------------------------------------------------
-
+    call CON_stop('Work in progress, do not use now')
     r = norm2(XyzIn_D)
     ! Unit vector of radial direction
     eBoldR_D = XyzIn_D/r
@@ -442,6 +444,7 @@ contains
   subroutine get_mc18_size(SizeXY,  SizeZ)
     real,  intent(out) :: SizeXY,  SizeZ
     !--------------------------------------------------------------------------
+    call CON_stop('Work in progress, do not use this routine now')
     SizeXY = Radius                    ! Horizontal size
     SizeZ  = ApexHeight                ! Apex height
   end subroutine get_mc18_size

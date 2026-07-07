@@ -192,6 +192,7 @@ contains
           case("MAGCONE")
              UseMagCone = .true.
              DoAddMagCone = DoAddFluxRope
+             call set_parameters_mc18(NameCommand)
           case("BREAKOUT")
              UseShearFlow = .true.
              call set_parameters_shearflow(NameCommand)
