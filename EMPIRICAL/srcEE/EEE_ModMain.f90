@@ -115,8 +115,9 @@ contains
     end if
 
     DoInit = .true.
-    !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22)
+    !$acc update device(UseCme, UseGL, UseTD, UseTD14, UseTD22, UseMagCone)
     !$acc update device(UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak)
+    !$acc update device(DoAddMagCone)
 
     !$acc update device(Io2Si_V, Si2Io_V, Io2No_V, No2Io_V, Si2No_V, No2Si_V)
     !$acc update device(rCmeApexInvSi, tStartCme, tDecayCmeDim, tDecayCme)
@@ -294,18 +295,17 @@ contains
 #endif
   end subroutine EEE_get_state_BC
   !============================================================================
-  subroutine EEE_get_state_init(Xyz_D, Rho, B_D, p, nStep, nIter)
+  subroutine EEE_get_state_init(Xyz_D, Rho, U_D, B_D, p)
 
     use EEE_ModCommonVariables, ONLY: UseCme, DoAddFluxRope, DoAddTD, &
-         DoAddGL, UseCms, DoAddSpheromak, tStartCme
+         DoAddGL, UseCms, DoAddSpheromak, DoAddMagCone, tStartCme
     use EEE_ModGL98, ONLY: get_GL98_fluxrope, gl98_init
     use EEE_ModTD99, ONLY: get_TD99_fluxrope, init_TD99_parameters
+    use EEE_ModMc18, ONLY: get_mc18_fluxrope, mc18_init
     use EEE_ModCms,  ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3)
-    real, intent(out) :: Rho, B_D(3), p
-    integer, intent(in) :: nStep, nIter
-    real :: U_D(3)
+    real, intent(out) :: Rho, U_D(3), B_D(3), p
     real :: Rho1, U1_D(3), B1_D(3), p1
     character(len=*), parameter :: NameSub='EEE_get_state_init'
     !--------------------------------------------------------------------------
@@ -340,6 +340,14 @@ contains
           DoInit = .false.
        end if
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, tStartCme)
+       Rho = Rho + Rho1; B_D = B_D + B1_D
+       p = p + p1; U_D = U_D + U1_D
+    end if
+    if(DoAddMagCone) then
+       if(DoInit)then
+          call mc18_init
+       end if
+       call get_mc18_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, tStartCme)
        Rho = Rho + Rho1; B_D = B_D + B1_D
        p = p + p1; U_D = U_D + U1_D
     end if
