@@ -10,7 +10,7 @@ module EEE_ModMc18
 #ifdef _OPENACC
   use ModUtilities, ONLY: norm2
 #endif
-  use EEE_ModCommonVariables
+  use EEE_ModCommonVariables, HalfOpeningAngle=>OrientationCme
 
   implicit none
 
@@ -27,14 +27,10 @@ module EEE_ModMc18
 
   ! Geometric characteristics of the superimposed configuration:
 
-  ! contraction distance as in   r --> r -a
-  real :: Stretch = 0.0
-  !$acc declare create(Stretch)
-
   ! distance from the magnetic configuration center to heliocenter
   real :: rDistance1 = 0.0
 
-  ! Radius of the magnetic configuration (spheromac)
+  ! Radius of the magnetic configuration (spheromak)
   real :: Radius = 0.0
   !$acc declare create(Radius)
 
@@ -64,6 +60,7 @@ module EEE_ModMc18
   ! Dimensionless product of R0 by Alpha0. 
   ! First zero of j_1(x): Rosenbluth-Bussac boundary condition k*r0 = Alpha0R0
   ! (GL98 used 5.763854, the first zero of j_2; we use the first zero of j_1)
+  ! This works for Beta0 = 0.0, needs to be generalized for Beta0/=0
   real, parameter :: Alpha0R0 = 4.493409457909064
 
   ! Vector characteristic of the configuration: radius vector of the
@@ -126,7 +123,8 @@ contains
     if(iProc==0)then
        write(*,*) prefix
        write(*,*) prefix, &
-            '>>>>>>>>>>>>>>>>>>>                            <<<<<<<<<<<<<<<<<<<<<'
+            '>>>>>>>>>>>>>>>>>>>                            '//&
+            '<<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
        write(*,*) prefix, &
             '     EEGMC Magnetic Cone Model (Rosenbluth-Bussac 1979) is initiated'
@@ -348,38 +346,35 @@ contains
     Rho = Rho*No2Si_V(UnitRho_)
     p   = p  *No2Si_V(UnitP_)
     ! u_D is already in SI [m/s] from the interior formula above
-
-  contains
-    !==========================================================================
-    real function spher_bessel0(x)
-      real, intent(in) :: x
-      !------------------------------------------------------------------------
-      spher_bessel0 = sin(x)/x
-    end function spher_bessel0
-    !==========================================================================
-    real function spher_bessel1(x)
-      real, intent(in) :: x
-      !------------------------------------------------------------------------
-      spher_bessel1 = (sin(x) - x*cos(x))/x**2
-    end function spher_bessel1
-    !==========================================================================
-    real function spher_bessel1_over_x(x)
-      real, intent(in) :: x
-      !------------------------------------------------------------------------
-      if(x == 0)then
-         spher_bessel1_over_x = 1.0/3.0
-      else
-         spher_bessel1_over_x = (sin(x) - x*cos(x))/x**3
-      end if
-    end function spher_bessel1_over_x
-    !==========================================================================
-    real function spher_bessel2(x)
-      real, intent(in) :: x
-      !------------------------------------------------------------------------
-      spher_bessel2 = 3*spher_bessel1_over_x(x) - spher_bessel0(x)
-    end function spher_bessel2
-    !==========================================================================
   end subroutine get_mc18_fluxrope
+  !============================================================================
+  real function spher_bessel0(x)
+    real, intent(in) :: x
+    !--------------------------------------------------------------------------
+    spher_bessel0 = sin(x)/x
+  end function spher_bessel0
+  !============================================================================
+  real function spher_bessel1(x)
+    real, intent(in) :: x
+    !--------------------------------------------------------------------------
+    spher_bessel1 = (sin(x) - x*cos(x))/x**2
+  end function spher_bessel1
+  !============================================================================
+  real function spher_bessel1_over_x(x)
+    real, intent(in) :: x
+    !--------------------------------------------------------------------------
+    if(x == 0)then
+       spher_bessel1_over_x = 1.0/3.0
+    else
+       spher_bessel1_over_x = (sin(x) - x*cos(x))/x**3
+    end if
+  end function spher_bessel1_over_x
+  !============================================================================
+  real function spher_bessel2(x)
+    real, intent(in) :: x
+    !--------------------------------------------------------------------------
+    spher_bessel2 = 3*spher_bessel1_over_x(x) - spher_bessel0(x)
+  end function spher_bessel2
   !============================================================================
   subroutine get_mc18_size(SizeXY,  SizeZ)
     real,  intent(out) :: SizeXY,  SizeZ
