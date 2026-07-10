@@ -14,8 +14,8 @@ contains
   subroutine EEE_get_B0(x_D,B0_D, TimeSimulation)
 
     use EEE_ModCommonVariables, ONLY: UseArch, UseTD, tStartCme
-    use EEE_ModArch,            ONLY: get_arch
-    use EEE_ModTD99,            ONLY: compute_TD99_BqField
+    use EEE_ModArch, ONLY: get_arch
+    use EEE_ModTD99, ONLY: compute_TD99_BqField
     real, intent(in)  :: x_D(3)
     real, intent(out) :: B0_D(3)
     real, optional, intent(in) :: TimeSimulation
