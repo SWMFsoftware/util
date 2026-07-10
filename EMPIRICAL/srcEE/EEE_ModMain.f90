@@ -358,7 +358,7 @@ contains
   subroutine EEE_init_cme_parameters
 
     use EEE_ModCommonVariables, ONLY: DoAddTD, DoAddGL, DoAddSpheromak, &
-         UseCme, DoAddFluxRope
+         UseCme, DoAddFluxRope, DoAddMagCone
     use EEE_ModGL98, ONLY: gl98_init
     use EEE_ModTD99, ONLY: init_TD99_parameters
     use EEE_ModMc18, ONLY: mc18_init
