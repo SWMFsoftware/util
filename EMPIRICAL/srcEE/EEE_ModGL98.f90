@@ -400,10 +400,11 @@ contains
        Rho = Rho*No2Si_V(UnitRho_)
        p = p*No2Si_V(UnitP_)
        b_D = b_D*No2Si_V(UnitB_)
-       if(present(u_D) .and. UseSpheromak) &
-            u_D = XyzIn_D*PhiInv   & ! Inputs for self-similar solution
-            *No2Si_V(UnitX_)       & ! Conversion to SI units
-            *uCmeSi*rCmeApexInvSi    ! uCmeSi velocity is reached at the apex
+       ! Temporalily disable computation of self-similar expansion velocity
+       if(present(u_D)) u_D = 0 !.and. UseSpheromak) &
+       !u_D = XyzIn_D*PhiInv   & ! Inputs for self-similar solution
+       !*No2Si_V(UnitX_)       & ! Conversion to SI units
+       !*uCmeSi*rCmeApexInvSi    ! uCmeSi velocity is reached at the apex
 
     else
        b_D = 0; Rho = 0; p = 0
