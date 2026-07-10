@@ -3,7 +3,9 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module EEE_ModMc18
 
-  ! Gibson-Low CME flux rope model
+  ! Rosenbluth & Bussac 1979 force-free spheromak model
+  ! with image dipoles (Lin 2006) and 
+  ! uniform field subtraction (Borovikov et al 2018).
 
 #ifdef _OPENACC
   use ModUtilities, ONLY: norm2
@@ -124,13 +126,13 @@ contains
     if(iProc==0)then
        write(*,*) prefix
        write(*,*) prefix, &
-            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
+            '>>>>>>>>>>>>>>>>>>>                            <<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
        write(*,*) prefix, &
-            '     EEGGL Spheromak (Rosenbluth-Bussac) is initiated'
+            '     EEGMC Magnetic Cone Model (Rosenbluth-Bussac 1979) is initiated'
        write(*,*) prefix
        write(*,*) prefix, &
-            '>>>>>>>>>>>>>>>>>>>                  <<<<<<<<<<<<<<<<<<<<<'
+            '>>>>>>>>>>>>>>>>>>>                            <<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
        write(*,*) prefix, 'B0Dim          = ', B0Dim,                '[Gauss]'
        write(*,*) prefix, 'Radius         = ', Radius,               '[rSun]'
