@@ -232,10 +232,11 @@ contains
     !$acc routine seq
 
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseShearFlow, UseGL, &
-         UseCms, UseSpheromak, tStartCme, tDecayCmeDim
+         UseCms, UseSpheromak, UseMagCone, tStartCme, tDecayCmeDim
     use EEE_ModTD99, ONLY: get_td99_fluxrope, init_td99_parameters
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_gl98_fluxrope, gl98_init
+    use EEE_ModMc18, ONLY: get_mc18_fluxrope, mc18_init
     use EEE_ModCms, ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3), Time
@@ -283,6 +284,18 @@ contains
        call get_GL98_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
        B_D = B_D + Coeff*B1_D
        if(UseSpheromak) U_D = U_D + Coeff*U1_D ! Never used, actually
+    end if
+
+    if(UseMagCone)then
+#ifndef _OPENACC
+       if(DoInit)then
+          call mc18_init
+          DoInit = .false.
+       end if
+#endif
+       call get_mc18_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
+       B_D = B_D + Coeff*B1_D
+       U_D = U_D + Coeff*U1_D
     end if
 
 #ifndef _OPENACC
@@ -346,6 +359,7 @@ contains
     if(DoAddMagCone) then
        if(DoInit)then
           call mc18_init
+          DoInit = .false.
        end if
        call get_mc18_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, tStartCme)
        Rho = Rho + Rho1; B_D = B_D + B1_D
@@ -389,18 +403,19 @@ contains
     ! Designed to avoid repeatedly adding CME in subsequent sessions
 
     use EEE_ModCommonVariables, ONLY: DoAddFluxRope, &
-         DoAddTD, DoAddGL, DoAddSpheromak
+         DoAddTD, DoAddGL, DoAddSpheromak, DoAddMagCone
     !--------------------------------------------------------------------------
     DoAddFluxRope = .false.; DoAddGL = .false.; DoAddTD = .false.
-    DoAddSpheromak = .false.
+    DoAddSpheromak = .false.; DoAddMagCone = .false.
 
   end subroutine EEE_do_not_add_cme_again
   !============================================================================
   subroutine EEE_set_plot_range(nXY, nZ)
     use EEE_ModCommonVariables, ONLY: UseCme, UseTD, UseGL, UseSpheromak, &
-         DXyzPlot, ExtensionFactor
+         UseMagCone, DXyzPlot, ExtensionFactor
     use EEE_ModTD99, ONLY: get_TD99_size
     use EEE_ModGL98, ONLY: get_GL98_size
+    use EEE_ModMc18, ONLY: get_mc18_size
     integer, intent(out) :: nXY, nZ
     real :: SizeXY, SizeZ
     !--------------------------------------------------------------------------
@@ -410,6 +425,8 @@ contains
        call get_GL98_size(SizeXY,  SizeZ)
     elseif(UseTD) then
        call get_TD99_size(SizeXY,  SizeZ)
+    elseif(UseMagCone) then
+       call get_mc18_size(SizeXY,  SizeZ)
     else
        RETURN
     end if
