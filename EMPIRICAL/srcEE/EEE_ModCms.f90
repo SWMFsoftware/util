@@ -52,7 +52,7 @@ contains
 
   subroutine get_cms(x_D, B_D)
 
-    use ModConst,    ONLY: rSun
+    use ModConst, ONLY: rSun
     use ModInterpolate, ONLY: trilinear
     use ModCoordTransform, ONLY: xyz_to_sph
     use ModNumConst, ONLY: cDegToRad, cTwoPi, cHalfPi
