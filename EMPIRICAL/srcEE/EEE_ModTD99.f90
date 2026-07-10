@@ -411,9 +411,9 @@ module ModCurrentFilament
        uniform_current_field=>get_amplitude_int, uniform_current=>current
   use ModSurfaceCurrent, ONLY: &
        surface_current_field=>get_amplitude_int
-  use ModParabolicCurrent,    ONLY: &
+  use ModParabolicCurrent, ONLY: &
        parabolic_current_field=>get_amplitude_int, parabolic_current=>current
-  use ModExternalField,          ONLY: Kappa2ExtMax, external_field, &
+  use ModExternalField, ONLY: Kappa2ExtMax, external_field, &
        Axial_, Poloidal_, Toroidal_
   implicit none
   !
@@ -486,7 +486,7 @@ module ModFieldGS
   use ModUtilities, ONLY: norm2
 #endif
   use ModCurrentFilament
-  use ModNumConst,       ONLY:  cTwoPi
+  use ModNumConst, ONLY:  cTwoPi
   implicit none
   ! Magnitude of the magnetic field at the center of filament:
   real, private :: Bc      ! In SI, Bc = \mu_0 I / (2 R_\infty)
@@ -502,7 +502,7 @@ module ModFieldGS
 contains
   !============================================================================
   subroutine set_filament_field(iHelicityIn, BcIn_D)
-    use ModNumConst,       ONLY:  cTwoPi
+    use ModNumConst, ONLY:  cTwoPi
     ! Inputs:
     ! The sign of helicity (+/- 1)
     integer, intent(in)  :: iHelicityIn
@@ -813,7 +813,7 @@ module EEE_ModTD99
 #ifdef _OPENACC
   use ModUtilities, ONLY: norm2
 #endif
-  use ModCoordTransform,      ONLY: cross_product
+  use ModCoordTransform, ONLY: cross_product
   use ModUtilities, ONLY: CON_stop
   use EEE_ModCommonVariables, ONLY: UseTD, UseTD14, UseTD22, DirCme_D, &
        No2Si_V, Si2No_V, Io2No_V, Io2Si_V, No2Io_V,                    &
