@@ -16,8 +16,8 @@ program magnetogram
   use ModCoordTransform, ONLY: rlonlat_to_xyz
   use ModMpi, ONLY: MPI_COMM_SELF, MPI_init, MPI_finalize
   ! use ModLookupTable, ONLY: read_lookup_table_param, get_lookup_table
-  use ModIoUnit,     ONLY:  io_unit_new
-  use ModUtilities,   ONLY: split_string, join_string
+  use ModIoUnit, ONLY:  io_unit_new
+  use ModUtilities, ONLY: split_string, join_string
   implicit none
   ! Number of indexes for magnetogram map
   integer :: nLong = 360, nLat = 180
