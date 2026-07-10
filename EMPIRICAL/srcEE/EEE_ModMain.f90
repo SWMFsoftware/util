@@ -361,6 +361,7 @@ contains
          UseCme, DoAddFluxRope
     use EEE_ModGL98, ONLY: gl98_init
     use EEE_ModTD99, ONLY: init_TD99_parameters
+    use EEE_ModMc18, ONLY: mc18_init
 
     character(len=*), parameter:: NameSub = 'EEE_init_cme_parameters'
     !--------------------------------------------------------------------------
@@ -374,6 +375,10 @@ contains
     end if
     if(DoInit .and. (DoAddGL .or. DoAddSpheromak))then
        call gl98_init
+       DoInit = .false.
+    end if
+    if(DoInit .and. (DoAddMagCone))then
+       call mc18_init
        DoInit = .false.
     end if
 
