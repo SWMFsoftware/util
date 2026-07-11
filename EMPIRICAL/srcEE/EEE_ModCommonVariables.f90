@@ -21,7 +21,7 @@ module EEE_ModCommonVariables
 
   ! Physics variables global to EEE
   real :: g = 5./3., inv_g = 3./5., gm1 = 2./3., inv_gm1 = 3./2.
-  real :: Gbody = -cGravitation*mSun*cProtonMass/(cBoltzmann*1.5e6)
+  real :: Gbody
   !$acc declare create(Gbody)
 
   ! Named indexes for I/O variable units
