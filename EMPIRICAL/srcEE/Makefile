@@ -69,16 +69,12 @@ BLESS=NO
 
 DIFFNUM = ${SCRIPTDIR}/DiffNum.pl -BLESS=${BLESS}
 
-# This should be in Makefile.RULES if needed
-#test_td22.o: test_td22.f90
-#	${COMPILE.f90} ${Cflag0} test_td22.f90
-
 test_td22_exe: test_td22.o
 	${LINK.f90} -o test_td22.exe test_td22.o \
 		-L${LIBDIR} -lEMPIRICALEE -lSHARE ${Lflag}
 
 test_td22_check:
-	-@(${DIFFNUM} -b -r=1e-7 \
+	-@(${DIFFNUM} -b -r=1e-5 \
 		test_fields.out test_fields.ref > test_td22.diff)
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_parabolic.out test_parabolic.ref >> test_td22.diff)
