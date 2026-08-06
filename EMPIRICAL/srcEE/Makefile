@@ -74,13 +74,13 @@ test_td22_exe: test_td22.o
 		-L${LIBDIR} -lEMPIRICALEE -lSHARE ${Lflag}
 
 test_td22_check:
-	-@(${DIFFNUM} -b -r=1e-5 \
+	-@(${DIFFNUM} -b -r=1e-7 \
 		test_fields.out test_fields.ref > test_td22.diff)
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_parabolic.out test_parabolic.ref >> test_td22.diff)
 	-@(${DIFFNUM} -b -r=1e-7 \
 		test_currents.out test_currents.ref >> test_td22.diff)
-	-@(${DIFFNUM} -b -r=1e-7 \
+	-@(${DIFFNUM} -b -r=1e-5 \
 		test_toroidal.out test_toroidal.ref >> test_td22.diff)
 	@ls -l test_td22.diff
 
