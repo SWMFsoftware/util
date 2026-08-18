@@ -310,7 +310,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    ## Calculate the GL flux rope orientation from the two weighted points.
    ## r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex] - incorrect
    r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
-   r1[0] *= np.cos(LonAR)
+   r1[0] *= np.cos(LatAR)
    r1 /= np.sqrt(r1[0]**2+r1[1]**2)
    r2=[1.0,0.0]
    if Orientation != -1.0 :
