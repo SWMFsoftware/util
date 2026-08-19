@@ -158,8 +158,8 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       '\n Negative Weighted Center Lon={0:6.2f}, Lat={1:6.2f} [deg]'.format(
          LonNeg*Rad2Deg,LatNeg*Rad2Deg))
 
-   PointN_I=[LonNeg,LatNeg] # negative spot
-   PointP_I=[LonPos,LatPos] # positive spot
+   PointN_I = [LonNeg, LatNeg] # negative spot
+   PointP_I = [LonPos, LatPos] # positive spot
 
    # Find center of the active region as the point on the line
    # connecting the positive and negative center at which the MF is minimal
@@ -307,24 +307,13 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
             Distance,GLRadius,Stretch)
 
    ## GL_Orientation calculation
-   ## Calculate the GL flux rope orientation from the two weighted points.
-   ## r1=[LonNegIndex-LonPosIndex,LatNegIndex-LatPosIndex] - incorrect
-   r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
-   r1[0] *= np.cos(LatAR)
-   r1 /= np.sqrt(r1[0]**2+r1[1]**2)
-   r2=[1.0,0.0]
    if Orientation != -1.0 :
-      GL_Orientation = Orientation
+      GL_Orientation = np.mod(Orientation, 360.0)
    else:
-      # If sine of Orientation is positive
-      GL_Orientation=np.arccos(r1[0]*r2[0]+r1[1]*r2[1])*Rad2Deg
-      if r1[1] < 0:
-         # If sine of Orientation is negative
-         GL_Orientation=360-GL_Orientation
-   # Orientation calculation based on the angle as a func of radius needs
-   # to be calcualted for both GLRadius formulations and included here. 
-   if GL_Orientation > 360 :
-      GL_Orientation = abs(360 - GL_Orientation)
+      ## Calculate the GL flux rope orientation from the two weighted points.
+      r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
+      r1[0] *= np.cos(LatAR)
+      GL_Orientation = np.atan2(r1[1], r1[0])*Rad2Deg
   
    # Calculate the poloidal flux needed for the observed CME velocity.
    # Flux is calculated using average of the radial field around the 
