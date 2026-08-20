@@ -308,13 +308,15 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
 
    ## GL_Orientation calculation
    if Orientation != -1.0 :
-      GL_Orientation = np.mod(Orientation, 360.0)
+      GL_Orientation = Orientation
    else:
       ## Calculate the GL flux rope orientation from the two weighted points.
       r1 = [PointN_I[0] - PointP_I[0], PointN_I[1] - PointP_I[1]]
       r1[0] *= np.cos(LatAR)
       GL_Orientation = np.arctan2(r1[1], r1[0])*Rad2Deg
-  
+
+   GL_Orientation = np.mod(GL_Orientation, 360.0)
+
    # Calculate the poloidal flux needed for the observed CME velocity.
    # Flux is calculated using average of the radial field around the 
    # weighted center spots.
