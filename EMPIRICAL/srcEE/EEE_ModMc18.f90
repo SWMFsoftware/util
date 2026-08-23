@@ -51,17 +51,19 @@ module EEE_ModMc18
   real :: B0Dim   ! in Gauss
   !$acc declare create(B0)
 
-  ! Characteristic ratio of plasma pressure to B_0^2/\mu_0
-  ! Exact definition in terms of the pressure derivative over
-  ! the flux function: \beta_0=\mu_0/(B_0 Alpha_0^2) dp/d\psi
-  real :: Beta0
-  !$acc declare create(Beta0)
+  ! Sign of alpha: chosen so the toroidal field at the spheromak bottom
+  ! opposes the ambient field component perpendicular to the
+  ! plane spanned by DirCme_D and bConf_D.
+  real :: iHelicity = 1.0
+  !$acc declare create(iHelicity)
 
-  ! Dimensionless product of R0 by Alpha0. 
-  ! First zero of j_1(x): Rosenbluth-Bussac boundary condition k*r0 = Alpha0R0
-  ! (GL98 used 5.763854, the first zero of j_2; we use the first zero of j_1)
-  ! This works for Beta0 = 0.0, needs to be generalized for Beta0/=0
-  real, parameter :: Alpha0R0 = 4.493409457909064
+  ! Dimensionless product of R0 by Alpha0.
+  ! Boundary condition: j1(Alpha0R0)/Alpha0R0 = Beta0
+  ! For Beta0=0: Alpha0R0 is the first zero of j1 (~4.4934).
+  ! For Beta0>0: solved iteratively in find_alpha0r0.
+  ! (GL98 used 5.763854, the first zero of j_2)
+  real :: Alpha0R0 = 4.493409457909064
+  !$acc declare create(Alpha0R0)
 
   ! Vector characteristic of the configuration: radius vector of the
   ! configuration center and B0 multiplied by unit vector along
@@ -69,20 +71,25 @@ module EEE_ModMc18
   real :: XyzCenterConf_D(3), bConf_D(3)
   !$acc declare create(XyzCenterConf_D, bConf_D)
 
+  ! Normalized ambient field at the spheromak center: bAmbientCenterSi_D in
+  ! code units.  Used for the Borovikov et al. (2018) uniform field subtraction:
+  ! interior perturbation = B_Bessel - bAmbientConf_D,
+  ! exterior dipole moment = -bAmbientConf_D * Radius^3/2.
+  real :: bAmbientConf_D(3) = 0.0
+  !$acc declare create(bAmbientConf_D)
+
   ! Parameter to control self-similar solution
   real :: uCmeSi = 0.0
   !$acc declare create(uCmeSi)
   real, parameter :: Delta = 0.1
-
-  ! Half opening angle of the CME [degrees]:  sin(AlphaAngle) = Radius/rDistance1
-  real :: AlphaAngle = 0.0
 
   ! Lin (2006) image dipole parameters
   logical :: UseImageDipoles = .false.
   !$acc declare create(UseImageDipoles)
   integer :: nDiscDipoles = 200
 
-  ! Pre-computed image dipoles: 1 point image + up to MaxImgDipoles-1 line images
+  ! Pre-computed image dipoles: 
+  ! 1 point image + up to MaxImgDipoles-1 line images
   integer, parameter :: MaxImgDipoles = 1001
   integer :: nImgDipoles = 0
   !$acc declare create(nImgDipoles)
@@ -90,32 +97,45 @@ module EEE_ModMc18
   real :: mImgDipole_DI(3, MaxImgDipoles) = 0.0
   !$acc declare create(rImgDipole_DI, mImgDipole_DI)
 
-  ! Plasma beta and ejecta temperature (same convention as TD99)
-  ! p = PlasmaBeta * 0.5 * |B|^2 inside; Rho = p / EjectaTemperature
-  logical :: UsePlasmaBeta = .false.
-  !$acc declare create(UsePlasmaBeta)
-  real :: PlasmaBeta = 0.0
+  ! Spheromak Beta0 and ejecta temperature (same convention as TD99)
+  ! Boundary parameter beta0: j1(alpha0*r0)/(alpha0*r0) = beta0.
+  ! Pressure from PDF Eq.(5): p = [j1/(a0 r) - b0]*b0*alpha0^2*(r x B0)^2
+  logical :: UseBeta0 = .false.
+  !$acc declare create(UseBeta0)
+  real :: Beta0 = 0.0
   real :: EjectaTemperature = 0.0           ! normalized code units
   real :: EjectaTemperatureDim = 5.0e4      ! [K]
-  !$acc declare create(PlasmaBeta, EjectaTemperature, EjectaTemperatureDim)
+  !$acc declare create(Beta0, EjectaTemperature, EjectaTemperatureDim)
 
 contains
   !============================================================================
   subroutine mc18_init
 
+    use ModCoordTransform, ONLY: cross_product
     !--------------------------------------------------------------------------
-    ! Wave number k = Alpha0R0 / r0  (first zero of j_1 divided by radius)
+    ! Solve boundary condition j1(Alpha0R0)/Alpha0R0 = Beta0.
+    ! For force-free (UseBeta0=F), Beta0=0 and Alpha0R0 is
+    ! the first zero of j1 (~4.4934).
+    Alpha0R0 = find_alpha0r0(merge(Beta0, 0.0, UseBeta0))
+
+    ! Wave number k = Alpha0R0 / r0
     Alpha0 = Alpha0R0/Radius
 
-    ! Pure force-free Rosenbluth-Bussac solution: no plasma pressure
-    Beta0 = 0.0
-
-    ! Field amplitude and axis from the ambient magnetic field at the CME center.
+    ! Field amplitude and axis from the ambient field at the CME center.
     ! bAmbientCenterSi_D is filled by the MHD solver before mc18_init is called
     ! (see SC_user_initial_perturbation in ModUserAwsom.f90).
-    bConf_D = (3.0/(2.0*cos(Alpha0R0))) * bAmbientCenterSi_D*Si2No_V(UnitB_)
-    B0      = norm2(bConf_D)
-    B0Dim   = B0*No2Io_V(UnitB_)
+    bConf_D        = (-3.0/(2.0*spher_bessel2(Alpha0R0))) * bAmbientCenterSi_D*Si2No_V(UnitB_)
+    B0             = norm2(bConf_D)
+    B0Dim          = B0*No2Io_V(UnitB_)
+    bAmbientConf_D = bAmbientCenterSi_D*Si2No_V(UnitB_)
+
+    ! Helicity: choose sign of alpha so that the toroidal field at the
+    ! spheromak bottom opposes the component of the ambient field there
+    ! perpendicular to the plane(DirCme_D, bConf_D).
+    ! Derivation: b_tor_bot ~ -iHelicity*(DirCme_D x bConf_D), so
+    ! iHelicity = sign(bAmbientBottomSi_D · (DirCme_D x bConf_D)).
+    iHelicity = sign(1.0, sum(bAmbientBottomSi_D &
+         *cross_product(DirCme_D, bConf_D)))
 
     ! Convert self-similar CME speed from km/s to SI
     uCmeSi = uCmeSi*Io2Si_V(UnitU_)
@@ -127,25 +147,28 @@ contains
             '<<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
        write(*,*) prefix, &
-            '     EEGMC Magnetic Cone Model (Rosenbluth-Bussac 1979) is initiated'
+            '     EEGMC Magnetic Cone Model'//&
+            ' (Rosenbluth-Bussac 1979) is initiated'
        write(*,*) prefix
        write(*,*) prefix, &
-            '>>>>>>>>>>>>>>>>>>>                            <<<<<<<<<<<<<<<<<<<<<'
+            '>>>>>>>>>>>>>>>>>>>                            '//&
+            '<<<<<<<<<<<<<<<<<<<<<'
        write(*,*) prefix
-       write(*,*) prefix, 'B0Dim          = ', B0Dim,                '[Gauss]'
-       write(*,*) prefix, 'Radius         = ', Radius,               '[rSun]'
-       write(*,*) prefix, 'AlphaAngle     = ', AlphaAngle,           '[degrees]'
-       write(*,*) prefix, 'rDistance1     = ', rDistance1,           '[rSun]'
-       write(*,*) prefix, 'BaseHeight     = ', BaseHeight,           '[rSun]'
-       write(*,*) prefix, 'LongitudeCme   = ', LongitudeCme,         '[degrees]'
-       write(*,*) prefix, 'LatitudeCme    = ', LatitudeCme,          '[degrees]'
-       write(*,*) prefix, 'Alpha0         = ', Alpha0,               '[1/rSun]'
+       write(*,*) prefix, 'B0Dim          = ', B0Dim,               '[Gauss]'
+       write(*,*) prefix, 'iHelicity      = ', iHelicity
+       write(*,*) prefix, 'Radius         = ', Radius,              '[rSun]'
+       write(*,*) prefix, 'HalfOpeningAngle= ', HalfOpeningAngle,   '[degrees]'
+       write(*,*) prefix, 'rDistance1     = ', rDistance1,          '[rSun]'
+       write(*,*) prefix, 'BaseHeight     = ', BaseHeight,          '[rSun]'
+       write(*,*) prefix, 'LongitudeCme   = ', LongitudeCme,        '[degrees]'
+       write(*,*) prefix, 'LatitudeCme    = ', LatitudeCme,         '[degrees]'
+       write(*,*) prefix, 'Alpha0         = ', Alpha0,              '[1/rSun]'
        write(*,*) prefix, 'UseImageDipoles= ', UseImageDipoles
        if(UseImageDipoles) &
             write(*,*) prefix, 'nDiscDipoles   = ', nDiscDipoles
-       write(*,*) prefix, 'UsePlasmaBeta  = ', UsePlasmaBeta
-       if(UsePlasmaBeta)then
-          write(*,*) prefix, 'PlasmaBeta     = ', PlasmaBeta
+       write(*,*) prefix, 'UseBeta0  = ', UseBeta0
+       if(UseBeta0)then
+          write(*,*) prefix, 'Beta0          = ', Beta0
           write(*,*) prefix, 'EjectaTemp     = ', EjectaTemperatureDim, '[K]'
        end if
        write(*,*) prefix, 'Start time     = ', tStartCme,            '[s]'
@@ -158,9 +181,10 @@ contains
 
     EjectaTemperature = EjectaTemperatureDim*Io2No_V(UnitTemperature_)
 
-    !$acc update device(Alpha0, Beta0, XyzCenterConf_D, bConf_D)
+    !$acc update device(Alpha0R0, Alpha0, XyzCenterConf_D, bConf_D, bAmbientConf_D)
     !$acc update device(uCmeSi, B0, Radius, UseImageDipoles)
-    !$acc update device(UsePlasmaBeta, PlasmaBeta, EjectaTemperature)
+    !$acc update device(iHelicity)
+    !$acc update device(UseBeta0, Beta0, EjectaTemperature)
 
     if(UseImageDipoles) call mc18_compute_image_dipoles
 
@@ -168,37 +192,34 @@ contains
   !============================================================================
   subroutine mc18_compute_image_dipoles
 
-    real :: mDip_D(3), rHat_D(3), dSource
+    real :: mDip_D(3)
     real :: mR_D(3), mT_D(3)
     real :: dImg, scale3, du, uCtr
     integer :: i
     !--------------------------------------------------------------------------
-    ! Equivalent external dipole: m = D*axis, D = -A*r0^3/2
-    ! (A = B0, axis = bConf_D/B0)  =>  m = -bConf_D * Radius^3/2
-    mDip_D = -bConf_D*(Radius**3/2.0)
+    ! Equivalent external dipole: m = -bAmbientConf_D * Radius^3/2
+    ! (Rosenbluth-Bussac B_r-continuity condition; see Borovikov et al. 2018)
+    mDip_D = -bAmbientConf_D*(Radius**3/2.0)
 
-    dSource = norm2(XyzCenterConf_D)
-    rHat_D  = XyzCenterConf_D/dSource
-
-    mR_D = sum(mDip_D*rHat_D)*rHat_D  ! radial component of moment
-    mT_D = mDip_D - mR_D              ! transverse component of moment
+    mR_D = sum(mDip_D*DirCme_D)*DirCme_D  ! radial component of moment
+    mT_D = mDip_D - mR_D                  ! transverse component of moment
 
     ! Image point at (a^2/d)*rHat = (1/d)*rHat  (solar surface a = 1 R_sun)
-    dImg   = 1.0/dSource
+    dImg   = 1.0/rDistance1
     scale3 = dImg**3              ! = (a/d)^3
 
     nImgDipoles = 1 + nDiscDipoles
 
     ! Combined point image: moment = scale3*(m_t - m_r)  (Lin 2006 Eq. II.B-C)
-    rImgDipole_DI(:,1) = dImg*rHat_D
+    rImgDipole_DI(:,1) = dImg*DirCme_D
     mImgDipole_DI(:,1) = scale3*(mT_D - mR_D)
 
     ! Discretised line images: cell-centred over [0, dImg] along rHat_D
     du = dImg/nDiscDipoles
     do i = 1, nDiscDipoles
        uCtr = (i - 0.5)*du
-       rImgDipole_DI(:, 1+i) = uCtr*rHat_D
-       mImgDipole_DI(:, 1+i) = -(mT_D/dSource)*uCtr*du
+       rImgDipole_DI(:, 1+i) = uCtr*DirCme_D
+       mImgDipole_DI(:, 1+i) = -(mT_D/rDistance1)*uCtr*du
     end do
 
     !$acc update device(nImgDipoles, rImgDipole_DI, mImgDipole_DI)
@@ -215,7 +236,6 @@ contains
     !--------------------------------------------------------------------------
     select case(NameCommand)
     case("#CME","#MAGCONE")
-       call read_var('AlphaAngle',      AlphaAngle)     ![deg] half opening angle
        call read_var('BaseHeight',      BaseHeight)     ![rSun]
        call read_var('uCmeSi',          uCmeSi)         ![km/s]
        call read_var('UseImageDipoles', UseImageDipoles)
@@ -224,26 +244,28 @@ contains
           if(nDiscDipoles > MaxImgDipoles - 1) call CON_stop( &
                NameSub//': nDiscDipoles exceeds MaxImgDipoles-1 = 1000')
        end if
-       call read_var('UsePlasmaBeta', UsePlasmaBeta)
-       if(UsePlasmaBeta)then
-          call read_var('PlasmaBeta', PlasmaBeta)
+       call read_var('UseBeta0', UseBeta0)
+       if(UseBeta0)then
+          call read_var('Beta0', Beta0)
           call read_var('EjectaTemperature', EjectaTemperatureDim)
        end if
 
        ! Derive center distance and radius from opening angle and base height.
        ! Geometry: sin(alpha) = Radius/rDistance1
-       !           1 + BaseHeight = rDistance1 - Radius = rDistance1*(1 - sin(alpha))
-       if(AlphaAngle <= 0.0 .or. AlphaAngle >= 90.0) call CON_stop( &
-            NameSub//': AlphaAngle must be in (0, 90) degrees')
-       SinAlpha   = sin(AlphaAngle*cDegToRad)
+       !           1 + BaseHeight = rDistance1 - Radius 
+       !                          = rDistance1*(1 - sin(alpha))
+       if(HalfOpeningAngle <= 0.0 .or. HalfOpeningAngle >= 90.0) call &
+            CON_stop(NameSub//': HalfOpeningAngle must be in (0, 90) degrees')
+       SinAlpha   = sin(HalfOpeningAngle*cDegToRad)
        rDistance1 = (1.0 + BaseHeight)/(1.0 - SinAlpha)
        Radius     = rDistance1*SinAlpha
 
        ! position of the CME apex
        XyzCmeApexSi_D = DirCme_D*(rDistance1 + Radius)
 
-       ! position of CME center
+       ! position of CME center and bottom
        XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*Radius
+       XyzCmeBottomSi_D = XyzCmeApexSi_D - DirCme_D*2.0*Radius
        DoNormalizeXyz = .true.
 
     case default
@@ -255,10 +277,11 @@ contains
   subroutine get_mc18_fluxrope(XyzIn_D, Rho, p, b_D, u_D, TimeNow)
     !$acc routine seq
 
-    ! Magnetic field of the Rosenbluth-Bussac force-free spheromak.
-    ! Interior: spherical Bessel (j1) field with Beta0=0.
-    ! Exterior: pure dipole of equivalent moment m = -bConf_D * Radius^3/2.
-    ! Image dipole corrections (Lin 2006) applied everywhere if UseImageDipoles.
+    ! Magnetic field perturbation of the Rosenbluth-Bussac force-free spheromak.
+    ! Interior: spherical Bessel (j1) field minus the uniform ambient field
+    !   (Borovikov et al. 2018 uniform-field subtraction for div-B continuity).
+    ! Exterior: pure dipole of equivalent moment m = -bAmbientConf_D * Radius^3/2.
+    ! Image dipole correction (Lin 2006) applied everywhere if UseImageDipoles.
 
     use ModCoordTransform, ONLY: cross_product
 
@@ -270,7 +293,7 @@ contains
     real, intent(out), optional :: u_D(3)
     real, optional, intent(in)  :: TimeNow
 
-    ! Density, pressure (non-zero inside if UsePlasmaBeta)
+    ! Density, pressure (non-zero inside if UseBeta0)
     real, intent(out) :: Rho, p
 
     real :: XyzConf_D(3), Distance2ConfCenter
@@ -301,16 +324,18 @@ contains
 
     if(Distance2ConfCenter <= Radius)then
 
-       ! INSIDE: force-free spherical Bessel field (Beta0 = 0)
+       ! INSIDE: force-free spherical Bessel field
        Alpha0R2    = Alpha0*Distance2ConfCenter
        R2CrossB0_D = cross_product(XyzConf_D, bConf_D)
-       b_D = (2*bConf_D - sign(Alpha0, B0)*R2CrossB0_D) &
-            *spher_bessel1_over_x(Alpha0R2)              &
+       b_D = (2*bConf_D + iHelicity*Alpha0*R2CrossB0_D) &
+            *(spher_bessel1_over_x(Alpha0R2) - Beta0) &
             + spher_bessel2(Alpha0R2)/Distance2ConfCenter**2 &
-            *cross_product(XyzConf_D, R2CrossB0_D)
+            *cross_product(XyzConf_D, R2CrossB0_D)          &
+            - bAmbientConf_D
 
-       if(UsePlasmaBeta)then
-          p   = PlasmaBeta*0.5*sum(b_D**2)
+       if(UseBeta0)then
+          p   = (spher_bessel1_over_x(Alpha0R2) - Beta0) &
+               * Beta0 * Alpha0**2 * sum(R2CrossB0_D**2)
           Rho = p/EjectaTemperature
        end if
 
@@ -322,9 +347,9 @@ contains
 
     else
 
-       ! OUTSIDE: pure dipole  m = -bConf_D * Radius^3/2
-       ! (uniform A*axis component is already in the background MHD state)
-       mDip_D = -bConf_D*(Radius**3/2.0)
+       ! OUTSIDE: pure dipole  m = -bAmbientConf_D * Radius^3/2
+       ! (ensures B_r continuity with the subtracted-ambient interior)
+       mDip_D = -bAmbientConf_D*(Radius**3/2.0)
        MdotR  = sum(mDip_D*XyzConf_D)
        b_D = (3.0*MdotR*XyzConf_D/Distance2ConfCenter**2 - mDip_D) &
             /Distance2ConfCenter**3
@@ -375,6 +400,43 @@ contains
     !--------------------------------------------------------------------------
     spher_bessel2 = 3*spher_bessel1_over_x(x) - spher_bessel0(x)
   end function spher_bessel2
+  !============================================================================
+  real function find_alpha0r0(Beta0In)
+
+    ! Solve j1(x)/x = Beta0In for x = Alpha0R0 by Newton-Raphson.
+    ! j1(x)/x is monotone decreasing from 1/3 at x=0 (Taylor limit)
+    ! to 0 at x=4.4934 (first zero of j1), so a unique solution
+    ! exists for any 0 < Beta0In < 1/3.
+    ! Derivative: d/dx[j1(x)/x] = -j2(x)/x (from Bessel recurrence).
+
+    real, intent(in) :: Beta0In
+
+    real    :: x, fx, dfdx
+    integer :: i
+    integer, parameter :: nIter = 20
+    real,    parameter :: Tol   = 1.0e-7
+    real,    parameter :: xZero = 4.493409457909064
+    character(len=*), parameter :: NameSub = 'find_alpha0r0'
+    !--------------------------------------------------------------------------
+    if(Beta0In <= 0.0)then
+       find_alpha0r0 = xZero
+       return
+    end if
+    if(Beta0In >= 1.0/3.0) call CON_stop( &
+         NameSub//': Beta0 >= 1/3, no solution to j1(x)/x = Beta0 exists')
+
+    ! Linear interpolation on (0, xZero) as initial guess
+    x = xZero*(1.0 - 3.0*Beta0In)
+
+    do i = 1, nIter
+       fx   =  spher_bessel1_over_x(x) - Beta0In
+       dfdx = -spher_bessel2(x)/x
+       x    =  x - fx/dfdx
+       if(abs(fx) < Tol) exit
+    end do
+    find_alpha0r0 = x
+
+  end function find_alpha0r0
   !============================================================================
   subroutine get_mc18_size(SizeXY,  SizeZ)
     real,  intent(out) :: SizeXY,  SizeZ

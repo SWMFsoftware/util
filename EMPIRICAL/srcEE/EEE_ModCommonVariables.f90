@@ -21,7 +21,7 @@ module EEE_ModCommonVariables
 
   ! Physics variables global to EEE
   real :: g = 5./3., inv_g = 3./5., gm1 = 2./3., inv_gm1 = 3./2.
-  real :: Gbody
+  real :: Gbody = -cGravitation*mSun*cProtonMass/(cBoltzmann*1.5e6)
   !$acc declare create(Gbody)
 
   ! Named indexes for I/O variable units
@@ -82,14 +82,16 @@ module EEE_ModCommonVariables
   ! Direction vector from the heliocenter to the CME center:
   real :: DirCme_D(3) = 0.0
 
-  ! Coordinate vectors of the CME center and apex
+  ! Coordinate vectors of the CME center, apex, and bottom
   logical :: DoNormalizeXyz = .false.
   real :: XyzCmeCenterSi_D(3) = 0.0, XyzCmeApexSi_D(3) = 0.0
+  real :: XyzCmeBottomSi_D(3) = 0.0
   real :: rCmeApexInvSi = 0.0
   !$acc declare create(rCmeApexInvSi)
 
   ! The AMBIENT magnetic field at these points
   real :: bAmbientCenterSi_D(3) = 0.0, bAmbientApexSi_D(3) = 0.0
+  real :: bAmbientBottomSi_D(3) = 0.0
 
   ! Starting time of CME eruption
   real    :: tStartCme = -1.0
