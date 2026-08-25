@@ -13,6 +13,7 @@ import argparse
 import GLSETUPAlg as GL
 from swmfpy.web import download_magnetogram_hmi as hmi_map
 import datetime as dt
+import sys
 
 BMax = 1900.0
 cPi = np.pi
@@ -82,6 +83,8 @@ if __name__ == '__main__':
                        'Use HMI map for helicity determination')
    parser.add_argument('--UseBATS',action='store_true', help=
                        'Reading magnetogram in the ModPlotFile format')
+   parser.add_argument('--DoNotPlot',action='store_true', help=
+                       'To be used on machines with no idl')
 
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
@@ -110,6 +113,7 @@ if __name__ == '__main__':
    UseARArea   = args.UseARArea
    DoScaling   = args.DoScaling
    UseBATS     = args.UseBATS
+   DoNotPlot   = args.DoNotPlot
 
    IdlFile = 'fitsfile.out'
    if UseBATS==False:
@@ -266,9 +270,10 @@ if __name__ == '__main__':
              CMESpeed,GLRadius,SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI,
-             UsePNDist, UseARArea, DoScaling, Time,
+             UsePNDist, UseARArea, DoScaling, Time, DoNotPlot,
              MinBStrength, MaxBStrength)
-
+   if DoNotPlot:
+      sys.exit(0)
    FileId=open('runidl','w')
    FileId.write('.r GLSETUP2\n')
    FileId.write("GLSETUP2, file='AfterGLSETUP.out',/UseBATS \n")

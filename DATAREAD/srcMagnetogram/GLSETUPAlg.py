@@ -5,6 +5,7 @@ import os
 import fnmatch
 import math
 import subprocess
+import sys
 
 BMax = 1900.0
 cPi  = np.pi
@@ -114,7 +115,7 @@ def calculate_index(Y, Y_I, n):
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
         Stretch, Distance, Helicity, DoHMI, UsePNDist, 
-        UseARArea, DoScaling, Time,
+        UseARArea, DoScaling, Time, DoNotPlot,
         min_GL_Bstrength = 2, max_GL_Bstrength = 40):
    Long0     = Param_I[0]
    LongEarth = Param_I[1]
@@ -568,26 +569,25 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    FileId=open('RunFRM','r')
    subprocess.call('./FRMAGNETOGRAM.exe',stdin=FileId)
    FileId.close()
-   
-   nParam = 8 + 2*nPIL
-   Param_I = np.zeros(nParam)
-   Param_I[0:8] = [Long0,LongEarth,LonPosIndex,LatPosIndex,LonNegIndex,
-                   LatNegIndex,iLonAR,iLatAR]
-   Param_I[8:8+nPIL]=iXPIL_I
-   Param_I[8+nPIL:8+2*nPIL]=iYPIL_I
-   nVar=5
-   Data_IV=np.zeros([nLat,nLong,nVar])
-   NameVar='Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})'.format(nPIL)
-   for k in np.arange(nLat):
-      for l in np.arange(nLong):
-         Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k,l]])])
-         Data_IV[k,l,1]=PSizeMap_C[k,l]
-         Data_IV[k,l,2]=NSizeMap_C[k,l]
-         Data_IV[k,l,3]=occPos[k,l]
-         Data_IV[k,l,4]=occNeg[k,l]
-   FinalFile=rmag.save_bats('AfterGLSETUP.out', 'After GLSETUP: Br[Gauss]', 
-                            NameVar, [nLong,nLat], nVar, nParam, Param_I,
-                            Rad2Deg*Long_I,Rad2Deg*Lat_I, Data_IV, Time)
-
+   if not DoNotPlot:
+      nParam = 8 + 2*nPIL
+      Param_I = np.zeros(nParam)
+      Param_I[0:8] = [Long0,LongEarth,LonPosIndex,LatPosIndex,LonNegIndex,
+                      LatNegIndex,iLonAR,iLatAR]
+      Param_I[8:8+nPIL]=iXPIL_I
+      Param_I[8+nPIL:8+2*nPIL]=iYPIL_I
+      nVar=5
+      Data_IV=np.zeros([nLat,nLong,nVar])
+      NameVar='Longitude Latitude Br PMap NMap occPos occNeg Long0 LongEarth xP yP xN yN xC yC xPIL1({0:1d}) yPIL1({0:1d})'.format(nPIL)
+      for k in np.arange(nLat):
+         for l in np.arange(nLong):
+            Data_IV[k,l,0]=max([-BMax,min([BMax,Br_C[k,l]])])
+            Data_IV[k,l,1]=PSizeMap_C[k,l]
+            Data_IV[k,l,2]=NSizeMap_C[k,l]
+            Data_IV[k,l,3]=occPos[k,l]
+            Data_IV[k,l,4]=occNeg[k,l]
+      FinalFile=rmag.save_bats('AfterGLSETUP.out', 'After GLSETUP: Br[Gauss]',
+                               NameVar, [nLong,nLat], nVar, nParam, Param_I,
+                               Rad2Deg*Long_I,Rad2Deg*Lat_I, Data_IV, Time)
    return(nLong,nLat,nParam,Param_I,Long_I,Lat_I,Br_C,PSizeMap_C,NSizeMap_C,occPos,occNeg)
 
