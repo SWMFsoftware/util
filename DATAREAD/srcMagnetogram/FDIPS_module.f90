@@ -126,22 +126,18 @@ contains
           call read_var('UseLogRadius', UseLogRadius)
           call read_var('UseWedge', UseWedge)
           if (UseWedge) then
-             call read_var('wedgeLatMin',ThetaMax)
-             ThetaMax = (90-ThetaMax) * cDegToRad
-             call read_var('wedgeLatMax',ThetaMin)
-             ThetaMin = (90-ThetaMin) * cDegToRad
-             if (ThetaMax <= ThetaMin) then
-                call CON_stop(NameSub//': Wedge latitude_min > latitude_max.')
-             endif
-             call read_var('wedgeLonMin',PhiMin)
-             PhiMin = PhiMin * cDegToRad
-             call read_var('wedgeLonMax',PhiMax)
-             PhiMax = PhiMax * cDegToRad
-             if (PhiMin >= PhiMax) then
-                ! wedge over zero meridian
-                call CON_stop(NameSub//': '//&
-                     'Currently does not support wedge over longitude=0.')
-             endif
+             call read_var('WedgeLatMin', ThetaMax)
+             ThetaMax = (90 - ThetaMax)*cDegToRad
+             call read_var('WedgeLatMax', ThetaMin)
+             ThetaMin = (90 - ThetaMin)*cDegToRad
+             if (ThetaMax <= ThetaMin) call CON_stop(NameSub// &
+                  ': WedgeLatMin > WedgeLatMax')
+             call read_var('WedgeLonMin', PhiMin)
+             PhiMin = PhiMin*cDegToRad
+             call read_var('WedgeLonMax', PhiMax)
+             PhiMax = PhiMax*cDegToRad
+             if (PhiMin >= PhiMax) call CON_stop(NameSub// &
+                     ': wedge over longitude 0 is not supported')
           endif
        case("#GRID")
           call read_var('nR',           nR)
