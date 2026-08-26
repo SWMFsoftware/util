@@ -11,18 +11,23 @@ dipole11.out		NameFileIn
 2.0			PolarExponent
 
 ! The observed magnetic field is increased
-! Br=sign(BrObserved)*min(BrFactor*|BrObserved|, BrMin + |BrObserved|)
+! Br = sign(BrObserved)*min(BrFactor*|BrObserved|, BrMin + |BrObserved|)
 ! Default BrFactor = 1.0, BrMin = 0.0 (no change)
 CHANGEWEAKFIELD
 3.75				BrFactor
 5.0				BrMin
 
-! For a non-default domain size and/or logarithmic radial grid
+! Define domain size, linear vs logarithmic radial grid
+! and/or a wedge with limited latitude and longitude range.
 #DOMAIN
 1.0			rMin         (default is 1)
 25.0			rMax         (default is 2.5)
 T			UseLogRadius (default is F)
-F			UseWedge
+T			UseWedge     (default is F, rest is read if T)
+-25.0			WedgeLatMin  [deg]
++14.0			WedgeLatMax  [deg]
+140.0			WedgeLonMin  [deg]
+175.0			WedgeLatMax  [deg]
 
 ! Chebyshev transform simply interpolates to a uniform (co)latitude grid.
 ! If the magnetometer grid is uniform to start with or was converted with
@@ -33,7 +38,6 @@ F			UseWedge
 ! is increased by a factor of pi/2 = 1.57 relative to the original grid
 ! or the coarsened grid requested in the #GRID command.
 ! Default is true so the lookup table is more uniform and accurate.
-
 #CHEBYSHEV
 T			UseChebyshevNode
 
