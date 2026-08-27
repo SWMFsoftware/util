@@ -23,7 +23,7 @@ CHANGEWEAKFIELD
 1.0			rMin         (default is 1)
 25.0			rMax         (default is 2.5)
 T			UseLogRadius (default is F)
-T			UseWedge     (default is F, rest is read if T)
+F			UseWedge     (default is F, rest is read if T)
 -25.0			WedgeLatMin  [deg]
 +14.0			WedgeLatMax  [deg]
 140.0			WedgeLonMin  [deg]
