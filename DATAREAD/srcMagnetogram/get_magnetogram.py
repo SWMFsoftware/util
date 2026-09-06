@@ -14,8 +14,10 @@ import os
 import shutil
 import gzip
 import argparse
+from datetime import datetime,timedelta
 
-ISWA_DATA_URL = 'https://iswaa-webservice1.ccmc.gsfc.nasa.gov/iswa_data_tree/observation/solar/gong/mrzqs/'
+ISWA_DATA_URL = 'https://nispdata.nso.edu/ftp/QR/zqs/'
+#202609/mrzqs260901/
 
 #modify to change the output directory (run_realtime directory used for realtime simulations)
 OUTPUT_BASE_PATH = os.getcwd()
@@ -42,14 +44,13 @@ class LinkScrape(HTMLParser):
     def clean(self):
         self.links = []
 
-def get_highest(page_url, pattern, datetime):
+def get_highest(page_url, pattern, datetimein):
     response = requests.get(page_url)
     page_html = response.text
     link_parser = LinkScrape()
     link_parser.feed(page_html)
     links = link_parser.links
     link_parser.clean()
-
 
     last_match = ''
     lats_link = ''
@@ -59,7 +60,7 @@ def get_highest(page_url, pattern, datetime):
         text = link['text']
         matches = re.search(pattern, text)
         if (matches):
-            if (matches.group(1) > last_match and matches.group(1)<=datetime):
+            if (matches.group(1)>last_match and matches.group(1)<=datetimein):
                 last_match = matches.group(1)
                 lats_link = original_url
                 last_text = text
@@ -83,20 +84,40 @@ def download_file(url, save_path):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description=
-                                     "Use python3 get_magnetogram.py datetime")
-    parser.add_argument('datetime', help=
+                                     "python3 get_magnetogram.py datetimein")
+    parser.add_argument('datetimein', help=
                         "Date_Time in the format yymmdd't'hhmm")
     args = parser.parse_args()
-    datetime = str(args.datetime)
-    matches=re.search(r'(\d\d\d\d\d\dt\d\d\d\d)',datetime)
+    datetimein = str(args.datetimein)
+    matches=re.search(r'(\d\d\d\d\d\dt\d\d\d\d)',datetimein)
     year = '20'+matches.group(1)[0:2]
     month = matches.group(1)[2:4]
-    month_url = ISWA_DATA_URL.rstrip('/')+'/'+\
-        str(year)+'/'+str(month)+'/'
+    day = matches.group(1)[0:6]
+    day_url = ISWA_DATA_URL.rstrip('/')+'/'+\
+        str(year)+str(month)+'/mrzqs'+str(day)+'/'
     [cr, text, link] = get_highest(
-        month_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
-    granule_url = month_url.rstrip('/') + '/' + link
-    print("granule_url="+granule_url)
+        day_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
+    if not link:
+        #
+        ### No magnetogram in the folder for this day. Look in the previous day
+        #
+        ### Convert datetime input string to the python datetime object
+        format_pattern = "%y%m%dt%H%M"
+        parsed_datetime = datetime.strptime(datetimein, format_pattern)
+        #
+        ### Reduce by one day
+        parsed_datetime = parsed_datetime - timedelta(hours=23)
+        #
+        ### Convert to a string
+        formatted_string = parsed_datetime.strftime(format_pattern)
+        year = '20'+formatted_string[0:2]
+        month = formatted_string[2:4]
+        day = formatted_string[0:6]
+        day_url = ISWA_DATA_URL.rstrip('/')+'/'+\
+            str(year)+str(month)+'/mrzqs'+str(day)+'/'
+        [cr, text, link] = get_highest(
+            day_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
+    granule_url = day_url.rstrip('/') + '/' + link
     # Adjust input files
     fits_file = os.path.join(OUTPUT_BASE_PATH, "fitsfile.fits")
     fits_file_gz = os.path.join(OUTPUT_BASE_PATH,str(link))
