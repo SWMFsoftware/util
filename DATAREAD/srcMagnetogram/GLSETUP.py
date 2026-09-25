@@ -248,9 +248,15 @@ if __name__ == '__main__':
       print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
             LonPosIn, LatPosIn,LonNegIn, LatNegIn))
       # Convert coordinates in degrees to grid indexes
-      LonPos = GL.calculate_index(LonPosIn*Deg2Rad,Lon_I,nLon)
+      LonPos = GL.calculate_index(
+         (
+            (LonPosIn - float(Lon0))%360.0
+         )*Deg2Rad,Lon_I,nLon)
       LatPos = GL.calculate_index(LatPosIn*Deg2Rad,Lat_I, nLat)
-      LonNeg = GL.calculate_index(LonNegIn*Deg2Rad,Lon_I,nLon)
+      LonNeg = GL.calculate_index(
+         (
+            (LonNegIn - float(Lon0))%360.0
+         )*Deg2Rad,Lon_I,nLon)
       LatNeg = GL.calculate_index(LatNegIn*Deg2Rad,Lat_I, nLat)
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
    nParam  = 6
