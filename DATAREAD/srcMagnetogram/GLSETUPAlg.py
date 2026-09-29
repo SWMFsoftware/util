@@ -167,7 +167,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    # (i.e as intersection of this with PIL,
    # herewith PIL=Polarity Inversion Line
    nProfile = max([round_my(abs(LonPos - LonNeg)*Rad2Deg),
-                   round_my(abs(LatPos-LatNeg)*Rad2Deg)]) + 1
+                   round_my(abs(LatPos - LatNeg)*Rad2Deg)]) + 1
    LonProfile_C = np.zeros(nProfile)
    LatProfile_C = np.zeros(nProfile)
    BTmp = BMax + 1.0
@@ -323,7 +323,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    # weighted center spots.
    # The second option of taking avg of field along PIL is currently removed.
    # These relationships are based on the GONG magnetogram with nsmooth = 5
-   RegionSize_ARMag=round_my((4.0*nLong)/360)
+   RegionSize_ARMag = round_my((4.0*nLong)/360)
    br_ar=np.mean(
       abs(Br_C[(iLatAR-RegionSize_ARMag//2):
                (iLatAR+RegionSize_ARMag//2)+1,
