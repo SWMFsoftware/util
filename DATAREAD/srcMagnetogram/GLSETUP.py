@@ -243,17 +243,17 @@ if __name__ == '__main__':
       LonNeg = float(a[2])
       LatNeg = float(a[3])
    else:
-      # The input locations are in degrees
+      # The input locations are in degrees. Apply periodicity in longitude
+      LonNegIn = LonNegIn % 360
+      LonPosIn = LonPosIn % 360
       print ("\n User input  Lon/Lat for Positive and negative spots:")
       print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
             LonPosIn, LatPosIn, LonNegIn, LatNegIn))
       # Convert coordinates in degrees to grid indexes
-      LonPos = GL.calculate_index(
-         ((LonPosIn - Lon0)%360.0)*Deg2Rad, Lon_I, nLon)
+      LonPos = GL.calculate_index(LonPosIn*Deg2Rad, Lon_I, nLon)
       LatPos = GL.calculate_index(LatPosIn*Deg2Rad, Lat_I, nLat)
-      LonNeg = GL.calculate_index(
-         ((LonNegIn - Lon0)%360.0)*Deg2Rad, Lon_I, nLon)
-      LatNeg = GL.calculate_index(LatNegIn*Deg2Rad,Lat_I, nLat)
+      LonNeg = GL.calculate_index(LonNegIn*Deg2Rad, Lon_I, nLon)
+      LatNeg = GL.calculate_index(LatNegIn*Deg2Rad, Lat_I, nLat)
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
    nParam  = 6
    Param_I = np.zeros(nParam)
