@@ -73,10 +73,20 @@ module EEE_ModMc18
 
   ! Normalized ambient field at the spheromak center: bAmbientCenterSi_D in
   ! code units.  Used for the Borovikov et al. (2018) uniform field subtraction:
-  ! interior perturbation = B_Bessel - bAmbientConf_D,
-  ! exterior dipole moment = -bAmbientConf_D * Radius^3/2.
+  ! interior perturbation = B_Bessel - bAmbientConf_D.
+  ! B0 (bConf_D) itself is calibrated against bAmbientConf_D in mc18_get_b0,
+  ! optionally including image-dipole feedback if UseImageDipoles is set.
   real :: bAmbientConf_D(3) = 0.0
   !$acc declare create(bAmbientConf_D)
+
+  ! Equivalent external dipole moment of the spheromak (Eq. 3): m = C0*B0,
+  ! split into the parts along DirCme_D (mRadDip_D = m_par) and
+  ! perpendicular to it (mHorDip_D = m_perp). mDip_D is used for the
+  ! exterior field (Sec. 2.1); mRadDip_D/mHorDip_D feed the analytic
+  ! image-dipole field (mc18_image_field) once B0 is known.
+  real :: C0 = 0.0
+  real :: mDip_D(3) = 0.0, mRadDip_D(3) = 0.0, mHorDip_D(3) = 0.0
+  !$acc declare create(C0, mDip_D, mRadDip_D, mHorDip_D)
 
   ! Parameter to control self-similar solution
   real :: uCmeSi = 0.0
@@ -86,16 +96,12 @@ module EEE_ModMc18
   ! Lin (2006) image dipole parameters
   logical :: UseImageDipoles = .false.
   !$acc declare create(UseImageDipoles)
-  integer :: nDiscDipoles = 200
 
-  ! Pre-computed image dipoles: 
-  ! 1 point image + up to MaxImgDipoles-1 line images
-  integer, parameter :: MaxImgDipoles = 1001
-  integer :: nImgDipoles = 0
-  !$acc declare create(nImgDipoles)
-  real :: rImgDipole_DI(3, MaxImgDipoles) = 0.0
-  real :: mImgDipole_DI(3, MaxImgDipoles) = 0.0
-  !$acc declare create(rImgDipole_DI, mImgDipole_DI)
+  ! nDiscDipoles is read (if present) for backward compatibility with
+  ! existing PARAM.in files, but is no longer used: the line distribution
+  ! of horizontal image dipoles (item 3 of Sec. 2.2) is now evaluated
+  ! analytically (mc18_image_field), not by discretizing it into dipoles.
+  integer :: nDiscDipoles = 200
 
   ! Spheromak Beta0 and ejecta temperature (same convention as TD99)
   ! Boundary parameter beta0: j1(alpha0*r0)/(alpha0*r0) = beta0.
@@ -121,13 +127,28 @@ contains
     ! Wave number k = Alpha0R0 / r0
     Alpha0 = Alpha0R0/Radius
 
-    ! Field amplitude and axis from the ambient field at the CME center.
-    ! bAmbientCenterSi_D is filled by the MHD solver before mc18_init is called
-    ! (see SC_user_initial_perturbation in ModUserAwsom.f90).
-    bConf_D        = (-3.0/(2.0*spher_bessel2(Alpha0R0))) * bAmbientCenterSi_D*Si2No_V(UnitB_)
-    B0             = norm2(bConf_D)
-    B0Dim          = B0*No2Io_V(UnitB_)
+    ! Center position of the configuration in the heliocentric frame.
+    ! Needed already here: mc18_get_b0 below uses it.
+    XyzCenterConf_D = rDistance1*DirCme_D
+
     bAmbientConf_D = bAmbientCenterSi_D*Si2No_V(UnitB_)
+
+    ! Field amplitude and axis: calibrate B0 (bConf_D) from the ambient
+    ! field at the spheromak center, optionally including image-dipole
+    ! feedback (see mc18_get_b0). bAmbientCenterSi_D is filled by the
+    ! MHD solver before mc18_init is called
+    ! (see SC_user_initial_perturbation in ModUserAwsom.f90).
+    call mc18_get_b0
+    B0    = norm2(bConf_D)
+    B0Dim = B0*No2Io_V(UnitB_)
+
+    ! Equivalent external dipole moment of the spheromak (Eq. 3): m = C0*B0,
+    ! needed for the exterior field regardless of UseImageDipoles; split
+    ! into radial/horizontal parts, which is what the analytic image-dipole
+    ! field (mc18_image_field) takes as input.
+    mDip_D    = C0*bConf_D
+    mRadDip_D = sum(mDip_D*DirCme_D)*DirCme_D
+    mHorDip_D = mDip_D - mRadDip_D
 
     ! Helicity: choose sign of alpha so that the toroidal field at the
     ! spheromak bottom opposes the component of the ambient field there
@@ -176,55 +197,174 @@ contains
        write(*,*) prefix
     end if
 
-    ! Center position of the configuration in the heliocentric frame
-    XyzCenterConf_D = rDistance1*DirCme_D
-
     EjectaTemperature = EjectaTemperatureDim*Io2No_V(UnitTemperature_)
 
     !$acc update device(Alpha0R0, Alpha0, XyzCenterConf_D, bConf_D, bAmbientConf_D)
     !$acc update device(uCmeSi, B0, Radius, UseImageDipoles)
-    !$acc update device(iHelicity)
+    !$acc update device(iHelicity, C0, mDip_D, mRadDip_D, mHorDip_D)
     !$acc update device(UseBeta0, Beta0, EjectaTemperature)
-
-    if(UseImageDipoles) call mc18_compute_image_dipoles
 
   end subroutine mc18_init
   !============================================================================
-  subroutine mc18_compute_image_dipoles
+  subroutine mc18_get_b0
 
-    real :: mDip_D(3)
-    real :: mR_D(3), mT_D(3)
-    real :: dImg, scale3, du, uCtr
-    integer :: i
+    ! Calibrate B0 (bConf_D). Without image dipoles this reduces to the
+    ! original Borovikov et al. (2018) estimate
+    !   B0 = -3/(2 j2(a0r0)) Bamb,c.
+    ! With image dipoles enabled, the field actually inserted into the MHD
+    ! domain is Bamb + (B-Buniform) + Bimg (Eq. 19); requiring this to be
+    ! approximately the self-consistent stand-alone configuration B means
+    !   Bamb,c + Bimg,c = Buniform(B0),                             (Eq. 21)
+    ! i.e. B0 is calibrated so that the uniform term supplies BOTH the
+    ! ambient field AND the (separately-inserted) image-dipole field at
+    ! the spheromak center - not the other way round. Every image source
+    ! (mc18_image_field) is built linearly from either the radial or the
+    ! horizontal part of the spheromak's equivalent dipole moment, and all
+    ! of them lie on the same solar-center-to-spheromak-center axis as the
+    ! spheromak itself, so this calibration decouples exactly into two
+    ! independent scalar solves - one along DirCme_D, one in the
+    ! perpendicular plane - with no iteration needed.
+
+    real :: bAmbCenter_D(3), Br, bT_D(3), ePerp_D(3)
+    real :: GammaUniform, Gr, Gh
+    real :: bTestR_D(3), bTestH_D(3)
+    real, parameter :: Zero_D(3) = (/0.0, 0.0, 0.0/)
     !--------------------------------------------------------------------------
-    ! Equivalent external dipole: m = -bAmbientConf_D * Radius^3/2
-    ! (Rosenbluth-Bussac B_r-continuity condition; see Borovikov et al. 2018)
-    mDip_D = -bAmbientConf_D*(Radius**3/2.0)
+    bAmbCenter_D = bAmbientCenterSi_D*Si2No_V(UnitB_)
 
-    mR_D = sum(mDip_D*DirCme_D)*DirCme_D  ! radial component of moment
-    mT_D = mDip_D - mR_D                  ! transverse component of moment
+    ! m-per-B0 scalar (Eq. 3): m = C0*B0
+    C0 = spher_bessel2(Alpha0R0)*Radius**3/3.0
 
-    ! Image point at (a^2/d)*rHat = (1/d)*rHat  (solar surface a = 1 R_sun)
+    ! Response of the uniform-field term alone to B0 (Sec. 2.1)
+    GammaUniform = -2.0/3.0*spher_bessel2(Alpha0R0)
+
+    if(.not.UseImageDipoles)then
+       bConf_D = bAmbCenter_D/GammaUniform
+       RETURN
+    end if
+
+    ! Radial/horizontal split of the ambient field at the spheromak center
+    Br   = sum(bAmbCenter_D*DirCme_D)
+    bT_D = bAmbCenter_D - Br*DirCme_D
+
+    ! Use an arbitrary perpendicular unit vector to obtain the horizontal
+    ! image-dipole response.
+    ! Any unit vector perpendicular to DirCme_D; the image-dipole response
+    ! in the perpendicular plane is isotropic, so the choice doesn't matter.
+    ePerp_D = perpendicular_unit_vector(DirCme_D)
+
+    ! Geometric image-dipole response to a unit radial/horizontal moment,
+    ! obtained with the same analytic mc18_image_field used for the actual
+    ! field (get_mc18_fluxrope), evaluated at the spheromak center.
+    bTestR_D = mc18_image_field(XyzCenterConf_D, DirCme_D, Zero_D)
+    bTestH_D = mc18_image_field(XyzCenterConf_D, Zero_D, ePerp_D)
+    Gr = sum(bTestR_D*DirCme_D)
+    Gh = sum(bTestH_D*ePerp_D)
+
+    ! Solve the two decoupled scalar equations for B0 (note the MINUS sign
+    ! on the image-dipole term, per Bamb,c + Bimg,c = Buniform, Eq. 21 -
+    ! opposite of naively matching Buniform+Bimg to Bamb,c).
+    !
+    ! Example: r direction:
+    ! Bamb,c,r + Bimg,c,r = Buniform(B0),r
+    ! => Br*DirCme_D + Gr*DirCme_D*C0*B0,r = GammaUniform*DirCme_D*B0,r
+    ! => B0,(Br/(GammaUniform - C0*Gr))
+    !
+    ! The same for horizontal direction.
+    bConf_D = (Br/(GammaUniform - C0*Gr))*DirCme_D &
+         + bT_D/(GammaUniform - C0*Gh)
+
+  end subroutine mc18_get_b0
+  !============================================================================
+  function mc18_image_field(rField_D, mPar_D, mPerp_D) result(b_D)
+    !$acc routine seq
+
+    ! Analytic field of the Lin (2006) image-dipole system (Sec. 2.2) at an
+    ! arbitrary field point rField_D (heliocentric coordinates, rSun units),
+    ! given the radial (mPar_D = m_par, along DirCme_D) and horizontal
+    ! (mPerp_D = m_perp, perpendicular to it) parts of the spheromak's
+    ! equivalent dipole moment m. Solar radius Rs = 1 in these units.
+    ! Combines:
+    !  - B1: the radial point image, moment -scale3*mPar_D at
+    !    rImg_D = (1/rDistance1)*DirCme_D (Lin 2006 Eq. II.B).
+    !  - B2+B3: the horizontal point image plus the continuous line of
+    !    horizontal image dipoles between the solar center and rImg_D,
+    !    combined and evaluated in closed form via Eq. 24 (Sec. 2.3) rather
+    !    than discretizing the line into dipoles or handling B2/B3
+    !    separately. Eq. 24, K*gradq*(1/(DS)-1/D^3) +
+    !    K*q*(3*gradD/D^4 - gradS/(D*S^2) - gradD/(S*D^2)), is used here
+    !    with the gradD coefficients combined algebraically:
+    !    3/D^4 - 1/(S*D^2) = (1/D^2)*(3/D^2 - 1/S).
+
+    real, intent(in) :: rField_D(3), mPar_D(3), mPerp_D(3)
+    real :: b_D(3)
+
+    real :: dImg, rImg_D(3)
+    real :: r, Dvec_D(3), Dist, S, q, gradD_D(3), gradS_D(3), K
+    !--------------------------------------------------------------------------
+    ! 1.0 is the solar radius in the normalized code units used here.
     dImg   = 1.0/rDistance1
-    scale3 = dImg**3              ! = (a/d)^3
+    rImg_D = dImg*DirCme_D
 
-    nImgDipoles = 1 + nDiscDipoles
+    ! B1: radial point image
+    ! -(1.0/rDistance1)**3*mPar_D is the moment of the radial point image (Lin 2006 Eq. II.B)
+    b_D = dipole_field(rImg_D, -(1.0/rDistance1)**3*mPar_D, rField_D)
 
-    ! Combined point image: moment = scale3*(m_t - m_r)  (Lin 2006 Eq. II.B-C)
-    rImgDipole_DI(:,1) = dImg*DirCme_D
-    mImgDipole_DI(:,1) = scale3*(mT_D - mR_D)
+    ! B2+B3: horizontal point image + continuous line, combined
+    r       = norm2(rField_D)
+    Dvec_D  = rField_D - rImg_D
+    Dist    = norm2(Dvec_D)
+    S       = r*Dist + r**2 - sum(rField_D*rImg_D)
+    q       = sum(mPerp_D*rField_D)
+    gradD_D = Dvec_D/Dist
+    gradS_D = r*gradD_D + Dist*(rField_D/r) + 2.0*rField_D - rImg_D
+    K       = 1.0/rDistance1**3
 
-    ! Discretised line images: cell-centred over [0, dImg] along rHat_D
-    du = dImg/nDiscDipoles
-    do i = 1, nDiscDipoles
-       uCtr = (i - 0.5)*du
-       rImgDipole_DI(:, 1+i) = uCtr*DirCme_D
-       mImgDipole_DI(:, 1+i) = -(mT_D/rDistance1)*uCtr*du
-    end do
+    b_D = b_D + K*mPerp_D*(1.0/(Dist*S) - 1.0/Dist**3) &
+         + K*q*(3.0/Dist**2 - 1.0/S)/Dist**2*gradD_D &
+         - K*q/(Dist*S**2)*gradS_D
 
-    !$acc update device(nImgDipoles, rImgDipole_DI, mImgDipole_DI)
+  end function mc18_image_field
+  !============================================================================
+  function perpendicular_unit_vector(a_D) result(e_D)
+    !$acc routine seq
 
-  end subroutine mc18_compute_image_dipoles
+    ! Returns an arbitrary unit vector perpendicular to a_D, which itself
+    ! must be a unit vector.
+
+    real, intent(in) :: a_D(3)
+    real :: e_D(3)
+
+    real :: Ref_D(3)
+    !--------------------------------------------------------------------------
+    if(abs(a_D(1)) < 0.9)then
+       Ref_D = (/1.0, 0.0, 0.0/)
+    else
+       Ref_D = (/0.0, 1.0, 0.0/)
+    end if
+    e_D = Ref_D - sum(Ref_D*a_D)*a_D
+    e_D = e_D/norm2(e_D)
+
+  end function perpendicular_unit_vector
+  !============================================================================
+  function dipole_field(rSrc_D, m_D, rField_D) result(b_D)
+    !$acc routine seq
+
+    ! Field of a point dipole with moment m_D located at rSrc_D, evaluated
+    ! at rField_D (all in the normalized code units used throughout this
+    ! module, where mu0/(4 pi) is absorbed into m_D, as elsewhere here).
+
+    real, intent(in) :: rSrc_D(3), m_D(3), rField_D(3)
+    real :: b_D(3)
+
+    real :: dr_D(3), R2, MdotR
+    !--------------------------------------------------------------------------
+    dr_D  = rField_D - rSrc_D
+    R2    = sum(dr_D**2)
+    MdotR = sum(m_D*dr_D)
+    b_D   = (3.0*MdotR*dr_D/R2 - m_D)/(sqrt(R2)*R2)
+
+  end function dipole_field
   !============================================================================
   subroutine set_parameters_mc18(NameCommand)
 
@@ -240,9 +380,10 @@ contains
        call read_var('uCmeSi',          uCmeSi)         ![km/s]
        call read_var('UseImageDipoles', UseImageDipoles)
        if(UseImageDipoles)then
+          ! nDiscDipoles is read for PARAM.in backward compatibility only;
+          ! the image-dipole field is now computed analytically (Sec. 2.2)
+          ! and no longer discretized, so the value itself is unused.
           call read_var('nDiscDipoles', nDiscDipoles)
-          if(nDiscDipoles > MaxImgDipoles - 1) call CON_stop( &
-               NameSub//': nDiscDipoles exceeds MaxImgDipoles-1 = 1000')
        end if
        call read_var('UseBeta0', UseBeta0)
        if(UseBeta0)then
@@ -280,7 +421,8 @@ contains
     ! Magnetic field perturbation of the Rosenbluth-Bussac force-free spheromak.
     ! Interior: spherical Bessel (j1) field minus the uniform ambient field
     !   (Borovikov et al. 2018 uniform-field subtraction for div-B continuity).
-    ! Exterior: pure dipole of equivalent moment m = -bAmbientConf_D * Radius^3/2.
+    ! Exterior: pure dipole of equivalent moment mDip_D = C0*bConf_D (Eq. 3),
+    !   calibrated in mc18_get_b0 (optionally including image-dipole feedback).
     ! Image dipole correction (Lin 2006) applied everywhere if UseImageDipoles.
 
     use ModCoordTransform, ONLY: cross_product
@@ -298,10 +440,7 @@ contains
 
     real :: XyzConf_D(3), Distance2ConfCenter
     real :: R2CrossB0_D(3), Alpha0R2
-    real :: mDip_D(3), MdotR
     real :: PhiInv
-    real :: dr_D(3), R2img
-    integer :: i
     !--------------------------------------------------------------------------
     if(UseMagCone)then
        PhiInv = 1.0/(1.0 + (TimeNow - tStartCme)*uCmeSi*rCmeApexInvSi)
@@ -347,25 +486,17 @@ contains
 
     else
 
-       ! OUTSIDE: pure dipole  m = -bAmbientConf_D * Radius^3/2
-       ! (ensures B_r continuity with the subtracted-ambient interior)
-       mDip_D = -bAmbientConf_D*(Radius**3/2.0)
-       MdotR  = sum(mDip_D*XyzConf_D)
-       b_D = (3.0*MdotR*XyzConf_D/Distance2ConfCenter**2 - mDip_D) &
-            /Distance2ConfCenter**3
+       ! OUTSIDE: pure dipole with equivalent moment mDip_D = C0*bConf_D
+       ! (ensures B_r continuity with the subtracted-ambient interior).
+       ! XyzConf_D is already relative to the spheromak center.
+       b_D = dipole_field((/0.0, 0.0, 0.0/), mDip_D, XyzConf_D)
 
     end if
 
-    ! Lin (2006) image dipole corrections (heliocentric coordinates, unscaled)
-    if(UseImageDipoles)then
-       do i = 1, nImgDipoles
-          dr_D  = XyzIn_D - rImgDipole_DI(:,i)
-          R2img = sum(dr_D**2)
-          MdotR = sum(mImgDipole_DI(:,i)*dr_D)
-          b_D   = b_D + (3.0*MdotR*dr_D/R2img - mImgDipole_DI(:,i)) &
-               /(sqrt(R2img)*R2img)
-       end do
-    end if
+    ! Lin (2006) image dipole corrections (heliocentric coordinates, unscaled),
+    ! evaluated analytically (Sec. 2.2), not via discretization.
+    if(UseImageDipoles) &
+         b_D = b_D + mc18_image_field(XyzIn_D, mRadDip_D, mHorDip_D)
 
     b_D = b_D*No2Si_V(UnitB_)
     Rho = Rho*No2Si_V(UnitRho_)
