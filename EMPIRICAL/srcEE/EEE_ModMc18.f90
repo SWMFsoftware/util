@@ -97,12 +97,6 @@ module EEE_ModMc18
   logical :: UseImageDipoles = .false.
   !$acc declare create(UseImageDipoles)
 
-  ! nDiscDipoles is read (if present) for backward compatibility with
-  ! existing PARAM.in files, but is no longer used: the line distribution
-  ! of horizontal image dipoles (item 3 of Sec. 2.2) is now evaluated
-  ! analytically (mc18_image_field), not by discretizing it into dipoles.
-  integer :: nDiscDipoles = 200
-
   ! Spheromak Beta0 and ejecta temperature (same convention as TD99)
   ! Boundary parameter beta0: j1(alpha0*r0)/(alpha0*r0) = beta0.
   ! Pressure from PDF Eq.(5): p = [j1/(a0 r) - b0]*b0*alpha0^2*(r x B0)^2
@@ -185,8 +179,6 @@ contains
        write(*,*) prefix, 'LatitudeCme    = ', LatitudeCme,         '[degrees]'
        write(*,*) prefix, 'Alpha0         = ', Alpha0,              '[1/rSun]'
        write(*,*) prefix, 'UseImageDipoles= ', UseImageDipoles
-       if(UseImageDipoles) &
-            write(*,*) prefix, 'nDiscDipoles   = ', nDiscDipoles
        write(*,*) prefix, 'UseBeta0  = ', UseBeta0
        if(UseBeta0)then
           write(*,*) prefix, 'Beta0          = ', Beta0
@@ -379,12 +371,6 @@ contains
        call read_var('BaseHeight',      BaseHeight)     ![rSun]
        call read_var('uCmeSi',          uCmeSi)         ![km/s]
        call read_var('UseImageDipoles', UseImageDipoles)
-       if(UseImageDipoles)then
-          ! nDiscDipoles is read for PARAM.in backward compatibility only;
-          ! the image-dipole field is now computed analytically (Sec. 2.2)
-          ! and no longer discretized, so the value itself is unused.
-          call read_var('nDiscDipoles', nDiscDipoles)
-       end if
        call read_var('UseBeta0', UseBeta0)
        if(UseBeta0)then
           call read_var('Beta0', Beta0)
