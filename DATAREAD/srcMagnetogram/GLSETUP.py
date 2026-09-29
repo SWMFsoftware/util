@@ -105,10 +105,10 @@ if __name__ == '__main__':
    MaxBStrength= args.MaxBStrength
    MinBStrength= args.MinBStrength
    DoHMI       = args.DoHMI # default is False
-   LonPosIn   = args.LonPosIn
-   LatPosIn   = args.LatPosIn
-   LonNegIn   = args.LonNegIn
-   LatNegIn   = args.LatNegIn
+   LonPosIn    = args.LonPosIn
+   LatPosIn    = args.LatPosIn
+   LonNegIn    = args.LonNegIn
+   LatNegIn    = args.LatNegIn
    UsePNDist   = args.UsePNDist
    UseARArea   = args.UseARArea
    DoScaling   = args.DoScaling
@@ -116,7 +116,7 @@ if __name__ == '__main__':
    DoNotPlot   = args.DoNotPlot
 
    IdlFile = 'fitsfile.out'
-   if UseBATS==False:
+   if UseBATS == False:
       # Check if the file extension is .out
       SplitName = NameFile.split('.')
       if  SplitName[-1]=='out':
@@ -143,19 +143,19 @@ if __name__ == '__main__':
    ##READ AND SMOOTH, IF DESIRED########################
    if UseBATS:
       cc =  rmag.read_bats(NameFile)
-      nIndex_I     = cc[0]
+      nIndex_I    = cc[0]
       nLon        = nIndex_I[0]
-      nLat         = nIndex_I[1]
-      nVar         = cc[1]
-      nParam       = cc[2]
-      Param_I      = cc[3]
+      nLat        = nIndex_I[1]
+      nVar        = cc[1]
+      nParam      = cc[2]
+      Param_I     = cc[3]
       Lon0        = Param_I[0] # Longitude of left edge
-      Time         = cc[7]
+      Time        = cc[7]
       LonEarth    = Param_I[1]         # CR number
       Lon_I       = cc[4]*Deg2Rad      # in radians
-      Lat_I        = cc[5]*Deg2Rad      # in radians
-      data         = cc[6]
-      if nVar ==1:
+      Lat_I       = cc[5]*Deg2Rad      # in radians
+      data        = cc[6]
+      if nVar == 1:
          Br_C = data
       else:
          Br_C = data[:,:,0]
@@ -163,7 +163,7 @@ if __name__ == '__main__':
          Br_C = rmag.smooth(nLon,  nLat,  nSmooth, Br_C)
          StrHeader = cc[8]
          NameVar   = cc[9]
-         if nVar==1:
+         if nVar == 1:
             data = Br_C
          else:
             data[:,:,0] = Br_C
@@ -178,15 +178,15 @@ if __name__ == '__main__':
       cc = rmag.remap(NameFile, IdlFile, nLat, nLon, grid_type,
                       i-1, nSmooth,BMax)
       nLon        = cc[0]
-      nLat         = cc[1]
-      nParam       = cc[2]
-      Param_I      = cc[3]
+      nLat        = cc[1]
+      nParam      = cc[2]
+      Param_I     = cc[3]
       Lon0        = Param_I[0] # Longitude of left edge
       LonEarth    = Param_I[1] # CR number of central meridian
       Lon_I       = cc[4]      # in radians
-      Lat_I        = cc[5]      # in radians
-      Br_C         = cc[6]
-      Time         = cc[9]
+      Lat_I       = cc[5]      # in radians
+      Br_C        = cc[6]
+      Time        = cc[9]
       if DoHMI:
          date         = cc[8]
          hmi_yymm = date.split("-")
@@ -218,12 +218,12 @@ if __name__ == '__main__':
       print("\n Please Input the Observed CME Speed (km/s). For example: ")
       print("\n python3 GLSETUP.py fitsfile.fits -CMESpeed 600 ")
       exit()
-   if (LonPosIn ==999. or LatPosIn ==999. or LonNegIn ==999.
-       or LatNegIn ==999.):
+   if (LonPosIn == 999. or LatPosIn == 999. or LonNegIn == 999.
+       or LatNegIn == 999.):
       print('Select the CME Source Region (POSITIVE) with the left button')
       print('Then select negative region with the right button')
 
-      FileId=open('runidl1','w')
+      FileId = open('runidl1','w')
       FileId.write('.r GLSETUP1\n')
       FileId.write("GLSETUP1,file='"+IdlFile+"' ")
       FileId.close()
@@ -233,9 +233,9 @@ if __name__ == '__main__':
       ls = subprocess.Popen(["idl", "runidl1"],stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,text=True)
       #################PROCESSING STDOUT################
-      stdout,stderr=ls.communicate()
-      b=stdout[stdout.index('===')+4:len(stdout)]
-      a=b.split() # x,y coordinates 
+      stdout,stderr = ls.communicate()
+      b = stdout[stdout.index('===')+4:len(stdout)]
+      a = b.split() # x,y coordinates 
       ###### TAKE TWO COORDINATES FROM TWO CLICKS#######
        # In this case, these values once rounded are grid indexes
       LonPos = float(a[0])
@@ -246,17 +246,13 @@ if __name__ == '__main__':
       # The input locations are in degrees
       print ("\n User input  Lon/Lat for Positive and negative spots:")
       print ("{0:4.1f} {1:4.1f} {2:4.1f} {3:4.1f} [deg]".format(
-            LonPosIn, LatPosIn,LonNegIn, LatNegIn))
+            LonPosIn, LatPosIn, LonNegIn, LatNegIn))
       # Convert coordinates in degrees to grid indexes
       LonPos = GL.calculate_index(
-         (
-            (LonPosIn - float(Lon0))%360.0
-         )*Deg2Rad,Lon_I,nLon)
-      LatPos = GL.calculate_index(LatPosIn*Deg2Rad,Lat_I, nLat)
+         ((LonPosIn - Lon0)%360.0)*Deg2Rad, Lon_I, nLon)
+      LatPos = GL.calculate_index(LatPosIn*Deg2Rad, Lat_I, nLat)
       LonNeg = GL.calculate_index(
-         (
-            (LonNegIn - float(Lon0))%360.0
-         )*Deg2Rad,Lon_I,nLon)
+         ((LonNegIn - Lon0)%360.0)*Deg2Rad, Lon_I, nLon)
       LatNeg = GL.calculate_index(LatNegIn*Deg2Rad,Lat_I, nLat)
    ##########SHAPE INPUTS FOR THE SECOND SERVER-SIDE SESSION####
    nParam  = 6
@@ -272,8 +268,8 @@ if __name__ == '__main__':
    Param_I[5] = float(LatNeg)
 
    ##SECOND SERVER-SIDE SESSION (PYTHON)#######################
-   CC=GL.Alg(nLon,nLat,nParam,Param_I,Lon_I,Lat_I,Br_C,
-             CMESpeed,GLRadius,SizeFactor,
+   CC = GL.Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C,
+             CMESpeed, GLRadius, SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
              Stretch, Distance, Helicity, DoHMI,
              UsePNDist, UseARArea, DoScaling, Time, DoNotPlot,
