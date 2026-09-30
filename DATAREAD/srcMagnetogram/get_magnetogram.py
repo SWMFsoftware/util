@@ -16,11 +16,10 @@ import gzip
 import argparse
 from datetime import datetime,timedelta
 
-ISWA_DATA_URL = 'https://nispdata.nso.edu/ftp/QR/zqs/'
-#202609/mrzqs260901/
+GONG_DATA_URL = 'https://gong.nso.edu/data/magmap/QR/zqs/'
 
 #modify to change the output directory (run_realtime directory used for realtime simulations)
-OUTPUT_BASE_PATH = os.getcwd()
+rundir = os.getcwd()
 
 HEADERS = {"User-Agent":"Mozilla/5.0 (Macintosh Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36"}
 
@@ -83,8 +82,8 @@ def download_file(url, save_path):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description=
-                                     "python3 get_magnetogram.py datetimein")
+    parser = argparse.ArgumentParser(
+        description="Use python3 get_magnetogram.py datetimein")
     parser.add_argument('datetimein', help=
                         "Date_Time in the format yymmdd't'hhmm")
     args = parser.parse_args()
@@ -93,7 +92,7 @@ if __name__ == '__main__':
     year = '20'+matches.group(1)[0:2]
     month = matches.group(1)[2:4]
     day = matches.group(1)[0:6]
-    day_url = ISWA_DATA_URL.rstrip('/')+'/'+\
+    day_url = GONG_DATA_URL.rstrip('/')+'/'+\
         str(year)+str(month)+'/mrzqs'+str(day)+'/'
     [cr, text, link] = get_highest(
         day_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
@@ -119,8 +118,8 @@ if __name__ == '__main__':
             day_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
     granule_url = day_url.rstrip('/') + '/' + link
     # Adjust input files
-    fits_file = os.path.join(OUTPUT_BASE_PATH, "fitsfile.fits")
-    fits_file_gz = os.path.join(OUTPUT_BASE_PATH,str(link))
+    fits_file = os.path.join(rundir, "fitsfile.fits")
+    fits_file_gz = os.path.join(rundir,str(link))
     download_file(granule_url,fits_file_gz)
     with gzip.open(fits_file_gz, 'rb') as f_in:
         with open(fits_file, 'wb') as f_out:
