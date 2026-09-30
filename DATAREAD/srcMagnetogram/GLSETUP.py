@@ -85,6 +85,8 @@ if __name__ == '__main__':
                        'Reading magnetogram in the ModPlotFile format')
    parser.add_argument('--DoNotPlot',action='store_true', help=
                        'To be used on machines with no idl')
+   parser.add_argument('--Spheromak',action='store_true', help=
+                       'Output files for spheromak')
 
    args = parser.parse_args()
    ##################OPTIONAL INPUT PARAMETERS######
@@ -114,6 +116,7 @@ if __name__ == '__main__':
    DoScaling   = args.DoScaling
    UseBATS     = args.UseBATS
    DoNotPlot   = args.DoNotPlot
+   Spheromak   = args.Spheromak
 
    IdlFile = 'fitsfile.out'
    if UseBATS == False:
@@ -271,7 +274,7 @@ if __name__ == '__main__':
    CC = GL.Alg(nLon, nLat, nParam, Param_I, Lon_I, Lat_I, Br_C,
              CMESpeed, GLRadius, SizeFactor,
              GLRadiusRange_I, UseCMEGrid, Orientation,
-             Stretch, Distance, Helicity, DoHMI,
+             Stretch, Distance, Helicity, DoHMI, Spheromak,
              UsePNDist, UseARArea, DoScaling, Time, DoNotPlot,
              MinBStrength, MaxBStrength)
    if DoNotPlot:

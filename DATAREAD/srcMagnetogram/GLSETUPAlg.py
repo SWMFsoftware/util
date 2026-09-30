@@ -114,7 +114,7 @@ def calculate_index(Y, Y_I, n):
 
 def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
         SizeFactor, GLRadiusRange_I, UseCMEGrid, Orientation,
-        Stretch, Distance, Helicity, DoHMI, UsePNDist, 
+        Stretch, Distance, Helicity, DoHMI, Spheromak, UsePNDist, 
         UseARArea, DoScaling, Time, DoNotPlot,
         min_GL_Bstrength = 2, max_GL_Bstrength = 40):
    Long0     = Param_I[0]
@@ -372,7 +372,8 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       ## Increase GLRadius to allow GL_Bstrength to decrease to
       ##   realistic value.
       GLRadius_old = GLRadius
-      GLRadius = GLRadius * np.sqrt(GL_Bstrength / max_GL_Bstrength)
+      GLRadius = min([GLRadius * np.sqrt(GL_Bstrength / max_GL_Bstrength),
+                      GLRadiusRange_I[1]])
       GL_Bstrength_old = GL_Bstrength
       GL_Bstrength = max_GL_Bstrength
 
@@ -488,21 +489,26 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
    print (' Poloidal flux [1E21 Mx]: %6.2f'%(GL_poloidal))
    print ('-----------------------------------------')
    FileId=open('CME.in','a')
-   FileId.write("#CME \n")
-   FileId.write("T                   UseCme \n")
-   FileId.write("T                   DoAddFluxRope \n")
-   FileId.write("-1.0                tDecayCme \n")
-   FileId.write("%-10.2f          LongitudeCme \n"% GL_Longitude)
-   FileId.write("%-10.2f          LatitudeCme \n"% GL_Latitude)
-   FileId.write("%-10.2f          OrientationCme \n"% GL_Orientation)
-   FileId.write("GL                  TypeCme \n")
-   FileId.write("%-10.2f          BStrength \n"% GL_Bstrength)
-   FileId.write("%-+d                  iHelicity \n"% iHelicity)
-   FileId.write("%-10.2f          Radius \n"% GLRadius)
-   FileId.write("%-10.2f          aStretch \n"% Stretch)
-   FileId.write("%-10.2f          ApexHeight \n"% ApexHeight)
-   FileId.write(" \n")
-   FileId.write("#END \n")
+   FileId.write("#CME\n")
+   FileId.write("T\t\t\tUseCme\n")
+   FileId.write("T\t\t\tDoAddFluxRope\n")
+   FileId.write("-1.0\t\t\ttDecayCme\n")
+   FileId.write("%-10.2f\t\tLongitudeCme\n"% GL_Longitude)
+   FileId.write("%-10.2f\t\tLatitudeCme\n"% GL_Latitude)
+   FileId.write("%-10.2f\t\tOrientationCme\n"% GL_Orientation)
+   if Spheromak:
+      FileId.write("SPHEROMAK\t\tTypeCme\n")
+   else:
+      FileId.write("GL\t\t\tTypeCme\n")
+   FileId.write("%-10.2f\t\tBStrength \n"% GL_Bstrength)
+   FileId.write("%-+d\t\t\tiHelicity \n"% iHelicity)
+   FileId.write("%-10.2f\t\tRadius\n"% GLRadius)
+   FileId.write("%-10.2f\t\taStretch\n"% Stretch)
+   FileId.write("%-10.2f\t\tApexHeight\n"% ApexHeight)
+   if Spheromak:
+      FileId.write("%-10.1f\t\tuCme\n"% CMESpeed)
+   FileId.write("\n")
+   FileId.write("#END\n")
    FileId.write("\n")
    FileId.write("Angular Size            = %5.2f\n"%(
       2*GLRadius/Distance*Rad2Deg))
@@ -532,7 +538,7 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       #Calculate the CME grid refinement parameters based on the flux rope
       #location and size.                                                
 
-      CMEbox_Start=[1.15,GL_Longitude-40.*GLRadius,GL_Latitude-20.*GLRadius]
+      CMEbox_Start=[1.062,GL_Longitude-40.*GLRadius,GL_Latitude-20.*GLRadius]
       CMEbox_End=[22.0,GL_Longitude+40.*GLRadius,GL_Latitude+20.*GLRadius]
       
       print ('==========================================')
@@ -546,17 +552,30 @@ def Alg(nLong, nLat, nParam, Param_I, Long_I, Lat_I, Br_C, CMESpeed, GLRadius,
       print ('         Latitude_End: %6.2f'% ( CMEbox_End[2]))
       print ('-----------------------------------------')
       FileId=open('CME_AMR.in','w')
-      FileId.write("#AMRREGION \n")
-      FileId.write("CMEbox              NameRegion \n")
-      FileId.write("box_gen             StringShape \n")
-      FileId.write("%-10.2f          XyzMinBox Radius \n"% CMEbox_Start[0])
-      FileId.write("%-10.2f          XyzMinBox Longitude \n"%  CMEbox_Start[1])
-      FileId.write("%-10.2f          XyzMinBox Latitude \n"% CMEbox_Start[2])
-      FileId.write("%-10.2f          XyzMaxBox Radius \n"% CMEbox_End[0])
-      FileId.write("%-10.2f          XyzMaxBox Longitude \n"%  CMEbox_End[1])
-      FileId.write("%-10.2f          XyzMaxBox Latitude \n"% CMEbox_End[2])
-      FileId.write(" \n")
-      FileId.write("#END \n")
+      FileId.write("#AMRREGION\n")
+      FileId.write("CMEbox\t\t\tNameRegion\n")
+      FileId.write("box_gen\t\t\tStringShape\n")
+      FileId.write("%-10.3f\t\tCoord1MinBox  Radius\n"% CMEbox_Start[0])
+      FileId.write("%-10.2f\t\tCoord2MinBox  Longitude\n"%  CMEbox_Start[1])
+      FileId.write("%-10.2f\t\tCoord3MinBox  Latitude\n"% CMEbox_Start[2])
+      FileId.write("%-10.2f\t\tCoord1MaxBox  Radius\n"% CMEbox_End[0])
+      FileId.write("%-10.2f\t\tCoord2MaxBox  Longitude\n"%  CMEbox_End[1])
+      FileId.write("%-10.2f\t\tCoord3MaxBox  Latitude\n"% CMEbox_End[2])
+      FileId.write("\n")
+      FileId.write("#END\n")
+      FileId.close()
+
+      FileId=open('IHCME_AMR.in','w')
+      FileId.write("#AMRREGION\n")
+      FileId.write("coneIH_CME\t\tNameRegion\n")
+      FileId.write("conex0 rotated\t\tStringShape\n")
+      FileId.write("220.0\t\t\tHeight\n")
+      FileId.write("127.0\t\t\tRadius\n")
+      FileId.write("0.0\t\t\txrotate\n")
+      FileId.write("%-10.2f\t\tyrotate\n"% -GL_Latitude)
+      FileId.write("%-10.2f\t\tzrotate\n"% GL_Longitude)
+      FileId.write("\n")
+      FileId.write("#END\n")
       FileId.close()
    #For comparison, make magnetogram of a flux rope field
    FileId=open('RunFRM','w')
