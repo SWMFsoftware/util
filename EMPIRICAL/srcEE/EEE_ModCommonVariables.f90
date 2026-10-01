@@ -81,6 +81,7 @@ module EEE_ModCommonVariables
 
   ! Direction vector from the heliocenter to the CME center:
   real :: DirCme_D(3) = 0.0
+  !acc declrare create(DirCme_D)
 
   ! Coordinate vectors of the CME center, apex, and bottom
   logical :: DoNormalizeXyz = .false.

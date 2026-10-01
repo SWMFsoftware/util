@@ -29,6 +29,7 @@ module EEE_ModMc18
 
   ! distance from the magnetic configuration center to heliocenter
   real :: rDistance1 = 0.0
+  !$acc declare create(rDistance1)
 
   ! Radius of the magnetic configuration (spheromak)
   real :: Radius = 0.0
