@@ -292,10 +292,11 @@ contains
           call mc18_init
           DoInit = .false.
        end if
-#endif
+
        call get_mc18_fluxrope(Xyz_D, Rho1, p1, B1_D, U1_D, Time)
        Rho = Rho + Coeff*Rho1; B_D = B_D + Coeff*B1_D
        p   = p   + Coeff*p1;   U_D = U_D + Coeff*U1_D
+#endif
     end if
 
 #ifndef _OPENACC

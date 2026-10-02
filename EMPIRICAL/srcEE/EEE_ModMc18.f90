@@ -403,7 +403,6 @@ contains
   end subroutine set_parameters_mc18
   !============================================================================
   subroutine get_mc18_fluxrope(XyzIn_D, Rho, p, b_D, u_D, TimeNow)
-    !$acc routine seq
 
     ! Magnetic field perturbation of the Rosenbluth-Bussac force-free spheromak.
     ! Interior: spherical Bessel (j1) field minus the uniform ambient field
