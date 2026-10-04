@@ -16,13 +16,10 @@ import gzip
 import argparse
 from datetime import datetime,timedelta
 
-GONG_DATA_URL = 'https://gong.nso.edu/data/magmap/QR/zqs/'
-
 #modify to change the output directory (run_realtime directory used for realtime simulations)
 rundir = os.getcwd()
 
 HEADERS = {"User-Agent":"Mozilla/5.0 (Macintosh Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36"}
-
 
 class LinkScrape(HTMLParser):
     def reset(self):
@@ -42,6 +39,21 @@ class LinkScrape(HTMLParser):
         if self.in_link: self.links[-1]['text'] = data
     def clean(self):
         self.links = []
+
+def get_path(parsed_datetime, UseGong):
+    """
+    Returns "path" - URL before the last slash, for the "parsed" datetime
+    """
+    if UseGong:
+        path = 'https://gong.nso.edu/data/magmap/QR/zqs/'+ \
+            parsed_datetime.strftime("%Y%m") + \
+            '/mrzqs' +  parsed_datetime.strftime("%y%m%d") + '/'
+    else:
+        path = f'https://iswa.ccmc.gsfc.nasa.gov/iswa_data_tree/' \
+            f'observation/solar/gong/mrzqs/'
+        path = path.rstrip('/') + '/' + parsed_datetime.strftime("%Y") \
+        + '/' + parsed_datetime.strftime("%m") + '/'
+    return path
 
 def get_highest(page_url, pattern, datetimein):
     response = requests.get(page_url)
@@ -74,54 +86,50 @@ def download_file(url, save_path):
             # Write the content of the response to a local file
             with open(save_path, 'wb') as file:
                 file.write(response.content)
-            print(f"File downloaded successfully: {save_path}")
         else:
-            print(f"Failed to download file. Status code: {response.status_code}")
+            print(
+                f"Failed to download file. Status code: {response.status_code}")
     except Exception as e:
         print(f"Error: {e}")
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Use python3 get_magnetogram.py datetimein")
+        description="Use python3 get_magnetogram.py <datetime as yymmddthhmm>")
     parser.add_argument('datetimein', help=
-                        "Date_Time in the format yymmdd't'hhmm")
+                        "DateTime in format yymmdd't'hhmm")
+    parser.add_argument('--UseGong', action='store_true', help=
+                        'Use GONG magnetogram repository (ISWA is default)')
+    parser.add_argument('--SaveUrl', action='store_true', help=
+                        'Save URL to the file')
     args = parser.parse_args()
-    datetimein = str(args.datetimein)
-    matches=re.search(r'(\d\d\d\d\d\dt\d\d\d\d)',datetimein)
-    year = '20'+matches.group(1)[0:2]
-    month = matches.group(1)[2:4]
-    day = matches.group(1)[0:6]
-    day_url = GONG_DATA_URL.rstrip('/')+'/'+\
-        str(year)+str(month)+'/mrzqs'+str(day)+'/'
+    datetimein = args.datetimein
+    UseGong = args.UseGong
+    SaveUrl = args.SaveUrl
+    parsed_datetime =  datetime.strptime(datetimein, "%y%m%dt%H%M")
+    # Find proper folder with the magnetogram link
+    path = get_path(parsed_datetime, UseGong)
     [cr, text, link] = get_highest(
-        day_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
+        path, r'(\d\d\d\d\d\dt\d\d\d\d)', datetimein)
     if not link:
         #
         ### No magnetogram in the folder for this day. Look in the previous day
         #
-        ### Convert datetime input string to the python datetime object
-        format_pattern = "%y%m%dt%H%M"
-        parsed_datetime = datetime.strptime(datetimein, format_pattern)
-        #
-        ### Reduce by one day
-        parsed_datetime = parsed_datetime - timedelta(hours=23)
-        #
-        ### Convert to a string
-        formatted_string = parsed_datetime.strftime(format_pattern)
-        year = '20'+formatted_string[0:2]
-        month = formatted_string[2:4]
-        day = formatted_string[0:6]
-        day_url = ISWA_DATA_URL.rstrip('/')+'/'+\
-            str(year)+str(month)+'/mrzqs'+str(day)+'/'
+        parsed_datetime -= timedelta(hours=23)
+        path = get_path(parsed_datetime, UseGong)
         [cr, text, link] = get_highest(
-            day_url,r'(\d\d\d\d\d\dt\d\d\d\d)',matches.group(1))
-    granule_url = day_url.rstrip('/') + '/' + link
+            path,r'(\d\d\d\d\d\dt\d\d\d\d)',datetimein)
+    granule_url = path.rstrip('/') + '/' + link
     # Adjust input files
     fits_file = os.path.join(rundir, "fitsfile.fits")
-    fits_file_gz = os.path.join(rundir,str(link))
-    download_file(granule_url,fits_file_gz)
+    fits_file_gz = os.path.join(rundir, link)
+    download_file(granule_url, fits_file_gz)
     with gzip.open(fits_file_gz, 'rb') as f_in:
         with open(fits_file, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
     os.unlink(fits_file_gz)
+    if SaveUrl:
+        url_file = os.path.join(rundir, "URL.gong")
+        fid = open(url_file,'w')
+        fid.write(str(granule_url))
+        fid.close()
