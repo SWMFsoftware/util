@@ -126,21 +126,21 @@ contains
   !============================================================================
   subroutine EEE_set_parameters(NameCommand)
 
-    use ModReadParam,     ONLY: read_var
-    use EEE_ModGL98,      ONLY: set_parameters_GL98
-    use EEE_ModMc18,      ONLY: set_parameters_mc18
-    use EEE_ModTD99,      ONLY: set_parameters_TD99
-    use EEE_ModArch,      ONLY: set_parameters_arch
+    use ModReadParam, ONLY: read_var
+    use EEE_ModGL98, ONLY: set_parameters_GL98
+    use EEE_ModMagCone, ONLY: set_parameters_mc18
+    use EEE_ModTD99, ONLY: set_parameters_TD99
+    use EEE_ModArch, ONLY: set_parameters_arch
     use EEE_ModShearFlow, ONLY: set_parameters_shearflow
-    use EEE_ModCms,       ONLY: set_parameters_cms
+    use EEE_ModCms, ONLY: set_parameters_cms
     use EEE_ModCommonVariables, ONLY: &
          UseCme, DoAddFluxRope, UseTD, UseTD14, UseGL, UseShearFLow, UseArch, &
          UseTD22, LongitudeCme, LatitudeCme, OrientationCme, DirCme_D, &
          UseCms, UseSpheromak, DoAddTD, DoAddGL, DoAddSpheromak, &
          UseMagCone, DoAddMagCone, tStartCme, tDecayCmeDim
-    use ModNumConst,      ONLY: cDegToRad
+    use ModNumConst, ONLY: cDegToRad
     use ModCoordTransform, ONLY: lonlat_to_xyz
-    use CON_axes,          ONLY: dLongitudeHgrDeg
+    use CON_axes, ONLY: dLongitudeHgrDeg
 
     character(len=*), intent(in) :: NameCommand
 
@@ -236,7 +236,7 @@ contains
     use EEE_ModTD99, ONLY: get_td99_fluxrope, init_td99_parameters
     use EEE_ModShearFlow, ONLY: get_shearflow
     use EEE_ModGL98, ONLY: get_gl98_fluxrope, gl98_init
-    use EEE_ModMc18, ONLY: get_mc18_fluxrope, mc18_init
+    use EEE_ModMagCone, ONLY: get_mc18_fluxrope, mc18_init
     use EEE_ModCms, ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3), Time
@@ -249,7 +249,7 @@ contains
     ! Coefficient for perturbations (less than 1 for decay)
     real :: Coeff
     ! initialize perturbed state variables
-    character(len=*), parameter :: NameSub='EEE_get_state_bc'
+    character(len=*), parameter:: NameSub = 'EEE_get_state_bc'
     !--------------------------------------------------------------------------
     Rho = 0.0; U_D = 0.0; B_D = 0.0; p = 0.0
 
@@ -315,13 +315,13 @@ contains
          DoAddGL, UseCms, DoAddSpheromak, DoAddMagCone, tStartCme
     use EEE_ModGL98, ONLY: get_GL98_fluxrope, gl98_init
     use EEE_ModTD99, ONLY: get_TD99_fluxrope, init_TD99_parameters
-    use EEE_ModMc18, ONLY: get_mc18_fluxrope, mc18_init
-    use EEE_ModCms,  ONLY: get_cms
+    use EEE_ModMagCone, ONLY: get_mc18_fluxrope, mc18_init
+    use EEE_ModCms, ONLY: get_cms
 
     real, intent(in) :: Xyz_D(3)
     real, intent(out) :: Rho, U_D(3), B_D(3), p
     real :: Rho1, U1_D(3), B1_D(3), p1
-    character(len=*), parameter :: NameSub='EEE_get_state_init'
+    character(len=*), parameter:: NameSub = 'EEE_get_state_init'
     !--------------------------------------------------------------------------
     ! initialize perturbed state variables
     Rho = 0.0; U_D = 0.0; B_D = 0.0; p = 0.0
@@ -376,7 +376,7 @@ contains
          UseCme, DoAddFluxRope, DoAddMagCone
     use EEE_ModGL98, ONLY: gl98_init
     use EEE_ModTD99, ONLY: init_TD99_parameters
-    use EEE_ModMc18, ONLY: mc18_init
+    use EEE_ModMagCone, ONLY: mc18_init
 
     character(len=*), parameter:: NameSub = 'EEE_init_cme_parameters'
     !--------------------------------------------------------------------------
@@ -416,7 +416,7 @@ contains
          UseMagCone, DXyzPlot, ExtensionFactor
     use EEE_ModTD99, ONLY: get_TD99_size
     use EEE_ModGL98, ONLY: get_GL98_size
-    use EEE_ModMc18, ONLY: get_mc18_size
+    use EEE_ModMagCone, ONLY: get_mc18_size
     integer, intent(out) :: nXY, nZ
     real :: SizeXY, SizeZ
     !--------------------------------------------------------------------------

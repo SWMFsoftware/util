@@ -1,9 +1,10 @@
 !  Copyright (C) 2002 Regents of the University of Michigan,
 !  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-module EEE_ModMc18
+module EEE_ModMagCone
 
   ! Rosenbluth & Bussac 1979 force-free spheromak model
+  ! generalized for non-zero plasma beta (see, e.g. Borovikov et al 2017)
   ! with image dipoles (Lin 2006) and 
   ! uniform field subtraction (Borovikov et al 2018).
 
@@ -17,7 +18,7 @@ module EEE_ModMc18
   SAVE
 
   private ! except
-
+  ! Herewith, mc18 stands for Magnetized Cone model (Borovikov et al 2018)
   public :: set_parameters_mc18
   public :: get_mc18_fluxrope
   public :: get_mc18_size
@@ -537,7 +538,7 @@ contains
     !--------------------------------------------------------------------------
     if(Beta0In <= 0.0)then
        find_alpha0r0 = xZero
-       return
+       RETURN
     end if
     if(Beta0In >= 1.0/3.0) call CON_stop( &
          NameSub//': Beta0 >= 1/3, no solution to j1(x)/x = Beta0 exists')
@@ -562,5 +563,5 @@ contains
     SizeZ  = rDistance1 + Radius - 1.0 ! Apex height above solar surface
   end subroutine get_mc18_size
   !============================================================================
-end module EEE_ModMc18
+end module EEE_ModMagCone
 !==============================================================================
