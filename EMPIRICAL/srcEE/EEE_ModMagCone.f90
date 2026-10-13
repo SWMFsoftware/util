@@ -5,7 +5,7 @@ module EEE_ModMagCone
 
   ! Rosenbluth & Bussac 1979 force-free spheromak model
   ! generalized for non-zero plasma beta (see, e.g. Borovikov et al 2017)
-  ! with image dipoles (Lin 2006) and 
+  ! with image dipoles (Lin 2006) and
   ! uniform field subtraction (Borovikov et al 2018).
 
 #ifdef _OPENACC
@@ -33,16 +33,17 @@ module EEE_ModMagCone
   !$acc declare create(rDistance1)
 
   ! Radius of the magnetic configuration (spheromak)
-  real :: Radius = 0.0
-  !$acc declare create(Radius)
+  real :: R0 = 0.0
+  !$acc declare create(R0)
 
   ! Height of the configuration base above the solar surface [rSun]:
-  !   1 + BaseHeight = rDistance1 - Radius
+  !   1 + BaseHeight = rDistance1 - R0
   ! Specifying BaseHeight is more straightforward than specifying rDistance1.
   real :: BaseHeight = 0.0
 
   ! The derivative of current over flux function
   !(\mu_0)dI/d\psi) has the dimentions of inverse length
+  ! Assumed to be constant thoughout the spheromak configuration
   real :: Alpha0
   !$acc declare create(Alpha0)
 
@@ -62,9 +63,10 @@ module EEE_ModMagCone
   ! Dimensionless product of R0 by Alpha0.
   ! Boundary condition: j1(Alpha0R0)/Alpha0R0 = Beta0
   ! For Beta0=0: Alpha0R0 is the first zero of j1 (~4.4934).
-  ! For Beta0>0: solved iteratively in find_alpha0r0.
-  ! (GL98 used 5.763854, the first zero of j_2)
   real :: Alpha0R0 = 4.493409457909064
+  ! For Beta0>0: solved iteratively in find_alpha0r0.
+  ! (GL98 used 5.763854, the first zero of j_2, which satisfies
+  ! the said boundary condition at the particular choice of negative Beta0)
   !$acc declare create(Alpha0R0)
 
   ! Vector characteristic of the configuration: radius vector of the
@@ -100,15 +102,20 @@ module EEE_ModMagCone
   !$acc declare create(UseImageDipoles)
 
   ! Spheromak Beta0 and ejecta temperature (same convention as TD99)
-  ! Boundary parameter beta0: j1(alpha0*r0)/(alpha0*r0) = beta0.
-  ! Pressure from PDF Eq.(5): p = [j1/(a0 r) - b0]*b0*alpha0^2*(r x B0)^2
+  ! Beta0 is constant throughout the spheromak configuration. It
+  ! characterizes the plasma pressure ratio  to that of the magnetic field.
+  ! Pressure as a function of r and Alpha0, and Beta0:
+  ! p = [j1/(Alpha0 r) - Beta0]*Beta0*Alpha0^2*(r x B0)^2 ???? No \mu_0?
+  ! So Beta0 is not identical with the local value of plasma beta.
+  ! Beta0 comes to the boundary condition: j1(alpha0*r0)/(alpha0*r0) = Beta0.
+  ! Because of this, at the spheromak boundary p(R0) = 0
   logical :: UseBeta0 = .false.
   !$acc declare create(UseBeta0)
+  ! In the Rosenbluth & Bussac 1979 force-free model the plasma pressure lacks
   real :: Beta0 = 0.0
   real :: EjectaTemperature = 0.0           ! normalized code units
   real :: EjectaTemperatureDim = 5.0e4      ! [K]
   !$acc declare create(Beta0, EjectaTemperature, EjectaTemperatureDim)
-
 contains
   !============================================================================
   subroutine mc18_init
@@ -120,8 +127,8 @@ contains
     ! the first zero of j1 (~4.4934).
     Alpha0R0 = find_alpha0r0(merge(Beta0, 0.0, UseBeta0))
 
-    ! Wave number k = Alpha0R0 / r0
-    Alpha0 = Alpha0R0/Radius
+    ! Magnetic field twist parameter = Alpha0R0 / r0
+    Alpha0 = Alpha0R0/R0
 
     ! Center position of the configuration in the heliocentric frame.
     ! Needed already here: mc18_get_b0 below uses it.
@@ -173,7 +180,7 @@ contains
        write(*,*) prefix
        write(*,*) prefix, 'B0Dim          = ', B0Dim,               '[Gauss]'
        write(*,*) prefix, 'iHelicity      = ', iHelicity
-       write(*,*) prefix, 'Radius         = ', Radius,              '[rSun]'
+       write(*,*) prefix, 'Radius         = ', R0,              '[rSun]'
        write(*,*) prefix, 'HalfOpeningAngle= ', HalfOpeningAngle,   '[degrees]'
        write(*,*) prefix, 'rDistance1     = ', rDistance1,          '[rSun]'
        write(*,*) prefix, 'BaseHeight     = ', BaseHeight,          '[rSun]'
@@ -194,7 +201,7 @@ contains
     EjectaTemperature = EjectaTemperatureDim*Io2No_V(UnitTemperature_)
 
     !$acc update device(Alpha0R0, Alpha0, XyzCenterConf_D, bConf_D, bAmbientConf_D)
-    !$acc update device(uCmeSi, B0, Radius, UseImageDipoles)
+    !$acc update device(uCmeSi, B0, R0, UseImageDipoles)
     !$acc update device(iHelicity, C0, mDip_D, mRadDip_D, mHorDip_D)
     !$acc update device(UseBeta0, Beta0, EjectaTemperature)
 
@@ -222,12 +229,12 @@ contains
     real :: bAmbCenter_D(3), Br, bT_D(3), ePerp_D(3)
     real :: GammaUniform, Gr, Gh
     real :: bTestR_D(3), bTestH_D(3)
-    real, parameter :: Zero_D(3) = (/0.0, 0.0, 0.0/)
+    real, parameter :: Zero_D(3) = [0.0, 0.0, 0.0]
     !--------------------------------------------------------------------------
     bAmbCenter_D = bAmbientCenterSi_D*Si2No_V(UnitB_)
 
     ! m-per-B0 scalar (Eq. 3): m = C0*B0
-    C0 = spher_bessel2(Alpha0R0)*Radius**3/3.0
+    C0 = spher_bessel2(Alpha0R0)*R0**3/3.0
 
     ! Response of the uniform-field term alone to B0 (Sec. 2.1)
     GammaUniform = -2.0/3.0*spher_bessel2(Alpha0R0)
@@ -332,9 +339,9 @@ contains
     real :: Ref_D(3)
     !--------------------------------------------------------------------------
     if(abs(a_D(1)) < 0.9)then
-       Ref_D = (/1.0, 0.0, 0.0/)
+       Ref_D = [1.0, 0.0, 0.0]
     else
-       Ref_D = (/0.0, 1.0, 0.0/)
+       Ref_D = [0.0, 1.0, 0.0]
     end if
     e_D = Ref_D - sum(Ref_D*a_D)*a_D
     e_D = e_D/norm2(e_D)
@@ -365,7 +372,7 @@ contains
     use ModReadParam, ONLY: read_var
     character(len=*), intent(in):: NameCommand
 
-    real :: SinAlpha
+    real :: SinOpeningAngle
     character(len=*), parameter:: NameSub = 'set_parameters_mc18'
     !--------------------------------------------------------------------------
     select case(NameCommand)
@@ -380,21 +387,21 @@ contains
        end if
 
        ! Derive center distance and radius from opening angle and base height.
-       ! Geometry: sin(alpha) = Radius/rDistance1
-       !           1 + BaseHeight = rDistance1 - Radius 
+       ! Geometry: sin(OpeningAngle) = R0/rDistance1
+       !           1 + BaseHeight = rDistance1 - R0
        !                          = rDistance1*(1 - sin(alpha))
        if(HalfOpeningAngle <= 0.0 .or. HalfOpeningAngle >= 90.0) call &
             CON_stop(NameSub//': HalfOpeningAngle must be in (0, 90) degrees')
-       SinAlpha   = sin(HalfOpeningAngle*cDegToRad)
-       rDistance1 = (1.0 + BaseHeight)/(1.0 - SinAlpha)
-       Radius     = rDistance1*SinAlpha
+       SinOpeningAngle   = sin(HalfOpeningAngle*cDegToRad)
+       rDistance1 = (1.0 + BaseHeight)/(1.0 - SinOpeningAngle)
+       R0     = rDistance1*SinOpeningAngle
 
        ! position of the CME apex
-       XyzCmeApexSi_D = DirCme_D*(rDistance1 + Radius)
+       XyzCmeApexSi_D = DirCme_D*(rDistance1 + R0)
 
        ! position of CME center and bottom
-       XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*Radius
-       XyzCmeBottomSi_D = XyzCmeApexSi_D - DirCme_D*2.0*Radius
+       XyzCmeCenterSi_D = XyzCmeApexSi_D - DirCme_D*R0
+       XyzCmeBottomSi_D = XyzCmeApexSi_D - DirCme_D*2.0*R0
        DoNormalizeXyz = .true.
 
     case default
@@ -448,7 +455,7 @@ contains
        Distance2ConfCenter = Delta
     end if
 
-    if(Distance2ConfCenter <= Radius)then
+    if(Distance2ConfCenter <= R0)then
 
        ! INSIDE: force-free spherical Bessel field
        Alpha0R2    = Alpha0*Distance2ConfCenter
@@ -476,7 +483,7 @@ contains
        ! OUTSIDE: pure dipole with equivalent moment mDip_D = C0*bConf_D
        ! (ensures B_r continuity with the subtracted-ambient interior).
        ! XyzConf_D is already relative to the spheromak center.
-       b_D = dipole_field((/0.0, 0.0, 0.0/), mDip_D, XyzConf_D)
+       b_D = dipole_field([0.0, 0.0, 0.0], mDip_D, XyzConf_D)
 
     end if
 
@@ -534,7 +541,7 @@ contains
     integer, parameter :: nIter = 20
     real,    parameter :: Tol   = 1.0e-7
     real,    parameter :: xZero = 4.493409457909064
-    character(len=*), parameter :: NameSub = 'find_alpha0r0'
+    character(len=*), parameter:: NameSub = 'find_alpha0r0'
     !--------------------------------------------------------------------------
     if(Beta0In <= 0.0)then
        find_alpha0r0 = xZero
@@ -550,7 +557,7 @@ contains
        fx   =  spher_bessel1_over_x(x) - Beta0In
        dfdx = -spher_bessel2(x)/x
        x    =  x - fx/dfdx
-       if(abs(fx) < Tol) exit
+       if(abs(fx) < Tol) EXIT
     end do
     find_alpha0r0 = x
 
@@ -559,8 +566,8 @@ contains
   subroutine get_mc18_size(SizeXY,  SizeZ)
     real,  intent(out) :: SizeXY,  SizeZ
     !--------------------------------------------------------------------------
-    SizeXY = Radius                    ! Horizontal size
-    SizeZ  = rDistance1 + Radius - 1.0 ! Apex height above solar surface
+    SizeXY = R0                    ! Horizontal size
+    SizeZ  = rDistance1 + R0 - 1.0 ! Apex height above solar surface
   end subroutine get_mc18_size
   !============================================================================
 end module EEE_ModMagCone
