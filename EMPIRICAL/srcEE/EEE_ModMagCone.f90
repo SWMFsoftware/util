@@ -389,7 +389,7 @@ contains
        ! Derive center distance and radius from opening angle and base height.
        ! Geometry: sin(OpeningAngle) = R0/rDistance1
        !           1 + BaseHeight = rDistance1 - R0
-       !                          = rDistance1*(1 - sin(alpha))
+       !                          = rDistance1*(1 - sin(OpeningAngle))
        if(HalfOpeningAngle <= 0.0 .or. HalfOpeningAngle >= 90.0) call &
             CON_stop(NameSub//': HalfOpeningAngle must be in (0, 90) degrees')
        SinOpeningAngle   = sin(HalfOpeningAngle*cDegToRad)
